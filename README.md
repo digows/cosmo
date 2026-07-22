@@ -12,6 +12,25 @@ layer that talked to PC hardware.
 Everything above that layer is the game as Todd Replogle wrote it: the physics,
 the actors, the collision handling, the bugs.
 
+## Screenshots
+
+| | |
+|:-:|:-:|
+| ![Apogee presents](docs/screenshots/pretitle.png) | ![Forbidden Planet title screen](docs/screenshots/title1.png) |
+| ![Credits](docs/screenshots/credit.png) | ![Bonus stage](docs/screenshots/bonus.png) |
+
+These are produced by this port, on macOS, from the original 1992 data files —
+not captured from an emulator. Reproduce them with:
+
+```bash
+./build/default/firstframe gamedata TITLE1.MNI docs/screenshots/title1.png 2
+```
+
+They are the fullscreen images, which is what the video layer renders today.
+Gameplay needs the timing and input layers that are still missing; those
+screenshots will land here when they are real. The artwork is from the freely
+redistributable shareware episode.
+
 ## Status
 
 | Subsystem | State |

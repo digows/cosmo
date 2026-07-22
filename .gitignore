@@ -7,5 +7,6 @@ gamedata/*
 
 *.o
 *.png
+!docs/screenshots/*.png
 .DS_Store
 .cache/

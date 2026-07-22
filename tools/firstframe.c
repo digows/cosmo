@@ -103,7 +103,8 @@ static void usage(const char *argv0)
         "  datadir     directory holding COSMO1.STN and COSMO1.VOL"
         " (default: gamedata)\n"
         "  entry       group entry to render (default: TITLE1.MNI)\n"
-        "  output.png  write a screenshot instead of opening a window\n",
+        "  output.png  write a screenshot instead of opening a window\n"
+        "  scale       integer magnification for the screenshot (default 1)\n",
         argv0);
 }
 
@@ -112,6 +113,7 @@ int main(int argc, char *argv[])
     const char *datadir  = (argc > 1) ? argv[1] : "gamedata";
     const char *entry    = (argc > 2) ? argv[2] : "TITLE1.MNI";
     const char *png_path = (argc > 3) ? argv[3] : NULL;
+    int scale = (argc > 4) ? atoi(argv[4]) : 1;
     unsigned char image[FULLSCREEN_IMAGE_SIZE];
 
     if (argc > 1 && (strcmp(argv[1], "-h") == 0 ||
@@ -146,11 +148,13 @@ int main(int argc, char *argv[])
     ega_select_active_page(0);
 
     if (png_path) {
-        if (!video_write_png(png_path)) {
+        if (scale < 1) scale = 1;
+        if (!video_write_png(png_path, scale)) {
             fprintf(stderr, "could not write %s\n", png_path);
             return 1;
         }
-        printf("Wrote %s (%dx%d)\n", png_path, EGA_SCREEN_W, EGA_SCREEN_H);
+        printf("Wrote %s (%dx%d)\n", png_path,
+               EGA_SCREEN_W * scale, EGA_SCREEN_H * scale);
         return 0;
     }
 

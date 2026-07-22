@@ -77,16 +77,44 @@ void video_render_rgb(uint8_t *out)
     }
 }
 
-bool video_write_png(const char *path)
+bool video_write_png(const char *path, int scale)
 {
     uint8_t *rgb = malloc(FB_BYTES);
-    bool ok;
+    uint8_t *scaled = NULL;
+    int out_w, out_h;
+    bool ok = false;
 
     if (!rgb) return false;
+    if (scale < 1) scale = 1;
 
     video_render_rgb(rgb);
-    ok = png_write_rgb(path, rgb, EGA_SCREEN_W, EGA_SCREEN_H);
 
+    if (scale == 1) {
+        ok = png_write_rgb(path, rgb, EGA_SCREEN_W, EGA_SCREEN_H);
+        free(rgb);
+        return ok;
+    }
+
+    out_w = EGA_SCREEN_W * scale;
+    out_h = EGA_SCREEN_H * scale;
+    scaled = malloc((size_t)out_w * (size_t)out_h * 3);
+    if (!scaled) { free(rgb); return false; }
+
+    for (int y = 0; y < out_h; y++) {
+        const uint8_t *src = rgb + (size_t)(y / scale) * EGA_SCREEN_W * 3;
+        uint8_t *dst = scaled + (size_t)y * (size_t)out_w * 3;
+
+        for (int x = 0; x < out_w; x++) {
+            const uint8_t *pixel = src + (size_t)(x / scale) * 3;
+            *dst++ = pixel[0];
+            *dst++ = pixel[1];
+            *dst++ = pixel[2];
+        }
+    }
+
+    ok = png_write_rgb(path, scaled, out_w, out_h);
+
+    free(scaled);
     free(rgb);
     return ok;
 }

@@ -14,8 +14,12 @@
  */
 void video_render_rgb(uint8_t *out);
 
-/* Write the current screen as a PNG. Returns false on I/O failure. */
-bool video_write_png(const char *path);
+/*
+ * Write the current screen as a PNG, enlarged by an integer `scale` using
+ * nearest-neighbour sampling so the pixels stay square-edged. Returns false on
+ * I/O failure.
+ */
+bool video_write_png(const char *path, int scale);
 
 /* Window management. `scale` is the horizontal factor; height is corrected
  * to 4:3 because mode 0Dh pixels are taller than they are wide. */
