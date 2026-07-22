@@ -1,0 +1,9 @@
+build/
+
+# Dados do jogo: propriedade da Apogee Software. Nunca versionar.
+gamedata/*
+!gamedata/README.md
+
+*.o
+*.png
+.DS_Store

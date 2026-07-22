@@ -1,0 +1,3 @@
+[submodule "vendor/cosmore"]
+	path = vendor/cosmore
+	url = https://github.com/smitelli/cosmore.git
