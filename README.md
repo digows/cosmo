@@ -23,7 +23,7 @@ These are produced by this port, on macOS, from the original 1992 data files —
 not captured from an emulator. Reproduce them with:
 
 ```bash
-./build/default/firstframe gamedata TITLE1.MNI docs/screenshots/title1.png 2
+./build/default/imgview gamedata TITLE1.MNI docs/screenshots/title1.png 2
 ```
 
 They are the fullscreen images, which is what the video layer renders today.
@@ -44,7 +44,7 @@ redistributable shareware episode.
 | AdLib (OPL2) and PC speaker | ⬜ |
 | Full game wiring | ⬜ |
 
-The `firstframe` harness already renders the game's fullscreen images straight
+The `imgview` harness already renders the game's fullscreen images straight
 from the original data files, exercising the whole path: group file → four EGA
 planes → palette → pixels.
 
@@ -78,10 +78,21 @@ The assets belong to Apogee Software and are **not** in this repository. Put
 `COSMO1.STN` and `COSMO1.VOL` in `gamedata/` — see
 [gamedata/README.md](gamedata/README.md) for where to get them legally.
 
+## Running
+
 ```bash
-./build/default/firstframe gamedata TITLE1.MNI          # opens a window
-./build/default/firstframe gamedata TITLE1.MNI shot.png # writes a screenshot
+./build/default/imgview
 ```
+
+Opens a window and browses the game's fullscreen images. Arrows or space change
+image, `S` saves a screenshot, `Q` or Escape quits.
+
+```bash
+./build/default/imgview gamedata TITLE1.MNI shot.png 2   # headless screenshot
+```
+
+This is a harness for the video layer, not the game — the interrupt, timing and
+input layers still have to land before Cosmo himself moves.
 
 ## How it works
 

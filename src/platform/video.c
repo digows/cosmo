@@ -185,15 +185,31 @@ void video_present(void)
     SDL_RenderPresent(renderer);
 }
 
-bool video_pump_events(void)
+video_key video_poll_key(void)
 {
     SDL_Event e;
 
     while (SDL_PollEvent(&e)) {
-        if (e.type == SDL_EVENT_QUIT) return false;
-        if (e.type == SDL_EVENT_KEY_DOWN && e.key.key == SDLK_ESCAPE) return false;
+        if (e.type == SDL_EVENT_QUIT) return VIDEO_KEY_QUIT;
+
+        if (e.type == SDL_EVENT_KEY_DOWN) {
+            switch (e.key.key) {
+            case SDLK_ESCAPE:
+            case SDLK_Q:      return VIDEO_KEY_QUIT;
+            case SDLK_RIGHT:
+            case SDLK_SPACE:  return VIDEO_KEY_NEXT;
+            case SDLK_LEFT:   return VIDEO_KEY_PREV;
+            case SDLK_S:      return VIDEO_KEY_SCREENSHOT;
+            default: break;
+            }
+        }
     }
-    return true;
+    return VIDEO_KEY_NONE;
+}
+
+void video_set_title(const char *title)
+{
+    if (window) SDL_SetWindowTitle(window, title);
 }
 
 void video_delay(uint32_t ms)

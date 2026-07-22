@@ -27,8 +27,24 @@ bool video_init(const char *title, int scale);
 void video_present(void);
 void video_shutdown(void);
 
-/* Returns false once the user closes the window or presses Escape. */
-bool video_pump_events(void);
+/*
+ * Minimal input for the standalone tools. This is not the game's keyboard
+ * path -- Cosmo installs its own int 9 handler and reads scancodes from port
+ * 0x60, which the interrupt layer will provide. This exists so the harnesses
+ * can be driven at all.
+ */
+typedef enum {
+    VIDEO_KEY_NONE = 0,
+    VIDEO_KEY_QUIT,
+    VIDEO_KEY_NEXT,
+    VIDEO_KEY_PREV,
+    VIDEO_KEY_SCREENSHOT
+} video_key;
+
+video_key video_poll_key(void);
+
+/* Update the window caption. */
+void video_set_title(const char *title);
 
 /* Sleep, used by the standalone tools. Wraps the SDL implementation so
  * callers do not need to include SDL headers. */

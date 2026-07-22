@@ -67,9 +67,9 @@ jobs:
         run: cmake --build --preset macos-universal
 
       - name: Verify architectures
-        run: lipo -info build/macos-universal/firstframe
+        run: lipo -info build/macos-universal/imgview
 
       - uses: actions/upload-artifact@v4
         with:
-          name: firstframe-macos-universal
-          path: build/macos-universal/firstframe
+          name: imgview-macos-universal
+          path: build/macos-universal/imgview

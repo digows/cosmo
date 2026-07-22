@@ -116,8 +116,8 @@ endif()
 # Tools
 # --------------------------------------------------------------------------
 
-add_executable(firstframe tools/firstframe.c)
-target_link_libraries(firstframe PRIVATE cosmo_video cosmo_warnings)
+add_executable(imgview tools/imgview.c)
+target_link_libraries(imgview PRIVATE cosmo_video cosmo_warnings)
 
 # --------------------------------------------------------------------------
 # Tests
