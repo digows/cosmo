@@ -44,6 +44,44 @@ void ega_init(void)
     ega.border_color = 0;
 }
 
+/*
+ * Mode 0Dh is a 200-line mode, which drives the monitor in its CGA-compatible
+ * mode. Only four bits of the six-bit color value reach the screen, and they
+ * are not contiguous (lowlevel.asm documents this in detail):
+ *
+ *     bit 0  Blue      bit 3  unused
+ *     bit 1  Green     bit 4  Intensity
+ *     bit 2  Red       bits 5-7  unused
+ *
+ * So the 64 possible values are really 16 distinct colors, each repeated four
+ * times. Getting this wrong is subtle: the BIOS default palette still looks
+ * plausible under the six-bit interpretation, and only the palette the game
+ * installs during its fade-in reveals the difference.
+ */
+void ega_palette_rgb(uint8_t value, uint8_t rgb[3])
+{
+    uint8_t b = (uint8_t)((value >> 0) & 1);
+    uint8_t g = (uint8_t)((value >> 1) & 1);
+    uint8_t r = (uint8_t)((value >> 2) & 1);
+    uint8_t i = (uint8_t)((value >> 4) & 1);
+
+    /*
+     * The Enhanced Color Display special-cased RGBI 1100. Left alone it is an
+     * unpleasant dark yellow, so the monitor nudged the green intensity bit on
+     * to produce brown instead [ECD, pg. 4].
+     */
+    if (r && g && !b && !i) {
+        rgb[0] = 0xAA;
+        rgb[1] = 0x55;
+        rgb[2] = 0x00;
+        return;
+    }
+
+    rgb[0] = (uint8_t)((r ? 0xAA : 0x00) + (i ? 0x55 : 0x00));
+    rgb[1] = (uint8_t)((g ? 0xAA : 0x00) + (i ? 0x55 : 0x00));
+    rgb[2] = (uint8_t)((b ? 0xAA : 0x00) + (i ? 0x55 : 0x00));
+}
+
 /* ------------------------------------------------------------------------- */
 /* Registers                                                                 */
 /* ------------------------------------------------------------------------- */

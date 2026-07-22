@@ -30,29 +30,13 @@ static SDL_Window   *window;
 static SDL_Renderer *renderer;
 static SDL_Texture  *texture;
 
-/*
- * An EGA color value holds six bits, r'g'b'RGB, where RGB are the primary bits
- * (two thirds intensity) and r'g'b' the secondary ones (one third). Each
- * channel sums both, giving four levels: 0, 85, 170, 255.
- */
-static void ega_color_to_rgb(uint8_t value, uint8_t rgb[3])
-{
-    uint8_t r = (uint8_t)((((value >> 2) & 1) << 1) | ((value >> 5) & 1));
-    uint8_t g = (uint8_t)((((value >> 1) & 1) << 1) | ((value >> 4) & 1));
-    uint8_t b = (uint8_t)((((value >> 0) & 1) << 1) | ((value >> 3) & 1));
-
-    rgb[0] = (uint8_t)(r * 85);
-    rgb[1] = (uint8_t)(g * 85);
-    rgb[2] = (uint8_t)(b * 85);
-}
-
 void video_render_rgb(uint8_t *out)
 {
     uint8_t lut[16][3];
     uint32_t base = ega.display_start;
 
     for (int i = 0; i < 16; i++) {
-        ega_color_to_rgb(ega.palette[i], lut[i]);
+        ega_palette_rgb(ega.palette[i], lut[i]);
     }
 
     for (uint32_t byte = 0; byte < EGA_PAGE_BYTES; byte++) {

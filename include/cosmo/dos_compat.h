@@ -29,6 +29,28 @@
 void *dos_map_segment(unsigned seg, unsigned ofs);
 #define MK_FP(seg, ofs) dos_map_segment((unsigned)(seg), (unsigned)(ofs))
 
+/*
+ * Video memory cannot be reached through MK_FP: a plain `*ptr = value` store
+ * would bypass the plane, latch and bit mask logic of the adapter. The two
+ * call sites in game1.c that did that are rerouted to these by patches/0001.
+ */
+void dos_vram_write(unsigned offset, unsigned char value);
+unsigned char dos_vram_read(unsigned offset);
+#define EGA_WRITE(offset, value) \
+    dos_vram_write((unsigned)(offset), (unsigned char)(value))
+#define EGA_READ(offset) dos_vram_read((unsigned)(offset))
+
+/*
+ * Stand-ins for the `pushf` / `popf` pairs that bracket critical sections in
+ * game2.c. They carry the interrupt flag, which is the only one the code
+ * around them depends on. See patches/0003.
+ */
+unsigned long SaveInterruptFlag(void);
+void RestoreInterruptFlag(unsigned long saved);
+
+/* Called when the game flips display pages; drives presentation. */
+void platform_page_flipped(void);
+
 #define random(num) (rand() % (num))
 
 enum COLORS {

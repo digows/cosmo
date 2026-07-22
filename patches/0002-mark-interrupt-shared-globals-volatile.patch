@@ -1,0 +1,93 @@
+Mark interrupt-shared globals volatile
+
+The game synchronises with its own interrupt handlers through plain globals.
+WaitHard() is the clearest case:
+
+    gameTickCount = 0;
+    while (gameTickCount < delay)
+        ;  /* VOID */
+
+On a 286 that worked because the handler ran on the same processor, and because
+Turbo C 2.0 did not optimise aggressively enough to notice. Here the handler
+runs on the main thread while the game runs on its own, and any modern compiler
+at -O2 hoists the load out of the loop and spins forever.
+
+So every global written by an interrupt handler and read by mainline code, or
+the reverse, is marked volatile. This does not change what the game computes;
+it restores an assumption the original code was entitled to make and that the
+translation to real threads took away.
+
+diff --git a/game1.c b/game1.c
+index 900aef5..f66ff4e 100644
+--- a/game1.c
++++ b/game1.c
+@@ -87,7 +87,7 @@ Free-running counters. These generally keep counting no matter what's going on
+ elsewhere in the game.
+ */
+ word activePage = 0;
+-word gameTickCount;
++volatile word gameTickCount;
+ static word randStepCount;
+ static dword paletteStepCount;
+ 
+@@ -196,8 +196,8 @@ static word nextActorIndex, nextDrawMode;
+ Keyboard and joystick variables. Also includes player immobilization and jump
+ lockout flags.
+ */
+-byte lastScancode;
+-bbool isKeyDown[BYTE_MAX];
++volatile byte lastScancode;
++volatile bbool isKeyDown[BYTE_MAX];
+ bool isJoystickReady;
+ bbool cmdWest, cmdEast, cmdNorth, cmdSouth, cmdJump, cmdBomb;
+ static bbool blockMovementCmds, cmdJumpLatch;
+@@ -213,8 +213,8 @@ byte scancodeWest, scancodeEast, scancodeNorth, scancodeSouth, scancodeJump, sca
+ PC speaker sound effect and AdLib music variables.
+ */
+ Music *activeMusic;
+-static word activeSoundIndex, activeSoundPriority;
+-static bool isNewSound, enableSpeaker;
++static volatile word activeSoundIndex, activeSoundPriority;
++static volatile bool isNewSound, enableSpeaker;
+ 
+ /*
+ Level/map control and global world variables.
+diff --git a/game2.c b/game2.c
+index 9af24da..5515a66 100644
+--- a/game2.c
++++ b/game2.c
+@@ -91,8 +91,8 @@ Low-level values for profiling and managing interrupts for the Programmable
+ Interval Timer, along with processor speed measurement.
+ */
+ static InterruptFunction savedInt8;
+-static dword pit0Value, timerTickCount;
+-static word profCountCPU, profCountPIT;
++static volatile dword pit0Value, timerTickCount;
++static volatile word profCountCPU, profCountPIT;
+ 
+ /*
+ Computed ratios for WaitWallclock(). 10 and 25us are never used.
+diff --git a/glue.h b/glue.h
+index da63aed..b6b0736 100644
+--- a/glue.h
++++ b/glue.h
+@@ -147,7 +147,7 @@ extern word miscDataContents;
+ extern word playerHealth, playerHealthCells, playerBombs;
+ extern byte demoState;
+ extern word activePage;
+-extern word gameTickCount;
++extern volatile word gameTickCount;
+ extern bool isGodMode;
+ extern char *stnGroupFilename, *volGroupFilename;
+ extern char *musicNames[];
+@@ -156,8 +156,8 @@ extern HighScoreName highScoreNames[];
+ extern dword highScoreValues[];
+ extern byte *fontTileData, *maskedTileData, *miscData;
+ extern dword lastGroupEntryLength;
+-extern byte lastScancode;
+-extern bbool isKeyDown[];
++extern volatile byte lastScancode;
++extern volatile bbool isKeyDown[];
+ extern bool isJoystickReady;
+ extern bbool cmdWest, cmdEast, cmdNorth, cmdSouth, cmdJump, cmdBomb;
+ extern bool isMusicEnabled, isSoundEnabled;

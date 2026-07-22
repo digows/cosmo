@@ -1,0 +1,84 @@
+Restore the interrupt flag save/restore, and the OPL2 register writes
+
+Three functions in game2.c bracket a critical section with `pushf` / `disable()`
+/ `popf`. Commenting out the assembly leaves the `disable()` with nothing to
+undo it: game2.c ends up with three calls to disable() and none to enable().
+SetAdLibRegister() is called several hundred times while probing for an AdLib,
+so the first one masks interrupts for the rest of the process's life, the timer
+interrupt never lands, and every WaitHard() spins forever.
+
+`pushf`/`popf` are replaced by explicit save and restore of the interrupt flag,
+which is the only flag the surrounding code cares about.
+
+SetAdLibRegister() also loses its actual work when the assembly goes: the OUTs
+to the OPL2 address and data ports were in there. Those come back as ordinary
+outportb() calls. The long runs of `in` instructions are not restored -- they
+existed purely to burn the microseconds the physical chip needed between
+diff --git a/game2.c b/game2.c
+index c998238..6244894 100644
+--- a/game2.c
++++ b/game2.c
+@@ -271,24 +271,14 @@ hardware to process the write and become ready for another (potential) write.
+ */
+ static void SetAdLibRegister(byte addr, byte data)
+ {
+-    // ASM: pushf
++    dword saved_flags = SaveInterruptFlag();
+ 
+     disable();
+ 
+-    // ASM: mov   dx,0x0388
+-    // ASM: mov   al,[addr]
+-    // ASM: out   dx,al
+-    // ASM: in    al,dx  /* 6 `in` instructions for a 3.4 us delay */
+-    // ASM: in    al,dx
+-    // ASM: in    al,dx
+-    // ASM: in    al,dx
+-    // ASM: in    al,dx
+-    // ASM: in    al,dx
+-    // ASM: mov   dx,0x0389
+-    // ASM: mov   al,[data]
+-    // ASM: out   dx,al
++    outportb(0x0388, addr);
++    outportb(0x0389, data);
+ 
+-    // ASM: popf
++    RestoreInterruptFlag(saved_flags);
+ 
+     // ASM: mov   dx,0x0388
+     // ASM: in    al,dx  /* 35 `in` instructions for a 23.5 us delay */
+@@ -551,14 +541,14 @@ void StopAdLib(void)
+ 
+     StopAdLibPlayback();
+ 
+-    // ASM: pushf
++    dword saved_flags = SaveInterruptFlag();
+ 
+     disable();
+ 
+     SetPIT0Value(0);
+     setvect(8, savedInt8);
+ 
+-    // ASM: popf
++    RestoreInterruptFlag(saved_flags);
+ 
+     isAdLibStarted = false;
+ }
+@@ -604,7 +594,7 @@ static void SwitchMusic(Music *music)
+ {
+     StopAdLibPlayback();
+ 
+-    // ASM: pushf
++    dword saved_flags = SaveInterruptFlag();
+ 
+     disable();
+ 
+@@ -618,7 +608,7 @@ static void SwitchMusic(Music *music)
+         StartAdLibPlayback();
+     }
+ 
+-    // ASM: popf
++    RestoreInterruptFlag(saved_flags);
+ }
+ 
+ /*

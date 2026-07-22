@@ -1,0 +1,51 @@
+Route direct video memory writes through the emulated EGA
+
+Two functions in game1.c build a far pointer to segment 0xA000 and then store
+through it with plain assignments. Everything else that touches video memory
+goes through the drawing routines, which the platform layer reimplements, but a
+plain `*ptr = value` cannot be intercepted: the store happens before any code of
+ours could apply the plane, latch and bit mask logic the EGA would.
+
+So these two call sites are rewritten to use EGA_WRITE(), which dos_compat.h
+maps onto the emulated adapter. The surrounding logic -- plane ordering, port
+values, loop bounds -- is left exactly as it was.
+
+This is the only patch applied to the upstream sources. Everything else is
+handled by the two mechanical transformations in PrepareCosmoreSources.cmake.
+
+diff --git a/game1.c b/game1.c
+index 900aef5..8f7805e 100644
+--- a/game1.c
++++ b/game1.c
+@@ -557,7 +557,6 @@ Replace the entire screen contents with a full-size (320x200) image.
+ */
+ void DrawFullscreenImage(word image_num)
+ {
+-    byte *destbase = MK_FP(0xa000, 0);
+ 
+     if (image_num != IMAGE_TITLE && image_num != IMAGE_CREDITS) {
+         StopMusic();
+@@ -586,7 +585,7 @@ void DrawFullscreenImage(word image_num)
+             outport(0x03c4, 0x0002 | mask);
+ 
+             for (i = 0; i < 8000; i++) {
+-                *(destbase + i) = *(miscData + i + srcbase);
++                EGA_WRITE(i, *(miscData + i + srcbase));
+             }
+ 
+             mask <<= 1;
+@@ -666,13 +665,12 @@ static void CopyTilesToEGA(byte *source, word dest_length, word dest_offset)
+     word i;
+     word mask;
+     byte *src = source;
+-    byte *dest = MK_FP(0xa000, dest_offset);
+ 
+     for (i = 0; i < dest_length; i++) {
+         for (mask = 0x0100; mask < 0x1000; mask = mask << 1) {
+             outport(0x03c4, mask | 0x0002);
+ 
+-            *(dest + i) = *(src++);
++            EGA_WRITE(dest_offset + i, *(src++));
+         }
+     }
+ }

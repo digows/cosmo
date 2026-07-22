@@ -150,6 +150,77 @@ static void test_page_selection(void)
     CHECK(ega.display_start == 0, "display_start is 0x%04X", ega.display_start);
 }
 
+/*
+ * The palette is the subtlest part of the adapter. Mode 0Dh is a 200-line
+ * mode, so only bits 0, 1, 2 and 4 of the six-bit color value reach the
+ * screen. Interpreting the value as the full six-bit r'g'b'RGB form still
+ * renders the BIOS default palette convincingly, and only goes visibly wrong
+ * once the game installs its own palette during a fade-in -- which is a long
+ * way from where the mistake was made.
+ */
+static void check_color(uint8_t value, uint8_t r, uint8_t g, uint8_t b,
+                        const char *name)
+{
+    uint8_t rgb[3];
+
+    ega_palette_rgb(value, rgb);
+    CHECK(rgb[0] == r && rgb[1] == g && rgb[2] == b,
+          "value 0x%02X (%s) gave %02X%02X%02X, expected %02X%02X%02X",
+          value, name, rgb[0], rgb[1], rgb[2], r, g, b);
+}
+
+static void test_palette_colors(void)
+{
+    check_color(0x00, 0x00, 0x00, 0x00, "black");
+    check_color(0x01, 0x00, 0x00, 0xAA, "blue");
+    check_color(0x02, 0x00, 0xAA, 0x00, "green");
+    check_color(0x04, 0xAA, 0x00, 0x00, "red");
+    check_color(0x07, 0xAA, 0xAA, 0xAA, "light gray");
+
+    /* Bit 4, not bit 3, is the intensity bit. */
+    check_color(0x10, 0x55, 0x55, 0x55, "dark gray");
+    check_color(0x17, 0xFF, 0xFF, 0xFF, "white");
+
+    /* Bits 3, 5, 6 and 7 are not wired to anything in a 200-line mode. */
+    check_color(0x08, 0x00, 0x00, 0x00, "black with bit 3 set");
+    check_color(0x37, 0xFF, 0xFF, 0xFF, "white with bits 3 and 5 set");
+
+    /* The monitor turned dark yellow into brown. */
+    check_color(0x06, 0xAA, 0x55, 0x00, "brown");
+    check_color(0x16, 0xFF, 0xFF, 0x55, "yellow (intensity, so no fudge)");
+}
+
+/*
+ * The palette the game installs during its fade-in must come out as the
+ * sixteen colors the artwork was drawn against. FadeInCustom() writes
+ * register N with value N, and N + 8 from register 8 up.
+ */
+static void test_fade_in_palette(void)
+{
+    static const uint8_t expected[16][3] = {
+        {0x00, 0x00, 0x00}, {0x00, 0x00, 0xAA}, {0x00, 0xAA, 0x00},
+        {0x00, 0xAA, 0xAA}, {0xAA, 0x00, 0x00}, {0xAA, 0x00, 0xAA},
+        {0xAA, 0x55, 0x00}, {0xAA, 0xAA, 0xAA}, {0x55, 0x55, 0x55},
+        {0x55, 0x55, 0xFF}, {0x55, 0xFF, 0x55}, {0x55, 0xFF, 0xFF},
+        {0xFF, 0x55, 0x55}, {0xFF, 0x55, 0xFF}, {0xFF, 0xFF, 0x55},
+        {0xFF, 0xFF, 0xFF}
+    };
+    unsigned skip = 0;
+
+    for (int reg = 0; reg < 16; reg++) {
+        uint8_t rgb[3];
+
+        if (reg == 8) skip = 8;
+        ega_palette_rgb((uint8_t)(reg + skip), rgb);
+
+        CHECK(rgb[0] == expected[reg][0] && rgb[1] == expected[reg][1] &&
+              rgb[2] == expected[reg][2],
+              "palette index %d gave %02X%02X%02X, expected %02X%02X%02X",
+              reg, rgb[0], rgb[1], rgb[2],
+              expected[reg][0], expected[reg][1], expected[reg][2]);
+    }
+}
+
 int main(void)
 {
     test_indexed_port_write();
@@ -160,6 +231,8 @@ int main(void)
     test_set_reset();
     test_read_loads_all_latches();
     test_page_selection();
+    test_palette_colors();
+    test_fade_in_palette();
 
     if (failures) {
         printf("%d check(s) failed\n", failures);

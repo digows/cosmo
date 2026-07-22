@@ -25,6 +25,8 @@
 #define GROUP_ENTRY_SIZE      20
 #define GROUP_NAME_COMPARE    11
 
+typedef uint16_t word;
+
 /* The game's own fullscreenImageNames[] table (game1.c:107), episode 1. */
 static const char *const fullscreen_images[] = {
     "PRETITLE.MNI", "TITLE1.MNI", "CREDIT.MNI",
@@ -125,6 +127,20 @@ static void upload_fullscreen_image(const unsigned char *image)
     }
 
     ega_select_active_page(0);
+
+    /*
+     * Install the palette the game itself ends up with. DrawFullscreenImage()
+     * finishes by calling FadeIn(), which writes register N with value N, and
+     * N + 8 from register 8 up. Without this the BIOS default palette is used,
+     * which differs in a couple of entries from what the artwork expects.
+     */
+    {
+        word skip = 0;
+        for (word reg = 0; reg < 16; reg++) {
+            if (reg == 8) skip = 8;
+            ega_set_palette_register((uint8_t)reg, (uint8_t)(reg + skip));
+        }
+    }
 }
 
 static bool show(const char *datadir, const char *entry, bool verbose)

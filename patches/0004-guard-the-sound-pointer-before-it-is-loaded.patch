@@ -1,0 +1,36 @@
+Guard the sound data pointer before it is loaded
+
+Startup() installs the timer handler inside StartAdLib(), several hundred
+milliseconds before it calls LoadSoundData(). In between, every timer tick runs
+PCSpeakerService(), which dereferences soundDataPtr[activeSoundIndex] without
+checking it.
+
+On DOS that was harmless. The array is static, so it started as a null far
+pointer, and 0000:0000 in real mode is the interrupt vector table -- readable
+memory holding values that were never going to equal END_SOUND. The read
+returned junk, the comparison failed, and the game carried on.
+
+With a modern memory map that same read is a fault on the very first tick. The
+guard returns early, after gameTickCount has already been incremented, so the
+game clock keeps its cadence and only the speaker work is skipped -- which is
+exactly what happened before, just without reading the vector table to find out.
+
+diff --git a/game1.c b/game1.c
+index d887712..027948d 100644
+--- a/game1.c
++++ b/game1.c
+@@ -8051,6 +8051,14 @@ void PCSpeakerService(void)
+         enableSpeaker = true;
+     }
+ 
++    /*
++    PORT: soundDataPtr is still null here on the first few hundred ticks --
++    StartAdLib() installs this handler well before Startup() loads the sound
++    data. In real mode the null pointer aimed at 0000:0000, the interrupt
++    vector table, which read back harmless garbage. Here it faults.
++    */
++    if (soundDataPtr[activeSoundIndex] == NULL) return;
++
+     if (*(soundDataPtr[activeSoundIndex] + soundCursor) == END_SOUND) {
+         enableSpeaker = false;
+         activeSoundPriority = 0;

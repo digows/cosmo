@@ -37,16 +37,18 @@ redistributable shareware episode.
 |---|---|
 | Game sources compiling on arm64 / x86_64 | ✅ 14,600 lines, zero errors |
 | Emulated EGA (write modes, latches, bit mask, map mask, set/reset) | ✅ unit tested |
-| Planar decode, palette, SDL3 presentation | ✅ verified against original assets |
-| STN/VOL group file reading | ✅ in the harness |
-| Interrupt and timing layer (int 8 / int 9) | ⬜ |
-| Keyboard and joystick | ⬜ |
-| AdLib (OPL2) and PC speaker | ⬜ |
-| Full game wiring | ⬜ |
+| Planar decode, palette, SDL3 presentation | ✅ unit tested |
+| STN/VOL group files, memory, Borland runtime | ✅ |
+| Interrupt and timing layer (int 8 / int 9, PIT, PIC) | ✅ 140 Hz, verified |
+| **The game boots and reaches its title screen** | ✅ |
+| Keyboard | 🟡 wired, not yet exercised |
+| Joystick | ⬜ |
+| AdLib (OPL2) and PC speaker | ⬜ silent |
+| Gameplay | 🟡 in progress |
 
-The `imgview` harness already renders the game's fullscreen images straight
-from the original data files, exercising the whole path: group file → four EGA
-planes → palette → pixels.
+The game itself runs: `cosmo` starts the original `InnerMain()` on its own
+thread, the main thread plays the part of the PC hardware, and the title screen
+comes up from the 1992 data files.
 
 ## Building
 
@@ -95,6 +97,13 @@ This is a harness for the video layer, not the game — the interrupt, timing an
 input layers still have to land before Cosmo himself moves.
 
 ## How it works
+
+The main thread plays the part of the PC hardware and a second thread plays the
+part of the CPU. Cosmo's main loop never yields: it busy-waits on a counter its
+own timer interrupt increments, and reads keyboard state its own keyboard
+interrupt fills in. On real hardware those handlers fired underneath the running
+program, so here the main thread fires them at whatever rate the game programmed
+into the PIT -- 140 Hz -- while the game runs uninterrupted alongside.
 
 The original game programs the EGA through I/O ports and writes into video
 memory at segment 0xA000. Rather than rewriting the drawing code, this port

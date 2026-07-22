@@ -98,4 +98,7 @@ void    ega_set_palette_register(uint8_t index, uint8_t color_value);
 void    ega_set_border_color(uint8_t color_value);
 void    ega_select_active_page(uint8_t page);
 
+/* Convert a 6-bit EGA color value to 8-bit RGB as the display would show it. */
+void    ega_palette_rgb(uint8_t value, uint8_t rgb[3]);
+
 #endif /* COSMO_EGA_H */

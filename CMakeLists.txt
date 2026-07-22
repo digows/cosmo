@@ -17,8 +17,7 @@ endif()
 option(COSMO_WERROR "Treat warnings as errors" OFF)
 option(COSMO_FETCH_SDL "Always build SDL3 from source instead of using a system copy" OFF)
 option(COSMO_BUILD_TESTS "Build the test suite" ON)
-option(COSMO_BUILD_GAME_OBJECTS
-    "Compile the Cosmore game sources (not linkable yet)" ON)
+option(COSMO_BUILD_GAME "Build the game itself from the Cosmore sources" ON)
 
 # --------------------------------------------------------------------------
 # Warnings
@@ -96,20 +95,35 @@ target_link_libraries(cosmo_video
 # interrupt, timing, keyboard and audio services. Building them anyway keeps
 # CI honest about whether the port still compiles on every platform.
 
-if(COSMO_BUILD_GAME_OBJECTS AND NOT MSVC)
+if(COSMO_BUILD_GAME AND NOT MSVC)
     include(cmake/PrepareCosmoreSources.cmake)
 
-    add_library(cosmore_objects OBJECT ${COSMORE_GEN_SOURCES})
-    target_include_directories(cosmore_objects PRIVATE
-        "${COSMORE_GEN_DIR}"
-        include
-        include/cosmo)
-    target_compile_definitions(cosmore_objects PRIVATE EPISODE=1)
-    target_compile_options(cosmore_objects PRIVATE
+    # The reconstructed 1992 sources. Warnings are silenced: this is not code
+    # we get to fix, and the noise would bury real problems in our own layer.
+    add_library(cosmore_game OBJECT ${COSMORE_GEN_SOURCES})
+    target_include_directories(cosmore_game PRIVATE "${COSMORE_GEN_DIR}" include)
+    target_compile_definitions(cosmore_game PRIVATE EPISODE=1)
+    target_compile_options(cosmore_game PRIVATE
+        -w -include "${CMAKE_CURRENT_SOURCE_DIR}/include/cosmo/dos_compat.h")
+
+    # Our replacements for the parts that spoke to hardware. These see the
+    # game's headers, so their prototypes match exactly, but they are ours and
+    # are compiled with warnings on.
+    add_library(cosmo_dos STATIC
+        src/platform/lowlevel_ega.c
+        src/platform/dos_compat.c
+        src/platform/ports.c
+        src/platform/interrupts.c
+        src/platform/platform_main.c)
+    target_include_directories(cosmo_dos PRIVATE "${COSMORE_GEN_DIR}")
+    target_compile_definitions(cosmo_dos PRIVATE EPISODE=1)
+    target_compile_options(cosmo_dos PRIVATE
         -include "${CMAKE_CURRENT_SOURCE_DIR}/include/cosmo/dos_compat.h")
-    # This is 1992 code reconstructed verbatim; its warnings are not ours to
-    # fix, and silencing them keeps real problems visible elsewhere.
-    target_compile_options(cosmore_objects PRIVATE -w)
+    target_link_libraries(cosmo_dos PUBLIC cosmo_video PRIVATE cosmo_warnings)
+    add_dependencies(cosmo_dos cosmore_game)
+
+    add_executable(cosmo $<TARGET_OBJECTS:cosmore_game>)
+    target_link_libraries(cosmo PRIVATE cosmo_dos)
 endif()
 
 # --------------------------------------------------------------------------
