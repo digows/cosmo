@@ -1,81 +1,109 @@
-# Cosmo — port nativo para macOS (Apple Silicon)
+# Cosmo
 
-Port de **Cosmo's Cosmic Adventure: Forbidden Planet** (Apogee Software, 1992)
-para rodar nativamente em macOS ARM64, sem emulador de DOS.
+A native port of **Cosmo's Cosmic Adventure: Forbidden Planet** (Apogee
+Software, 1992) to modern systems. No DOS emulator.
 
-O ponto de partida é o código do jogo original, não uma reimplementação. Usamos
-o [Cosmore](https://github.com/smitelli/cosmore) — a reconstrução do código-fonte
-da v1.20 feita por Scott Smitelli a partir do desassembly dos executáveis, 96,3%
-byte-accurate contra os binários de 1992 — e substituímos apenas a camada que
-falava com o hardware do PC.
+The starting point is the original game's own code, not a reimplementation.
+This project builds on [Cosmore](https://github.com/smitelli/cosmore) — Scott
+Smitelli's reconstruction of the v1.20 source, recovered by disassembling the
+1992 executables and accurate to 96.3% of their bytes — and replaces only the
+layer that talked to PC hardware.
 
-## Estado atual
+Everything above that layer is the game as Todd Replogle wrote it: the physics,
+the actors, the collision handling, the bugs.
 
-| Subsistema | Estado |
+## Status
+
+| Subsystem | State |
 |---|---|
-| Compilação do código do jogo em ARM64 | ✅ 0 erros (14.600 linhas) |
-| EGA emulado (write modes, latches, bit mask, map mask) | ✅ |
-| Decodificação planar + paleta + apresentação SDL2 | ✅ validado |
-| Leitura dos group files STN/VOL | ✅ (harness) |
-| Camada de interrupções (int 8 / int 9) e temporização | ⬜ |
-| Teclado e joystick | ⬜ |
-| AdLib (OPL2) e PC speaker | ⬜ |
-| Wiring do jogo completo | ⬜ |
+| Game sources compiling on arm64 / x86_64 | ✅ 14,600 lines, zero errors |
+| Emulated EGA (write modes, latches, bit mask, map mask, set/reset) | ✅ unit tested |
+| Planar decode, palette, SDL3 presentation | ✅ verified against original assets |
+| STN/VOL group file reading | ✅ in the harness |
+| Interrupt and timing layer (int 8 / int 9) | ⬜ |
+| Keyboard and joystick | ⬜ |
+| AdLib (OPL2) and PC speaker | ⬜ |
+| Full game wiring | ⬜ |
 
-O harness `firstframe` já renderiza as telas cheias do jogo a partir dos dados
-originais, exercitando o caminho completo: group file → 4 planos EGA → paleta →
-pixels.
+The `firstframe` harness already renders the game's fullscreen images straight
+from the original data files, exercising the whole path: group file → four EGA
+planes → palette → pixels.
 
-## Como construir
+## Building
 
-Requer macOS com Xcode command line tools, `pkg-config` e SDL2.
-
-```bash
-brew install sdl2 pkg-config
-```
+Requires CMake 3.21+, a C11 compiler, and SDL3. If SDL3 is not installed, CMake
+downloads and builds it automatically.
 
 ```bash
-git clone --recurse-submodules <este-repo> && cd cosmos && make
+git clone --recurse-submodules https://github.com/digows/cosmos.git
+cd cosmos
+cmake --preset default
+cmake --build --preset default
+ctest --preset default
 ```
 
-## Dados do jogo
+**macOS** — `brew install cmake sdl3`
+**Linux** — SDL3 from your distribution, or let CMake fetch it
+**Windows** — vcpkg, or let CMake fetch it
 
-Os assets são propriedade da Apogee Software e **não** estão neste repositório.
-Coloque `COSMO1.STN` e `COSMO1.VOL` em `gamedata/`. Veja
-[gamedata/README.md](gamedata/README.md).
-
-Para ver o primeiro frame:
+For a universal binary on macOS (builds SDL from source for both slices, since
+the Homebrew package is single-architecture):
 
 ```bash
-make firstframe ENTRY=TITLE1.MNI PNG=title.png
+cmake --preset macos-universal && cmake --build --preset macos-universal
 ```
 
-Sem `PNG=`, abre uma janela SDL com correção de proporção 4:3.
+## Game data
 
-## Arquitetura
+The assets belong to Apogee Software and are **not** in this repository. Put
+`COSMO1.STN` and `COSMO1.VOL` in `gamedata/` — see
+[gamedata/README.md](gamedata/README.md) for where to get them legally.
+
+```bash
+./build/default/firstframe gamedata TITLE1.MNI          # opens a window
+./build/default/firstframe gamedata TITLE1.MNI shot.png # writes a screenshot
+```
+
+## How it works
+
+The original game programs the EGA through I/O ports and writes into video
+memory at segment 0xA000. Rather than rewriting the drawing code, this port
+emulates the adapter: four 64 KiB planes in ordinary memory, with the write
+modes, latches, bit mask and set/reset logic the game depends on.
+
+That fidelity matters. `DrawSolidTile` blits scenery from video memory to video
+memory using `*dst = *src` under write mode 1, where the CPU data is discarded
+and what reaches the screen is the latch content the read loaded. An EGA that
+looks correct but skips the latches renders garbage.
+
+Assembly is avoided entirely. Upstream publishes a pure C implementation of
+every drawing routine in `C-DRAWING.md`, written as a curiosity because it is
+too slow for a 286. On a modern CPU that cost is irrelevant, and using it
+removes the dependency on Turbo Assembler, which Borland never released for
+free.
+
+## Layout
 
 ```
-vendor/cosmore/     submódulo pinado no upstream (intocado)
-tools/prep.sh       gera build/gen/ a partir do submódulo
-include/            headers da camada de plataforma
-src/platform/       EGA emulado, vídeo, compat DOS
-tools/firstframe.c  harness de validação
+vendor/cosmore/    upstream submodule, pinned and never modified
+cmake/             source preparation, run at configure time
+include/cosmo/     platform layer headers
+src/platform/      emulated EGA, video, PNG writer
+tools/             validation harnesses
+tests/             unit tests, no game data required
 ```
 
-O `prep.sh` aplica exatamente duas transformações no código do upstream: remove
-os `#include` de headers Borland sem equivalente moderno, e comenta as linhas de
-assembly inline 16-bit. Nada mais é editado — o diff contra o original fica
-auditável.
+Source preparation applies exactly two transformations to upstream: it drops
+the `#include` lines for Borland headers with no modern equivalent, and
+comments out the 16-bit inline assembly. It runs in CMake rather than a shell
+script so it behaves the same on every platform, and the diff against the
+original stays auditable.
 
-As rotinas de desenho em assembly são substituídas pela implementação em C que o
-próprio upstream publica em `C-DRAWING.md`. Isso elimina a dependência do Turbo
-Assembler, que nunca foi liberado gratuitamente.
+## License
 
-## Licença
+Code in this repository: MIT, see [LICENSE](LICENSE).
 
-Código deste repositório: MIT (veja [LICENSE](LICENSE)).
+Cosmore: MIT, © Scott Smitelli and contributors.
 
-Cosmore: MIT, © Scott Smitelli e contribuidores.
-
-*Cosmo's Cosmic Adventure*, seus assets e marcas: © 1992 Apogee Software, Ltd.
-Veja [ATTRIBUTION.md](ATTRIBUTION.md).
+*Cosmo's Cosmic Adventure*, its assets and trademarks: © 1992 Apogee Software,
+Ltd. See [ATTRIBUTION.md](ATTRIBUTION.md).

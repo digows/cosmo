@@ -1,0 +1,75 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: macOS (Apple Silicon)
+            os: macos-latest
+          - name: Linux
+            os: ubuntu-latest
+          - name: Windows
+            os: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install dependencies (macOS)
+        if: runner.os == 'macOS'
+        run: brew install sdl3
+
+      # SDL3 is not packaged on the Ubuntu runners yet, so CMake falls back to
+      # FetchContent. These are the headers that source build needs.
+      - name: Install dependencies (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libasound2-dev libpulse-dev libx11-dev libxext-dev \
+            libxrandr-dev libxcursor-dev libxi-dev libxss-dev \
+            libwayland-dev libxkbcommon-dev libdrm-dev libgbm-dev
+
+      - name: Configure
+        run: cmake --preset ci
+
+      - name: Build
+        run: cmake --build --preset ci
+
+      - name: Test
+        run: ctest --preset ci
+
+  macos-universal:
+    name: macOS universal binary
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      # The Homebrew SDL3 is single-architecture, so a universal build has to
+      # compile SDL from source for both slices.
+      - name: Configure
+        run: cmake --preset macos-universal
+
+      - name: Build
+        run: cmake --build --preset macos-universal
+
+      - name: Verify architectures
+        run: lipo -info build/macos-universal/firstframe
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: firstframe-macos-universal
+          path: build/macos-universal/firstframe

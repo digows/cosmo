@@ -1,31 +1,39 @@
 /*
- * video.c -- Converte a VRAM planar do EGA emulado em pixels e apresenta.
+ * video.c -- Turn planar EGA memory into pixels and put them on screen.
  *
- * O EGA guarda cada pixel espalhado em 4 planos: o bit N de cada plano forma o
- * bit N do indice de paleta. Aqui isso e desentrelacado, passado pela paleta de
- * 6 bits do EGA e entregue como RGB.
+ * The EGA scatters each pixel across four planes: bit N of each plane forms
+ * bit N of the palette index. This file de-interleaves that, runs the result
+ * through the adapter's 6-bit palette, and hands it to SDL.
  */
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <zlib.h>
 
-#include <SDL2/SDL.h>
+#include <SDL3/SDL.h>
 
-#include "ega.h"
-#include "video.h"
+#include "cosmo/ega.h"
+#include "cosmo/png.h"
+#include "cosmo/video.h"
 
 #define FB_PIXELS (EGA_SCREEN_W * EGA_SCREEN_H)
+#define FB_BYTES  (FB_PIXELS * 3)
+
+/*
+ * Mode 0Dh pixels are not square: the 320x200 frame was displayed at 4:3, so
+ * each pixel is 20% taller than it is wide. Stretching the height preserves
+ * the proportions the artists actually drew for.
+ */
+#define PIXEL_ASPECT 1.2
 
 static SDL_Window   *window;
 static SDL_Renderer *renderer;
 static SDL_Texture  *texture;
 
 /*
- * Um valor de cor EGA tem 6 bits: r'g'b'RGB, onde RGB sao os bits primarios
- * (2/3 de intensidade) e r'g'b' os secundarios (1/3). Cada canal soma os dois,
- * dando 4 niveis: 0, 85, 170, 255.
+ * An EGA color value holds six bits, r'g'b'RGB, where RGB are the primary bits
+ * (two thirds intensity) and r'g'b' the secondary ones (one third). Each
+ * channel sums both, giving four levels: 0, 85, 170, 255.
  */
 static void ega_color_to_rgb(uint8_t value, uint8_t rgb[3])
 {
@@ -54,7 +62,7 @@ void video_render_rgb(uint8_t *out)
         uint8_t p2 = ega.vram[2][addr];
         uint8_t p3 = ega.vram[3][addr];
 
-        /* O bit 7 e o pixel mais a esquerda. */
+        /* Bit 7 is the leftmost pixel of the byte. */
         for (int bit = 7; bit >= 0; bit--) {
             uint8_t index = (uint8_t)(
                   ((p0 >> bit) & 1)
@@ -69,115 +77,43 @@ void video_render_rgb(uint8_t *out)
     }
 }
 
-/* ------------------------------------------------------------------------- */
-/* PNG                                                                       */
-/* ------------------------------------------------------------------------- */
-
-static void png_chunk(FILE *fp, const char *type, const uint8_t *data, size_t len)
-{
-    uint8_t be[4];
-    uLong crc;
-
-    be[0] = (uint8_t)(len >> 24); be[1] = (uint8_t)(len >> 16);
-    be[2] = (uint8_t)(len >> 8);  be[3] = (uint8_t)len;
-    fwrite(be, 1, 4, fp);
-
-    fwrite(type, 1, 4, fp);
-    if (len) fwrite(data, 1, len, fp);
-
-    crc = crc32(0, (const Bytef *)type, 4);
-    if (len) crc = crc32(crc, (const Bytef *)data, (uInt)len);
-    be[0] = (uint8_t)(crc >> 24); be[1] = (uint8_t)(crc >> 16);
-    be[2] = (uint8_t)(crc >> 8);  be[3] = (uint8_t)crc;
-    fwrite(be, 1, 4, fp);
-}
-
 bool video_write_png(const char *path)
 {
-    static const uint8_t sig[8] = {137, 'P', 'N', 'G', '\r', '\n', 26, '\n'};
-    uint8_t ihdr[13];
-    uint8_t *rgb = NULL, *raw = NULL, *comp = NULL;
-    uLongf complen;
-    FILE *fp = NULL;
-    bool ok = false;
+    uint8_t *rgb = malloc(FB_BYTES);
+    bool ok;
 
-    rgb = malloc((size_t)FB_PIXELS * 3);
-    /* Cada scanline leva um byte de filtro (0 = None) na frente. */
-    raw = malloc((size_t)EGA_SCREEN_H * (1 + EGA_SCREEN_W * 3));
-    if (!rgb || !raw) goto done;
+    if (!rgb) return false;
 
     video_render_rgb(rgb);
+    ok = png_write_rgb(path, rgb, EGA_SCREEN_W, EGA_SCREEN_H);
 
-    for (int y = 0; y < EGA_SCREEN_H; y++) {
-        uint8_t *dst = raw + (size_t)y * (1 + EGA_SCREEN_W * 3);
-        *dst = 0;
-        memcpy(dst + 1, rgb + (size_t)y * EGA_SCREEN_W * 3, EGA_SCREEN_W * 3);
-    }
-
-    complen = compressBound((uLong)EGA_SCREEN_H * (1 + EGA_SCREEN_W * 3));
-    comp = malloc(complen);
-    if (!comp) goto done;
-    if (compress(comp, &complen, raw,
-                 (uLong)EGA_SCREEN_H * (1 + EGA_SCREEN_W * 3)) != Z_OK) goto done;
-
-    fp = fopen(path, "wb");
-    if (!fp) goto done;
-
-    fwrite(sig, 1, sizeof sig, fp);
-
-    ihdr[0] = 0; ihdr[1] = 0;
-    ihdr[2] = (uint8_t)(EGA_SCREEN_W >> 8); ihdr[3] = (uint8_t)EGA_SCREEN_W;
-    ihdr[4] = 0; ihdr[5] = 0;
-    ihdr[6] = (uint8_t)(EGA_SCREEN_H >> 8); ihdr[7] = (uint8_t)EGA_SCREEN_H;
-    ihdr[8] = 8;    /* bits por canal */
-    ihdr[9] = 2;    /* truecolor RGB */
-    ihdr[10] = 0; ihdr[11] = 0; ihdr[12] = 0;
-    png_chunk(fp, "IHDR", ihdr, sizeof ihdr);
-    png_chunk(fp, "IDAT", comp, complen);
-    png_chunk(fp, "IEND", NULL, 0);
-
-    ok = true;
-
-done:
-    if (fp) fclose(fp);
-    free(comp); free(raw); free(rgb);
+    free(rgb);
     return ok;
 }
 
-/* ------------------------------------------------------------------------- */
-/* Janela SDL                                                                */
-/* ------------------------------------------------------------------------- */
-
 bool video_init(const char *title, int scale)
 {
+    int w, h;
+
     if (scale < 1) scale = 3;
 
-    if (SDL_Init(SDL_INIT_VIDEO) != 0) {
+    if (!SDL_Init(SDL_INIT_VIDEO)) {
         fprintf(stderr, "SDL_Init: %s\n", SDL_GetError());
         return false;
     }
 
-    /* 320x200 nao e 4:3 -- o pixel do modo 0Dh e 20%% mais alto que largo.
-     * Esticamos a altura para preservar as proporcoes originais. */
-    int w = EGA_SCREEN_W * scale;
-    int h = (int)(EGA_SCREEN_H * scale * 1.2);
+    w = EGA_SCREEN_W * scale;
+    h = (int)(EGA_SCREEN_H * scale * PIXEL_ASPECT);
 
-    window = SDL_CreateWindow(title, SDL_WINDOWPOS_CENTERED,
-                              SDL_WINDOWPOS_CENTERED, w, h,
-                              SDL_WINDOW_ALLOW_HIGHDPI);
-    if (!window) {
-        fprintf(stderr, "SDL_CreateWindow: %s\n", SDL_GetError());
+    if (!SDL_CreateWindowAndRenderer(title, w, h, SDL_WINDOW_RESIZABLE,
+                                     &window, &renderer)) {
+        fprintf(stderr, "SDL_CreateWindowAndRenderer: %s\n", SDL_GetError());
         return false;
     }
 
-    renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);
-    if (!renderer) {
-        fprintf(stderr, "SDL_CreateRenderer: %s\n", SDL_GetError());
-        return false;
-    }
-
-    SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "nearest");
-    SDL_RenderSetLogicalSize(renderer, w, h);
+    /* Letterbox to the corrected aspect, so resizing never distorts. */
+    SDL_SetRenderLogicalPresentation(renderer, w, h,
+                                     SDL_LOGICAL_PRESENTATION_LETTERBOX);
 
     texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGB24,
                                 SDL_TEXTUREACCESS_STREAMING,
@@ -187,6 +123,9 @@ bool video_init(const char *title, int scale)
         return false;
     }
 
+    /* Chunky pixels, not a blurry upscale. */
+    SDL_SetTextureScaleMode(texture, SDL_SCALEMODE_NEAREST);
+
     return true;
 }
 
@@ -195,17 +134,18 @@ void video_present(void)
     uint8_t *pixels;
     int pitch;
 
-    if (SDL_LockTexture(texture, NULL, (void **)&pixels, &pitch) != 0) return;
+    if (!SDL_LockTexture(texture, NULL, (void **)&pixels, &pitch)) return;
 
     if (pitch == EGA_SCREEN_W * 3) {
         video_render_rgb(pixels);
     } else {
-        uint8_t *tmp = malloc((size_t)FB_PIXELS * 3);
+        uint8_t *tmp = malloc(FB_BYTES);
         if (tmp) {
             video_render_rgb(tmp);
             for (int y = 0; y < EGA_SCREEN_H; y++) {
-                memcpy(pixels + (size_t)y * pitch,
-                       tmp + (size_t)y * EGA_SCREEN_W * 3, EGA_SCREEN_W * 3);
+                memcpy(pixels + (size_t)y * (size_t)pitch,
+                       tmp + (size_t)y * EGA_SCREEN_W * 3,
+                       EGA_SCREEN_W * 3);
             }
             free(tmp);
         }
@@ -213,7 +153,7 @@ void video_present(void)
 
     SDL_UnlockTexture(texture);
     SDL_RenderClear(renderer);
-    SDL_RenderCopy(renderer, texture, NULL, NULL);
+    SDL_RenderTexture(renderer, texture, NULL, NULL);
     SDL_RenderPresent(renderer);
 }
 
@@ -222,10 +162,15 @@ bool video_pump_events(void)
     SDL_Event e;
 
     while (SDL_PollEvent(&e)) {
-        if (e.type == SDL_QUIT) return false;
-        if (e.type == SDL_KEYDOWN && e.key.keysym.sym == SDLK_ESCAPE) return false;
+        if (e.type == SDL_EVENT_QUIT) return false;
+        if (e.type == SDL_EVENT_KEY_DOWN && e.key.key == SDLK_ESCAPE) return false;
     }
     return true;
+}
+
+void video_delay(uint32_t ms)
+{
+    SDL_Delay(ms);
 }
 
 void video_shutdown(void)

@@ -1,9 +1,11 @@
 build/
+compile_commands.json
 
-# Dados do jogo: propriedade da Apogee Software. Nunca versionar.
+# Game data is Apogee Software's property. Never commit it.
 gamedata/*
 !gamedata/README.md
 
 *.o
 *.png
 .DS_Store
+.cache/

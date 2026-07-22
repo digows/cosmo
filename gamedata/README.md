@@ -1,7 +1,7 @@
-# Dados do jogo
+# Game data
 
-Coloque aqui os group files do Cosmo. Eles **não** são versionados: são
-propriedade da Apogee Software.
+Put the Cosmo group files here. They are **not** version controlled: they are
+Apogee Software's property.
 
 ```
 gamedata/
@@ -9,14 +9,15 @@ gamedata/
   COSMO1.VOL
 ```
 
-## Onde obter
+## Where to get them
 
-**Episódio 1** foi distribuído como shareware e é livremente redistribuível.
-Uma cópia íntegra da v1.20 está no Internet Archive, no item
-[`CosmosCosmicAdventure`](https://archive.org/details/CosmosCosmicAdventure),
-arquivo `...V1.20sw1992apogeeSoftwareLtd.action.zip`.
+**Episode 1** was distributed as shareware and is freely redistributable. An
+intact copy of v1.20 — the same version Cosmore reconstructs — is on the
+Internet Archive under the
+[`CosmosCosmicAdventure`](https://archive.org/details/CosmosCosmicAdventure)
+item, in `...V1.20sw1992apogeeSoftwareLtd.action.zip`.
 
-Checksums da v1.20 shareware (SHA-256):
+SHA-256 checksums for shareware v1.20:
 
 ```
 9babfd342683bffea1cc272805f3beda54c2b1f2620c167688b6ac8bf38f6047  COSMO1.EXE
@@ -24,8 +25,9 @@ Checksums da v1.20 shareware (SHA-256):
 f578a1b72423e83b363c5c019faac5b96124f39bc4a2ec4ee09cabc29f3a63fd  COSMO1.VOL
 ```
 
-**Episódios 2 e 3** não são shareware. Estão à venda na Steam, GOG e Zoom
-Platform; use os `COSMO2.*` / `COSMO3.*` da sua própria cópia.
+**Episodes 2 and 3** are not shareware. They are sold on Steam, GOG and Zoom
+Platform; use the `COSMO2.*` / `COSMO3.*` files from your own copy.
 
-O `COSMO1.EXE` original não é necessário para o port rodar, mas é útil como
-oráculo: rodá-lo no DOSBox permite comparar frames com a nossa saída.
+The original `COSMO1.EXE` is not needed to run the port, but it is useful as an
+oracle: running it under DOSBox lets you compare frames against this port's
+output.
