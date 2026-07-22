@@ -16,20 +16,13 @@ the actors, the collision handling, the bugs.
 
 | | |
 |:-:|:-:|
-| ![Apogee presents](docs/screenshots/pretitle.png) | ![Forbidden Planet title screen](docs/screenshots/title1.png) |
-| ![Credits](docs/screenshots/credit.png) | ![Bonus stage](docs/screenshots/bonus.png) |
+| ![Forbidden Planet title screen](docs/screenshots/title1.png) | ![Credits](docs/screenshots/credit.png) |
+| ![Gameplay in the jungle](docs/screenshots/gameplay-jungle.png) | ![Gameplay in the tech level](docs/screenshots/gameplay-tech.png) |
 
-These are produced by this port, on macOS, from the original 1992 data files —
-not captured from an emulator. Reproduce them with:
-
-```bash
-./build/default/imgview gamedata TITLE1.MNI docs/screenshots/title1.png 2
-```
-
-They are the fullscreen images, which is what the video layer renders today.
-Gameplay needs the timing and input layers that are still missing; those
-screenshots will land here when they are real. The artwork is from the freely
-redistributable shareware episode.
+All four are produced by this port, on macOS, from the original 1992 data
+files — not captured from an emulator. The bottom two are the game actually
+running its attract-mode demo. The artwork is from the freely redistributable
+shareware episode.
 
 ## Status
 
@@ -41,14 +34,15 @@ redistributable shareware episode.
 | STN/VOL group files, memory, Borland runtime | ✅ |
 | Interrupt and timing layer (int 8 / int 9, PIT, PIC) | ✅ 140 Hz, verified |
 | **The game boots and reaches its title screen** | ✅ |
-| Keyboard | 🟡 wired, not yet exercised |
+| Map loading, scrolling, actors, the attract-mode demo | ✅ |
+| Keyboard | 🟡 wired, not yet played through |
 | Joystick | ⬜ |
 | AdLib (OPL2) and PC speaker | ⬜ silent |
-| Gameplay | 🟡 in progress |
 
-The game itself runs: `cosmo` starts the original `InnerMain()` on its own
-thread, the main thread plays the part of the PC hardware, and the title screen
-comes up from the 1992 data files.
+The game runs. `cosmo` starts the original `InnerMain()` on its own thread, the
+main thread plays the part of the PC hardware, and it goes through its title
+screen, credits and playable attract-mode demo at the 10.8 frames per second
+the original was paced for.
 
 ## Building
 
@@ -83,6 +77,13 @@ The assets belong to Apogee Software and are **not** in this repository. Put
 ## Running
 
 ```bash
+cd gamedata && ../build/default/cosmo
+```
+
+Runs the game. Leave it alone for a minute and it will play its attract-mode
+demo.
+
+```bash
 ./build/default/imgview
 ```
 
@@ -93,8 +94,13 @@ image, `S` saves a screenshot, `Q` or Escape quits.
 ./build/default/imgview gamedata TITLE1.MNI shot.png 2   # headless screenshot
 ```
 
-This is a harness for the video layer, not the game — the interrupt, timing and
-input layers still have to land before Cosmo himself moves.
+`imgview` is a harness for the video layer alone, useful for inspecting the
+fullscreen images without starting the game.
+
+Two environment variables help with debugging and automated comparison:
+`COSMO_DEBUG=1` reports the timer rate and interrupt delivery once a second,
+and `COSMO_SHOT_PATH=prefix COSMO_SHOT_MS=500,3000` writes screenshots at fixed
+moments after startup. `F12` takes one at any time.
 
 ## How it works
 

@@ -209,6 +209,15 @@ void hardware_init(void)
     memset(&pit0, 0, sizeof pit0);
     memset(&pit2, 0, sizeof pit2);
     memset(&kbd, 0, sizeof kbd);
+    /*
+     * Port 0x60 latches the last scancode the controller saw, and the game
+     * tests it directly: IsAnyKeyDown() is `!(inportb(0x60) & 0x80)`, so a
+     * zero here reads as a key being held down and the title screen falls
+     * straight through its idle loop. On a real machine the last thing seen
+     * before the game started was a key being released, so start with a
+     * release code.
+     */
+    kbd.scancode = 0x80;
     memset(adlib_registers, 0, sizeof adlib_registers);
     adlib_register_index = 0;
     adlib_status = 0x00;

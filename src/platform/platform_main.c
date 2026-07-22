@@ -223,6 +223,7 @@ static void screenshots_update(uint32_t elapsed_ms)
             printf("screenshot: %s\n", path);
             fflush(stdout);
         }
+
         shot_next++;
     }
 }
@@ -322,12 +323,10 @@ int main(int argc, char *argv[])
 
             if (debug_enabled && now >= next_debug) {
                 fprintf(stderr,
-                        "[cosmo] pit divisor=%u hz=%.1f int8=%llu delivered=%llu "
-                        "masked=%d\n",
+                        "[cosmo] pit=%u (%.1f Hz) int8 fired=%llu delivered=%llu\n",
                         pit_divisor(), hz,
                         (unsigned long long)tick_attempts,
-                        (unsigned long long)tick_delivered,
-                        interrupts_enabled() ? 0 : 1);
+                        (unsigned long long)tick_delivered);
                 next_debug = now + freq;
             }
 

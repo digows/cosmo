@@ -43,6 +43,27 @@ void *dos_map_segment(unsigned seg, unsigned ofs)
     return NULL;
 }
 
+/*
+ * 16-bit little-endian file word access, as Borland's getw/putw provided.
+ */
+int cosmo_getw(FILE *fp)
+{
+    int lo = fgetc(fp);
+    int hi = fgetc(fp);
+
+    if (lo == EOF || hi == EOF) return EOF;
+
+    return (int)((unsigned)(hi & 0xFF) << 8 | (unsigned)(lo & 0xFF));
+}
+
+int cosmo_putw(int value, FILE *fp)
+{
+    if (fputc(value & 0xFF, fp) == EOF) return EOF;
+    if (fputc((value >> 8) & 0xFF, fp) == EOF) return EOF;
+
+    return value;
+}
+
 void movmem(void *src, void *dest, unsigned length)
 {
     if (!src || !dest) return;

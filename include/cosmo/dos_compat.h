@@ -14,6 +14,7 @@
 #define COSMO_DOS_COMPAT_H
 
 #include <stdint.h>
+#include <stdio.h>
 #include <stdlib.h>
 
 /* Borland's `interrupt` calling convention does not exist outside real mode. */
@@ -62,6 +63,19 @@ union REGS {
     struct {unsigned int ax, bx, cx, dx, si, di, cflag, flags;} x;
     struct {unsigned char al, ah, bl, bh, cl, ch, dl, dh;} h;
 };
+
+/*
+ * Borland's getw/putw move a 16-bit word. The POSIX functions of the same name
+ * move an `int`, which is 32 bits here -- so every map header and save file
+ * would be read at double width and at the wrong offsets. These replace them.
+ *
+ * The signatures match the POSIX declarations so that the macro rename below
+ * stays compatible with whatever <stdio.h> declares.
+ */
+int cosmo_getw(FILE *fp);
+int cosmo_putw(int value, FILE *fp);
+#define getw cosmo_getw
+#define putw cosmo_putw
 
 unsigned long coreleft(void);
 void disable(void);

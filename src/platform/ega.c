@@ -10,7 +10,6 @@
 #include "cosmo/ega.h"
 
 ega_state ega;
-
 /*
  * Mode 0Dh default palette. In the palette index bit 0 is blue, bit 1 green,
  * bit 2 red and bit 3 intensity, which lines up with Borland's COLORS enum and
