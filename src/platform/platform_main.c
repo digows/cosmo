@@ -33,6 +33,7 @@ void InnerMain(int argc, char *argv[]);
 extern volatile uint8_t isKeyDown[];
 extern uint8_t cmdWest, cmdEast, cmdNorth, cmdSouth, cmdJump, cmdBomb;
 
+#include "cosmo/audio.h"
 #include "cosmo/dos_compat.h"
 #include "cosmo/ega.h"
 #include "cosmo/hardware.h"
@@ -307,8 +308,12 @@ int main(int argc, char *argv[])
     ega_init();
     screenshots_configure();
     input_script_load(SDL_getenv("COSMO_SCRIPT"));
+    audio_record_to(SDL_getenv("COSMO_AUDIO_WAV"));
 
     if (!video_init("Cosmo's Cosmic Adventure", 3)) return 1;
+
+    /* Silence is survivable; a missing audio device must not stop the game. */
+    audio_init();
 
     SDL_SetAtomicInt(&game_running, 1);
 
@@ -336,6 +341,7 @@ int main(int argc, char *argv[])
                  * the process outright rather than joining a thread that will
                  * never return.
                  */
+                audio_shutdown();
                 video_shutdown();
                 exit(EXIT_SUCCESS);
             } else if (event.type == SDL_EVENT_WINDOW_FOCUS_LOST) {
@@ -428,6 +434,7 @@ int main(int argc, char *argv[])
     }
 
     SDL_WaitThread(thread, NULL);
+    audio_shutdown();
     video_shutdown();
     return 0;
 }

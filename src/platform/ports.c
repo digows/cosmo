@@ -9,6 +9,8 @@
 
 #include <string.h>
 
+#include <SDL3/SDL.h>
+
 #include "cosmo/dos_compat.h"
 #include "cosmo/ega.h"
 #include "cosmo/hardware.h"
@@ -34,6 +36,28 @@ static struct {
     uint8_t scancode;
     bool pending;
 } kbd;
+
+/*
+ * A lock-free snapshot of the speaker for the audio thread. The game updates
+ * the speaker from the timer interrupt, which runs on the main thread, so this
+ * is a genuine cross-thread handoff.
+ */
+static SDL_AtomicInt speaker_snapshot;
+
+static void speaker_publish(void)
+{
+    uint32_t packed = pit2.divisor;
+
+    /* Both gate bits of port 0x61 must be set for the speaker to sound. */
+    if ((kbd.port61 & 0x03) == 0x03) packed |= 1u << 16;
+
+    SDL_SetAtomicInt(&speaker_snapshot, (int)packed);
+}
+
+uint32_t speaker_state(void)
+{
+    return (uint32_t)SDL_GetAtomicInt(&speaker_snapshot);
+}
 
 static uint8_t adlib_register_index;
 static uint8_t adlib_registers[256];
@@ -132,7 +156,7 @@ void outportb(int portid, unsigned char value)
 
     /* PIT */
     case 0x0040: pit_data(0, value); break;
-    case 0x0042: pit_data(2, value); break;
+    case 0x0042: pit_data(2, value); speaker_publish(); break;
     case 0x0043: pit_command(value); break;
 
     /*
@@ -144,6 +168,7 @@ void outportb(int portid, unsigned char value)
             kbd.pending = false;
         }
         kbd.port61 = value;
+        speaker_publish();
         break;
 
     /* Joystick: writing starts the resistor timing cycle */
@@ -221,4 +246,5 @@ void hardware_init(void)
     memset(adlib_registers, 0, sizeof adlib_registers);
     adlib_register_index = 0;
     adlib_status = 0x00;
+    speaker_publish();
 }

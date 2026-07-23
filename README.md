@@ -37,7 +37,8 @@ shareware episode.
 | Map loading, scrolling, actors, the attract-mode demo | ✅ |
 | Keyboard, including jump while moving | ✅ verified by script |
 | Joystick | ⬜ |
-| AdLib (OPL2) and PC speaker | ⬜ silent |
+| PC speaker sound effects | ✅ verified against the game's sound data |
+| AdLib (OPL2) music | ⬜ silent |
 
 The game runs. `cosmo` starts the original `InnerMain()` on its own thread, the
 main thread plays the part of the PC hardware, and it goes through its title
@@ -128,6 +129,12 @@ Each line is `<milliseconds> <down|up|tap> <key>`. `COSMO_DEBUG=1` reports the
 timer rate, interrupt delivery, and the game's own key and command state once a
 second, which is how the jump-while-walking behaviour above was confirmed to
 work at the emulation level before being traced to the window system.
+
+`COSMO_AUDIO_WAV=out.wav` records everything the speaker produces. The header
+is kept up to date as it goes, so the file is valid even when the game is
+killed rather than quit — which is how most interesting captures end. This is
+how the sound effects were checked: the capture's frequencies were compared
+against the divisors decoded straight out of `SOUNDS.MNI`.
 
 ## How it works
 

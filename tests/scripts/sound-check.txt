@@ -1,0 +1,24 @@
+# Drives the game to a point where sound effects fire, for audio capture.
+# Jumping plays SND_PLAYER_JUMP and landing plays SND_PLAYER_LAND.
+
+12000 tap space
+13500 tap space
+15000 tap space
+16500 tap space
+18000 tap space
+19500 tap space
+21000 tap space
+22500 tap space
+24000 tap space
+25500 tap space
+27000 tap space
+28500 tap space
+30000 tap space
+31500 tap space
+33000 tap space
+34500 tap space
+
+38000 tap ctrl
+40000 tap ctrl
+42000 tap ctrl
+44000 tap ctrl

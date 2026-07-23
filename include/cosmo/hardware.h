@@ -17,8 +17,13 @@
 /* Programmable Interval Timer (8253)                                       */
 /* ------------------------------------------------------------------------ */
 
-/* The base frequency of PIT channel 0, as the game computes it (game2.c:182). */
-#define PIT_BASE_HZ 1192030.0
+/*
+ * The PIT's input clock: one third of the 315/88 MHz the IBM PC's components
+ * ran at. The game divides 1192030 instead when picking a divisor, which its
+ * own comment notes is about 0.1% off for reasons nobody recorded -- but the
+ * chip still divides the real clock, so that is what belongs here.
+ */
+#define PIT_BASE_HZ 1193181.8181818
 
 /*
  * Divisor the game last programmed into channel 0. A value of 0 means the full
@@ -48,6 +53,13 @@ bool keyboard_has_scancode(void);
 
 /* Current square wave frequency in Hz, or 0 when the speaker is gated off. */
 double speaker_frequency(void);
+
+/*
+ * The same thing packed into one word so the audio thread can read it without
+ * a lock: the PIT channel 2 divisor in the low 16 bits, and bit 16 set when
+ * port 0x61 has the output gated on. Zero means silence.
+ */
+uint32_t speaker_state(void);
 
 /* ------------------------------------------------------------------------ */
 /* Interrupt delivery                                                       */
