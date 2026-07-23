@@ -64,7 +64,24 @@ EOF
 ) &
 pid=$!
 
-sleep 25
+# Whether it ended on its own, and how, is the thing worth knowing: a crash and
+# a tidy exit both leave a log that simply stops.
+ending="still running"
+for _ in $(seq 25); do
+    if ! kill -0 "$pid" 2>/dev/null; then
+        set +e
+        wait "$pid"
+        code=$?
+        set -e
+        if [ "$code" -gt 128 ]; then
+            ending="killed by signal $((code - 128))"
+        else
+            ending="exited with status $code"
+        fi
+        break
+    fi
+    sleep 1
+done
 
 kill -9 "$pid" 2>/dev/null || true
 wait "$pid" 2>/dev/null || true
@@ -73,7 +90,7 @@ cat "$log.stdout" >> "$log" 2>/dev/null || true
 
 echo "--- output"
 cat "$log" || true
-echo "---"
+echo "--- the program $ending"
 
 if grep -q 'cannot start' "$log"; then
     echo "the launcher could not start the episode" >&2
@@ -107,6 +124,7 @@ required=18
 if [ "${seconds:-0}" -lt "$required" ]; then
     echo "the game stopped after about ${seconds}s, before it was asked to" >&2
     echo "it was still expected to be running at ${required}s" >&2
+    echo "the program $ending" >&2
     exit 1
 fi
 

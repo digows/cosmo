@@ -45,13 +45,6 @@ extern unsigned long adlib_writes;
 
 #ifdef _WIN32
 #   include <windows.h>
-#   include <io.h>
-#   define duplicate_fd _dup2
-#   define fd_of _fileno
-#else
-#   include <unistd.h>
-#   define duplicate_fd dup2
-#   define fd_of fileno
 #endif
 
 #define TARGET_PRESENT_HZ 60.0
@@ -326,7 +319,8 @@ static void logging_init(void)
     if (requested && *requested) {
         if (freopen(requested, "w", stdout)) {
             setvbuf(stdout, NULL, _IOLBF, 0);
-            duplicate_fd(fd_of(stdout), fd_of(stderr));
+            freopen(requested, "a", stderr);
+            setvbuf(stderr, NULL, _IONBF, 0);
         }
         return;
     }
@@ -343,7 +337,8 @@ static void logging_init(void)
         freopen(path, "w", stdout))
     {
         setvbuf(stdout, NULL, _IOLBF, 0);
-        duplicate_fd(fd_of(stdout), fd_of(stderr));
+        freopen(path, "a", stderr);
+        setvbuf(stderr, NULL, _IONBF, 0);
     }
 #else
     (void)path;
