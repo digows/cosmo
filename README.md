@@ -58,9 +58,16 @@ cmake --build --preset default
 ctest --preset default
 ```
 
-**macOS** — `brew install cmake sdl3`
-**Linux** — SDL3 from your distribution, or let CMake fetch it
-**Windows** — vcpkg, or let CMake fetch it
+**macOS** — `brew install cmake sdl3`. Built and played here; this is the
+platform the port is developed on.
+
+**Linux** — SDL3 from your distribution, or let CMake fetch it. Expected to
+work, but not yet run.
+
+**Windows** — the tools and tests build, the game does not. The game sources
+are compiled with `-include` and `-w`, which MSVC spells differently, so that
+target is skipped there; MinGW should be fine. Making MSVC work is on the
+list.
 
 For a universal binary on macOS (builds SDL from source for both slices, since
 the Homebrew package is single-architecture):
