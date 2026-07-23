@@ -22,6 +22,51 @@ static char write_dir[MAX_PATH_LEN];
 /* The extensions an episode's two group files carry. */
 static const char *const GROUP_EXTENSIONS[] = {"STN", "VOL"};
 
+/*
+ * Paths are assembled with explicit lengths rather than snprintf.
+ *
+ * A path built from another path cannot be shown to fit, because it need not:
+ * the compiler is right to complain, and truncating one silently would mean
+ * looking for the data somewhere other than where it was asked to. These say
+ * what happens instead, which is that the caller is told and gives up.
+ */
+static bool path_copy(char *dest, size_t size, const char *text)
+{
+    size_t length = SDL_strlen(text);
+
+    if (length >= size) return false;
+
+    SDL_memcpy(dest, text, length + 1);
+    return true;
+}
+
+static bool path_join(char *dest, size_t size, const char *dir, const char *leaf)
+{
+    size_t dir_length = SDL_strlen(dir);
+    size_t leaf_length = SDL_strlen(leaf);
+
+    if (dir_length + 1 + leaf_length >= size) return false;
+
+    SDL_memcpy(dest, dir, dir_length);
+    dest[dir_length] = '/';
+    SDL_memcpy(dest + dir_length + 1, leaf, leaf_length + 1);
+    return true;
+}
+
+/* The path of one of an episode's two group files. */
+static bool group_path(char *dest, size_t size, const char *dir, int episode,
+                       const char *extension)
+{
+    char leaf[16] = "COSMO0.";
+
+    if (episode < 1 || episode > 9) return false;
+
+    leaf[5] = (char)('0' + episode);
+    if (SDL_strlcat(leaf, extension, sizeof leaf) >= sizeof leaf) return false;
+
+    return path_join(dest, size, dir, leaf);
+}
+
 static bool dir_has_any_episode(const char *dir)
 {
     int episode;
@@ -44,7 +89,7 @@ static bool dir_is_writable(const char *dir)
 
     if (strstr(dir, ".app/Contents/")) return false;
 
-    snprintf(probe, sizeof probe, "%s/.cosmo-write-probe", dir);
+    if (!path_join(probe, sizeof probe, dir, ".cosmo-write-probe")) return false;
 
     io = SDL_IOFromFile(probe, "wb");
     if (!io) return false;
@@ -78,10 +123,10 @@ static void copy_episode(const char *from, const char *to, int episode)
     for (i = 0; i < SDL_arraysize(GROUP_EXTENSIONS); i++) {
         char src[MAX_PATH_LEN], dst[MAX_PATH_LEN];
 
-        snprintf(src, sizeof src, "%s/COSMO%d.%s", from, episode,
-                 GROUP_EXTENSIONS[i]);
-        snprintf(dst, sizeof dst, "%s/COSMO%d.%s", to, episode,
-                 GROUP_EXTENSIONS[i]);
+        if (!group_path(src, sizeof src, from, episode, GROUP_EXTENSIONS[i]) ||
+            !group_path(dst, sizeof dst, to, episode, GROUP_EXTENSIONS[i])) {
+            return;
+        }
 
         if (!copy_file(src, dst)) {
             fprintf(stderr, "cosmo: could not copy %s\n", src);
@@ -100,8 +145,8 @@ static int shipped_locations(char slots[][MAX_PATH_LEN])
     const char *base = SDL_GetBasePath();
     int count = 0;
 
-    if (env && *env) {
-        snprintf(slots[count++], MAX_PATH_LEN, "%s", env);
+    if (env && *env && path_copy(slots[count], MAX_PATH_LEN, env)) {
+        count++;
     }
 
     if (base) {
@@ -110,11 +155,11 @@ static int shipped_locations(char slots[][MAX_PATH_LEN])
          * is one level across, in Contents/Resources. SDL hands back a
          * trailing separator, which is trimmed so group.c can add its own.
          */
-        snprintf(slots[count++], MAX_PATH_LEN, "%s../Resources", base);
-        snprintf(slots[count++], MAX_PATH_LEN, "%s", base);
+        if (path_join(slots[count], MAX_PATH_LEN, base, "../Resources")) count++;
+        if (path_copy(slots[count], MAX_PATH_LEN, base)) count++;
     }
 
-    snprintf(slots[count++], MAX_PATH_LEN, ".");
+    if (path_copy(slots[count], MAX_PATH_LEN, ".")) count++;
 
     for (int i = 0; i < count; i++) {
         size_t len = strlen(slots[i]);
@@ -136,8 +181,8 @@ bool paths_init(void)
     /* Used in place when the data sits somewhere that takes the saves too. */
     for (i = 0; i < count; i++) {
         if (dir_has_any_episode(shipped[i]) && dir_is_writable(shipped[i])) {
-            snprintf(data_dir, sizeof data_dir, "%s", shipped[i]);
-            snprintf(write_dir, sizeof write_dir, "%s", shipped[i]);
+            if (!path_copy(data_dir, sizeof data_dir, shipped[i])) continue;
+            if (!path_copy(write_dir, sizeof write_dir, shipped[i])) continue;
             return change_dir(data_dir) == 0;
         }
     }
@@ -153,14 +198,14 @@ bool paths_init(void)
         return false;
     }
 
-    snprintf(data_dir, sizeof data_dir, "%s", prefs);
+    if (!path_copy(data_dir, sizeof data_dir, prefs)) return false;
     {
         size_t len = strlen(data_dir);
         while (len > 1 && (data_dir[len - 1] == '/' || data_dir[len - 1] == '\\')) {
             data_dir[--len] = '\0';
         }
     }
-    snprintf(write_dir, sizeof write_dir, "%s", data_dir);
+    if (!path_copy(write_dir, sizeof write_dir, data_dir)) return false;
 
     for (i = 0; i < count; i++) {
         for (episode = 1; episode <= 4; episode++) {
@@ -201,16 +246,20 @@ bool paths_import_episode(const char *chosen_file, int episode)
 #endif
     if (!slash) return false;
 
-    snprintf(folder, sizeof folder, "%.*s",
-             (int)(slash - chosen_file), chosen_file);
+    {
+        size_t length = (size_t)(slash - chosen_file);
+        if (length >= sizeof folder) return false;
+        SDL_memcpy(folder, chosen_file, length);
+        folder[length] = '\0';
+    }
 
     for (i = 0; i < SDL_arraysize(GROUP_EXTENSIONS); i++) {
         char src[MAX_PATH_LEN], dst[MAX_PATH_LEN];
 
-        snprintf(src, sizeof src, "%s/COSMO%d.%s", folder, episode,
-                 GROUP_EXTENSIONS[i]);
-        snprintf(dst, sizeof dst, "%s/COSMO%d.%s", data_dir, episode,
-                 GROUP_EXTENSIONS[i]);
+        if (!group_path(src, sizeof src, folder, episode, GROUP_EXTENSIONS[i]) ||
+            !group_path(dst, sizeof dst, data_dir, episode, GROUP_EXTENSIONS[i])) {
+            return false;
+        }
 
         if (!copy_file(src, dst)) return false;
     }
