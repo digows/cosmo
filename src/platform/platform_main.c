@@ -296,6 +296,14 @@ static int SDLCALL game_thread(void *data)
 
     InnerMain(argc_saved, argv_saved);
 
+    /*
+     * The game finishing on its own and the game dying leave the same thing
+     * behind -- a log that stops -- unless one of them says so. This is what
+     * tells the two apart afterwards.
+     */
+    printf("[cosmo] the game returned; shutting down\n");
+    fflush(stdout);
+
     SDL_SetAtomicInt(&game_running, 0);
     return 0;
 }
@@ -319,8 +327,9 @@ static void logging_init(void)
     if (requested && *requested) {
         if (freopen(requested, "w", stdout)) {
             setvbuf(stdout, NULL, _IOLBF, 0);
-            freopen(requested, "a", stderr);
-            setvbuf(stderr, NULL, _IONBF, 0);
+            if (freopen(requested, "a", stderr)) {
+                setvbuf(stderr, NULL, _IONBF, 0);
+            }
         }
         return;
     }
@@ -337,8 +346,9 @@ static void logging_init(void)
         freopen(path, "w", stdout))
     {
         setvbuf(stdout, NULL, _IOLBF, 0);
-        freopen(path, "a", stderr);
-        setvbuf(stderr, NULL, _IONBF, 0);
+        if (freopen(path, "a", stderr)) {
+            setvbuf(stderr, NULL, _IONBF, 0);
+        }
     }
 #else
     (void)path;
