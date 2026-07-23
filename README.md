@@ -34,6 +34,7 @@ running its attract-mode demo.
 | Interrupt and timing layer (int 8 / int 9, PIT, PIC) | ✅ 140 Hz, verified |
 | **The game boots and reaches its title screen** | ✅ |
 | Map loading, scrolling, actors, the attract-mode demo | ✅ |
+| All three episodes | ✅ |
 | Keyboard, including jump while moving | ✅ verified by script |
 | PC speaker sound effects | ✅ verified against the game's sound data |
 | AdLib (OPL2) music, via ymfm | ✅ |
@@ -79,8 +80,13 @@ cmake --preset macos-universal && cmake --build --preset macos-universal
 ## Game data
 
 The assets belong to Apogee Software and are **not** in this repository. Put
-`COSMO1.STN` and `COSMO1.VOL` in `gamedata/` — see
-[gamedata/README.md](gamedata/README.md) for where to get them legally.
+`COSMO1.STN` and `COSMO1.VOL` in `gamedata/`, and the episode 2 and 3 files
+beside them if you have those. See [gamedata/README.md](gamedata/README.md) for
+where to get them legally.
+
+If a `COSMOn.CFG` is already present it wins over this port's defaults,
+including the jump key — the original distributions shipped one with ctrl.
+Delete it to get the defaults, or just rebind in game.
 
 ## Running
 
@@ -90,6 +96,19 @@ cd gamedata && ../build/default/cosmo
 
 Runs the game. Leave it alone for a minute and it will play its attract-mode
 demo.
+
+`cosmo` is a launcher. It looks for which episodes have their data present and
+runs one, asking only when there is more than one to choose from. Name an
+episode to skip the question:
+
+```bash
+cd gamedata && ../build/default/cosmo 2
+```
+
+The three episodes are separate programs -- `cosmo1`, `cosmo2`, `cosmo3` --
+which is not a packaging choice. They differ by preprocessor conditionals that
+include or exclude whole actor implementations, so they compile to genuinely
+different code, and Apogee shipped three executables for the same reason.
 
 ```bash
 ./build/default/imgview
