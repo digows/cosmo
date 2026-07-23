@@ -2,13 +2,16 @@
 #
 # Generates the buildable copy of the Cosmore sources into ${COSMORE_GEN_DIR}.
 #
-# The submodule under vendor/cosmore is never modified. Exactly two
-# transformations are applied here, and nothing else, so the diff between the
-# 1992 reconstruction and what we compile stays small and auditable:
+# The submodule under vendor/cosmore is never modified. Three mechanical
+# transformations are applied here, and anything they cannot express is a
+# numbered patch under patches/, so the diff between the 1992 reconstruction
+# and what we compile stays small and auditable:
 #
 #   1. Drop the #include lines for Borland headers with no modern equivalent.
 #   2. Comment out the 16-bit inline assembly, which the platform layer
 #      reimplements.
+#   3. Pin the base types to their original widths, since the game relies on
+#      16-bit wraparound that `unsigned int` no longer provides.
 #
 # This runs in CMake rather than a shell script so it behaves identically on
 # macOS, Linux and Windows without requiring sed, awk or a Python interpreter.
@@ -66,10 +69,9 @@ if(NOT CMAKE_MATCH_1)
 endif()
 file(WRITE "${COSMORE_GEN_DIR}/lowlevel.c" "${CMAKE_MATCH_1}")
 
-# Anything the two mechanical transformations cannot express lives in patches/.
-# Currently that is one patch, rerouting the two places that store through a far
-# pointer into video memory. Applying them here, rather than committing modified
-# copies, keeps the delta from 1992 visible in review.
+# Anything the transformations above cannot express lives in patches/. Applying
+# them here, rather than committing modified copies of the sources, keeps the
+# delta from 1992 visible in review.
 file(GLOB _cosmore_patches "${CMAKE_CURRENT_SOURCE_DIR}/patches/*.patch")
 list(SORT _cosmore_patches)
 
@@ -90,19 +92,29 @@ endfunction()
 if(_cosmore_patches)
     find_package(Git REQUIRED)
 
+    # `git apply` resolves a patch's paths against whatever repository it
+    # discovers, not against the working directory, and quietly ignores
+    # anything outside it -- while still exiting 0. Since the build tree
+    # usually sits inside this repository, that made every patch a silent
+    # no-op. Giving the generated sources a repository of their own stops the
+    # search there, which works the same way on every platform rather than
+    # depending on how GIT_CEILING_DIRECTORIES compares paths.
+    execute_process(
+        COMMAND "${GIT_EXECUTABLE}" init --quiet
+        WORKING_DIRECTORY "${COSMORE_GEN_DIR}"
+        RESULT_VARIABLE _init_result
+        ERROR_VARIABLE _init_error)
+    if(NOT _init_result EQUAL 0)
+        message(FATAL_ERROR
+            "Could not prepare the patch directory:\n${_init_error}")
+    endif()
+
     foreach(_patch IN LISTS _cosmore_patches)
         get_filename_component(_patch_name "${_patch}" NAME)
         _cosmore_fingerprint(_before)
 
-        # GIT_CEILING_DIRECTORIES stops git from discovering the surrounding
-        # repository. Without it, `git apply` resolves the patch paths against
-        # the repository root instead of the working directory, silently
-        # ignores everything outside it, and still exits 0 -- so the patch
-        # appears to apply while changing nothing at all.
         execute_process(
-            COMMAND "${CMAKE_COMMAND}" -E env
-                    "GIT_CEILING_DIRECTORIES=${CMAKE_BINARY_DIR}"
-                    "${GIT_EXECUTABLE}" apply -p1 "${_patch}"
+            COMMAND "${GIT_EXECUTABLE}" apply -p1 "${_patch}"
             WORKING_DIRECTORY "${COSMORE_GEN_DIR}"
             RESULT_VARIABLE _patch_result
             ERROR_VARIABLE _patch_error)

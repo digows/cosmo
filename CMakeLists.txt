@@ -34,11 +34,20 @@ if(MSVC)
     if(COSMO_WERROR)
         target_compile_options(cosmo_warnings INTERFACE /WX)
     endif()
+
+    # Spellings for the two flags the vendored code needs. MSVC writes both
+    # differently, and hard-coding the GCC forms is what kept the game from
+    # being built on Windows at all.
+    set(COSMO_NO_WARNINGS /w)
+    set(COSMO_FORCE_INCLUDE /FI)
 else()
     target_compile_options(cosmo_warnings INTERFACE -Wall -Wextra)
     if(COSMO_WERROR)
         target_compile_options(cosmo_warnings INTERFACE -Werror)
     endif()
+
+    set(COSMO_NO_WARNINGS -w)
+    set(COSMO_FORCE_INCLUDE -include)
 endif()
 
 # --------------------------------------------------------------------------
@@ -91,7 +100,7 @@ add_library(ymfm STATIC
     vendor/ymfm/src/ymfm_pcm.cpp)
 # SYSTEM so that warnings from ymfm's headers do not reach our -Werror build.
 target_include_directories(ymfm SYSTEM PUBLIC vendor/ymfm/src)
-target_compile_options(ymfm PRIVATE $<$<NOT:$<C_COMPILER_ID:MSVC>>:-w>)
+target_compile_options(ymfm PRIVATE ${COSMO_NO_WARNINGS})
 
 # --------------------------------------------------------------------------
 # Libraries
@@ -121,7 +130,7 @@ target_link_libraries(cosmo_video
 # interrupt, timing, keyboard and audio services. Building them anyway keeps
 # CI honest about whether the port still compiles on every platform.
 
-if(COSMO_BUILD_GAME AND NOT MSVC)
+if(COSMO_BUILD_GAME)
     include(cmake/PrepareCosmoreSources.cmake)
 
     # Everything that does not depend on which episode is being built. The
@@ -155,7 +164,8 @@ if(COSMO_BUILD_GAME AND NOT MSVC)
         # Reconstructed 1992 code; its warnings are not ours to fix, and the
         # noise would bury real problems in our own layer.
         target_compile_options(cosmore_game${episode} PRIVATE
-            -w -include "${CMAKE_CURRENT_SOURCE_DIR}/include/cosmo/dos_compat.h")
+            ${COSMO_NO_WARNINGS}
+            ${COSMO_FORCE_INCLUDE} "${CMAKE_CURRENT_SOURCE_DIR}/include/cosmo/dos_compat.h")
 
         # The drawing routines see the game's headers, so they are episode
         # specific too, but they are ours and are built with warnings on.
@@ -164,7 +174,7 @@ if(COSMO_BUILD_GAME AND NOT MSVC)
             PRIVATE "${COSMORE_GEN_DIR}")
         target_compile_definitions(cosmo_lowlevel${episode} PRIVATE EPISODE=${episode})
         target_compile_options(cosmo_lowlevel${episode} PRIVATE
-            -include "${CMAKE_CURRENT_SOURCE_DIR}/include/cosmo/dos_compat.h")
+            ${COSMO_FORCE_INCLUDE} "${CMAKE_CURRENT_SOURCE_DIR}/include/cosmo/dos_compat.h")
         target_link_libraries(cosmo_lowlevel${episode}
             PUBLIC cosmo_core PRIVATE cosmo_warnings)
 

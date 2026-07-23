@@ -3,73 +3,170 @@ name: CI
 on:
   push:
     branches: [main]
+    tags: ['v*']
   pull_request:
   workflow_dispatch:
 
+# SDL3 is built from source on every platform rather than taken from a system
+# package. It makes the three jobs behave the same way, and it is what makes
+# the artifacts self-contained: nothing to install before running them.
+env:
+  CMAKE_FLAGS: -DCOSMO_WERROR=ON -DCOSMO_FETCH_SDL=ON -DCMAKE_BUILD_TYPE=Release
+
 jobs:
-  build:
-    name: ${{ matrix.name }}
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - name: macOS (Apple Silicon)
-            os: macos-latest
-          - name: Linux
-            os: ubuntu-latest
-          - name: Windows
-            os: windows-latest
-
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          submodules: recursive
-
-      - name: Install dependencies (macOS)
-        if: runner.os == 'macOS'
-        run: brew install sdl3
-
-      # SDL3 is not packaged on the Ubuntu runners yet, so CMake falls back to
-      # FetchContent. These are the headers that source build needs.
-      - name: Install dependencies (Linux)
-        if: runner.os == 'Linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            libasound2-dev libpulse-dev libx11-dev libxext-dev \
-            libxrandr-dev libxcursor-dev libxi-dev libxss-dev \
-            libwayland-dev libxkbcommon-dev libdrm-dev libgbm-dev
-
-      - name: Configure
-        run: cmake --preset ci
-
-      - name: Build
-        run: cmake --build --preset ci
-
-      - name: Test
-        run: ctest --preset ci
-
-  macos-universal:
-    name: macOS universal binary
+  # Single architecture on purpose. GitHub bills macOS minutes at ten times the
+  # Linux rate, and building both slices doubles the longest job in the
+  # workflow. The universal binary is a release concern rather than a
+  # per-commit one: `cmake --preset macos-universal` produces it locally, and
+  # the release job below builds it when a tag is pushed.
+  macos:
+    name: macOS (arm64)
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
         with:
           submodules: recursive
 
-      # The Homebrew SDL3 is single-architecture, so a universal build has to
-      # compile SDL from source for both slices.
       - name: Configure
-        run: cmake --preset macos-universal
+        run: cmake -S . -B build $CMAKE_FLAGS -DCMAKE_OSX_DEPLOYMENT_TARGET=11.0
 
       - name: Build
-        run: cmake --build --preset macos-universal
+        run: cmake --build build -j3
 
-      - name: Verify architectures
-        run: lipo -info build/macos-universal/imgview
+      - name: Test
+        run: ctest --test-dir build --output-on-failure
 
       - uses: actions/upload-artifact@v4
         with:
-          name: imgview-macos-universal
-          path: build/macos-universal/imgview
+          name: cosmo-macos-arm64
+          path: |
+            build/cosmo
+            build/cosmo1
+            build/cosmo2
+            build/cosmo3
+            build/imgview
+
+  linux:
+    name: Linux
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      # SDL3's build dependencies. Checked against a clean ubuntu:24.04
+      # container -- the runner image already carries some of these, but
+      # naming them all is what keeps this from breaking silently when the
+      # image changes.
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libasound2-dev libpulse-dev \
+            libx11-dev libxext-dev libxrandr-dev libxcursor-dev libxfixes-dev \
+            libxi-dev libxss-dev libxtst-dev libxkbcommon-dev \
+            libwayland-dev wayland-protocols libdecor-0-dev \
+            libdrm-dev libgbm-dev libgl1-mesa-dev libegl1-mesa-dev \
+            libdbus-1-dev libudev-dev libibus-1.0-dev
+
+      - name: Configure
+        run: cmake -S . -B build $CMAKE_FLAGS
+
+      - name: Build
+        run: cmake --build build -j3
+
+      - name: Test
+        run: ctest --test-dir build --output-on-failure
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cosmo-linux-x86_64
+          path: |
+            build/cosmo
+            build/cosmo1
+            build/cosmo2
+            build/cosmo3
+            build/imgview
+
+  windows:
+    name: Windows (MinGW)
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: msys2 {0}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      # MinGW rather than MSVC. The game is 1992 C compiled with a forced
+      # include and warnings off, which both toolchains can express, but only
+      # the GCC side of that has been exercised -- the same toolchain is used
+      # to cross-compile a Windows build locally, so this is the configuration
+      # that is actually known to work.
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: true
+          install: >-
+            git
+            mingw-w64-x86_64-gcc
+            mingw-w64-x86_64-cmake
+            mingw-w64-x86_64-ninja
+
+      - name: Configure
+        run: >
+          cmake -S . -B build -G Ninja
+          -DCOSMO_WERROR=ON -DCOSMO_FETCH_SDL=ON -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        run: cmake --build build -j3
+
+      - name: Test
+        run: ctest --test-dir build --output-on-failure
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cosmo-windows-x86_64
+          path: |
+            build/cosmo.exe
+            build/cosmo1.exe
+            build/cosmo2.exe
+            build/cosmo3.exe
+            build/imgview.exe
+
+  # Only on a tag. This is the expensive one -- two architectures on a runner
+  # billed at ten times the Linux rate -- so it does not run per commit.
+  release-macos:
+    name: macOS (universal, tagged releases)
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Configure
+        run: >
+          cmake -S . -B build $CMAKE_FLAGS
+          -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64"
+          -DCMAKE_OSX_DEPLOYMENT_TARGET=11.0
+
+      - name: Build
+        run: cmake --build build -j3
+
+      - name: Verify both architectures
+        run: |
+          for binary in cosmo cosmo1 cosmo2 cosmo3 imgview; do
+            lipo -info "build/$binary"
+          done
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cosmo-macos-universal
+          path: |
+            build/cosmo
+            build/cosmo1
+            build/cosmo2
+            build/cosmo3
+            build/imgview

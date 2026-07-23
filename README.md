@@ -59,19 +59,34 @@ cmake --build --preset default
 ctest --preset default
 ```
 
-**macOS** — `brew install cmake sdl3`. Built and played here; this is the
-platform the port is developed on.
+**macOS** — `brew install cmake sdl3`. This is where the port is developed and
+played.
 
-**Linux** — SDL3 from your distribution, or let CMake fetch it. Expected to
-work, but not yet run.
+**Linux** — SDL3 from your distribution, or let CMake fetch it. Builds and
+tests clean on Ubuntu 24.04; see the dependency list in the CI workflow.
 
-**Windows** — the tools and tests build, the game does not. The game sources
-are compiled with `-include` and `-w`, which MSVC spells differently, so that
-target is skipped there; MinGW should be fine. Making MSVC work is on the
-list.
+**Windows** — MinGW, either natively through MSYS2 or cross-compiled. MSVC is
+not yet exercised: the game sources need a forced include and warnings off,
+which both toolchains can express, but only the GCC spelling has been used in
+anger.
+
+### Checking other platforms without a CI run
+
+Two container recipes reproduce the Linux and Windows jobs on any machine with
+Docker, which is a good deal faster than finding out from a red pipeline:
+
+```bash
+docker build -f tools/checks/linux.Dockerfile .
+docker build -f tools/checks/windows-mingw.Dockerfile .
+```
+
+The first uses the same distribution and the same package list as the CI job,
+so a missing dependency surfaces here. The second cross-compiles with
+MinGW-w64, the same compiler family the Windows job uses.
 
 For a universal binary on macOS (builds SDL from source for both slices, since
-the Homebrew package is single-architecture):
+the Homebrew package is single-architecture). CI does this only for tagged
+releases, since GitHub bills macOS minutes at ten times the Linux rate:
 
 ```bash
 cmake --preset macos-universal && cmake --build --preset macos-universal

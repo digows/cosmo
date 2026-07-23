@@ -19,11 +19,9 @@
 
 #ifdef _WIN32
 #   include <process.h>
-#   define cosmo_exec _execv
 #   define EPISODE_PROGRAM_SUFFIX ".exe"
 #else
 #   include <unistd.h>
-#   define cosmo_exec execv
 #   define EPISODE_PROGRAM_SUFFIX ""
 #endif
 
@@ -249,6 +247,19 @@ static void report_missing_data(void)
  * leaves the launcher holding a window and an event loop while the game tries
  * to open its own, which on macOS ends with neither getting the foreground.
  */
+/*
+ * The two spellings differ in more than name: Windows takes the argument
+ * vector as const, POSIX does not.
+ */
+static int replace_process(const char *program, char *argv[])
+{
+#ifdef _WIN32
+    return (int)_execv(program, (const char *const *)argv);
+#else
+    return execv(program, argv);
+#endif
+}
+
 static int run_episode(int number, char *write_path)
 {
     const char *base = SDL_GetBasePath();
@@ -271,7 +282,7 @@ static int run_episode(int number, char *write_path)
     child_argv[1] = write_path;   /* the game's write path, or NULL */
     child_argv[2] = NULL;
 
-    cosmo_exec(program, child_argv);
+    replace_process(program, child_argv);
 
     /* Only reached if the replacement failed. */
     fprintf(stderr, "cosmo: cannot start %s\n", program);
