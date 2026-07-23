@@ -107,7 +107,14 @@ moments after startup. `F12` takes one at any time.
 ## Controls
 
 Arrow keys move, **Ctrl** jumps, **Alt** throws a bomb — the game's own
-defaults. They can be rebound from the game's menu.
+defaults.
+
+All six can be rebound from the game's own menu: **G** for Game Redefine at the
+main menu, then **K** for Keyboard redefine. The choice is written to
+`COSMO1.CFG` alongside the sound settings and high scores, so it survives
+between runs — but only on a clean exit. Quit through the game (**Q**, then
+**Y**) rather than closing the window, exactly as on DOS, where killing the
+program lost the file the same way.
 
 On macOS, **Command also jumps**. This is not a preference: macOS binds
 Control with Left, Right, Up and Down to Mission Control, so the one
