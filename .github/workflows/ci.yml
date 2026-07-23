@@ -1,10 +1,19 @@
 name: CI
 
+# Documentation-only changes do not run the matrix. Nothing here compiles a
+# README, and runner minutes are not free -- macOS is billed at ten times the
+# Linux rate. Use the manual trigger to force a run.
 on:
   push:
     branches: [main]
     tags: ['v*']
+    paths-ignore: &docs
+      - '**.md'
+      - 'docs/**'
+      - 'LICENSE'
+      - '.gitattributes'
   pull_request:
+    paths-ignore: *docs
   workflow_dispatch:
 
 # SDL3 is built from source on every platform rather than taken from a system
