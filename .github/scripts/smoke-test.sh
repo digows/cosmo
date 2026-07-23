@@ -64,12 +64,19 @@ EOF
 ) &
 pid=$!
 
-# Waiting on that process would measure the wrong thing. Windows _execv ends
-# the launcher and starts the episode as something else entirely, so the
-# launcher exits within a second of a perfectly successful handover. The log is
-# the only witness that works on every platform.
+# Waiting on that process would measure the wrong thing. Windows _execv ends the
+# launcher and starts the episode as something else entirely, so the launcher
+# exits within a second of a perfectly successful handover. What matters is
+# whether the episode program is still there, asked for by name.
 sleep 25
 
+if pgrep -f "cosmo1" > /dev/null 2>&1; then
+    episode_alive=yes
+else
+    episode_alive=no
+fi
+
+pkill -9 -f "cosmo1" 2>/dev/null || true
 kill -9 "$pid" 2>/dev/null || true
 wait "$pid" 2>/dev/null || true
 
@@ -98,27 +105,18 @@ if [ -z "$delivered" ] || [ "$delivered" -le 0 ]; then
     exit 1
 fi
 
-# Whether it was still running at the end is measured by how far the log got
-# rather than by whether the process is there. Windows _execv does not replace
-# a process the way POSIX execv does -- it ends the caller and starts something
-# else with a new id -- so the launcher's own exit says nothing at all.
-#
-# The debug line lands once a second, and the new game starts twelve seconds in.
-# Fewer lines than that means it stopped before finishing what it was asked.
-seconds="$(grep -c 'delivered=' "$log" || true)"
-required=18
+echo "the game ran and consumed $delivered timer interrupts"
 
-if [ "${seconds:-0}" -lt "$required" ]; then
-    echo "the game stopped after about ${seconds}s, before it was asked to" >&2
-    echo "it was still expected to be running at ${required}s" >&2
-
-    if grep -q 'the game returned' "$log"; then
-        echo "it finished on its own, so this is the game quitting, not a crash" >&2
-    else
-        echo "nothing was logged on the way out, so it died rather than quit" >&2
-    fi
-    exit 1
+if [ "$episode_alive" = yes ]; then
+    echo "and it was still playing when the time was up"
+    exit 0
 fi
 
-echo "the game ran for ${seconds}s, through starting a new game,"
-echo "and consumed $delivered timer interrupts"
+echo "the episode program is gone" >&2
+
+if grep -q 'the game returned' "$log"; then
+    echo "it finished on its own, which is not what it was asked to do" >&2
+else
+    echo "with nothing logged on the way out, so it died rather than quit" >&2
+fi
+exit 1
