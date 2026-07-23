@@ -28,9 +28,10 @@ case "$archive" in
 esac
 
 case "$platform" in
-macos) program="$(find "$work" -type f -path '*/Cosmo.app/Contents/MacOS/Cosmo')" ;;
-linux) program="$(find "$work" -type f -name cosmo -perm -u+x | head -1)" ;;
-*)     echo "unknown platform: $platform" >&2; exit 1 ;;
+macos)   program="$(find "$work" -type f -path '*/Cosmo.app/Contents/MacOS/Cosmo')" ;;
+linux)   program="$(find "$work" -type f -name cosmo -perm -u+x | head -1)" ;;
+windows) program="$(find "$work" -type f -name 'cosmo.exe' | head -1)" ;;
+*)       echo "unknown platform: $platform" >&2; exit 1 ;;
 esac
 
 if [ -z "$program" ] || [ ! -x "$program" ]; then
@@ -42,18 +43,33 @@ echo "running $program"
 
 log="$work/run.log"
 
+# Reaching the title screen is not the same as playing. This presses through
+# the main menu into a new game, which is where the Windows build was reported
+# to die and where nothing before this would have noticed.
+script="$work/begin.txt"
+cat > "$script" <<'EOF'
+9000 tap space
+10500 tap b
+12000 tap 1
+EOF
+
 # Episode 1 by name, so the launcher hands straight over rather than waiting on
-# a menu nobody is watching.
+# a menu nobody is watching. On Windows the program has no streams of its own,
+# so COSMO_LOG is where its output has to come from.
 (
     cd "$(dirname "$program")"
     SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy COSMO_DEBUG=1 \
-        "$program" 1 > "$log" 2>&1
+    COSMO_SCRIPT="$script" COSMO_LOG="$log" \
+        "$program" 1 > "$log.stdout" 2>&1
 ) &
 pid=$!
 
-sleep 20
+sleep 25
+
 kill -9 "$pid" 2>/dev/null || true
 wait "$pid" 2>/dev/null || true
+
+cat "$log.stdout" >> "$log" 2>/dev/null || true
 
 echo "--- output"
 cat "$log" || true
@@ -78,4 +94,21 @@ if [ -z "$delivered" ] || [ "$delivered" -le 0 ]; then
     exit 1
 fi
 
-echo "the game ran, and consumed $delivered timer interrupts"
+# Whether it was still running at the end is measured by how far the log got
+# rather than by whether the process is there. Windows _execv does not replace
+# a process the way POSIX execv does -- it ends the caller and starts something
+# else with a new id -- so the launcher's own exit says nothing at all.
+#
+# The debug line lands once a second, and the new game starts twelve seconds in.
+# Fewer lines than that means it stopped before finishing what it was asked.
+seconds="$(grep -c 'delivered=' "$log" || true)"
+required=18
+
+if [ "${seconds:-0}" -lt "$required" ]; then
+    echo "the game stopped after about ${seconds}s, before it was asked to" >&2
+    echo "it was still expected to be running at ${required}s" >&2
+    exit 1
+fi
+
+echo "the game ran for ${seconds}s, through starting a new game,"
+echo "and consumed $delivered timer interrupts"

@@ -154,6 +154,9 @@ jobs:
       - name: Package
         run: bash .github/scripts/package.sh windows build "${{ github.ref_name }}"
 
+      - name: Start the packaged game
+        run: bash .github/scripts/smoke-test.sh windows dist/*
+
       - uses: actions/upload-artifact@v7
         with:
           name: package-windows

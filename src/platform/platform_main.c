@@ -43,6 +43,17 @@ extern unsigned long adlib_writes;
 #include "cosmo/video.h"
 #include "cosmo/paths.h"
 
+#ifdef _WIN32
+#   include <windows.h>
+#   include <io.h>
+#   define duplicate_fd _dup2
+#   define fd_of _fileno
+#else
+#   include <unistd.h>
+#   define duplicate_fd dup2
+#   define fd_of fileno
+#endif
+
 #define TARGET_PRESENT_HZ 60.0
 #define SCANCODE_QUEUE_SIZE 64
 
@@ -296,6 +307,49 @@ static int SDLCALL game_thread(void *data)
     return 0;
 }
 
+/*
+ * Give the program somewhere to say things.
+ *
+ * On Windows the game is built for the GUI subsystem, so that no console window
+ * sits behind it -- which also means it starts with no stdout and no stderr at
+ * all. A crash left nothing behind and there was no way to ask what happened.
+ *
+ * So: if it was started from a terminal, borrow that terminal. Otherwise write
+ * to a file beside the saves, where it can be found afterwards. COSMO_LOG names
+ * the file directly, on any platform.
+ */
+static void logging_init(void)
+{
+    const char *requested = SDL_getenv("COSMO_LOG");
+    char path[1024];
+
+    if (requested && *requested) {
+        if (freopen(requested, "w", stdout)) {
+            setvbuf(stdout, NULL, _IOLBF, 0);
+            duplicate_fd(fd_of(stdout), fd_of(stderr));
+        }
+        return;
+    }
+
+#ifdef _WIN32
+    if (AttachConsole(ATTACH_PARENT_PROCESS)) {
+        freopen("CONOUT$", "w", stdout);
+        freopen("CONOUT$", "w", stderr);
+        setvbuf(stdout, NULL, _IOLBF, 0);
+        return;
+    }
+
+    if (snprintf(path, sizeof path, "%s/cosmo.log", paths_write_dir()) > 0 &&
+        freopen(path, "w", stdout))
+    {
+        setvbuf(stdout, NULL, _IOLBF, 0);
+        duplicate_fd(fd_of(stdout), fd_of(stderr));
+    }
+#else
+    (void)path;
+#endif
+}
+
 int main(int argc, char *argv[])
 {
     SDL_Thread *thread;
@@ -323,6 +377,8 @@ int main(int argc, char *argv[])
                                  "Cosmo's Cosmic Adventure", message, NULL);
         return 1;
     }
+
+    logging_init();
 
     hardware_init();
     interrupts_init();
