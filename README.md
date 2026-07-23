@@ -36,9 +36,9 @@ shareware episode.
 | **The game boots and reaches its title screen** | ✅ |
 | Map loading, scrolling, actors, the attract-mode demo | ✅ |
 | Keyboard, including jump while moving | ✅ verified by script |
-| Joystick | ⬜ |
 | PC speaker sound effects | ✅ verified against the game's sound data |
-| AdLib (OPL2) music | ⬜ silent |
+| AdLib (OPL2) music, via ymfm | ✅ |
+| Joystick | ⬜ |
 
 The game runs. `cosmo` starts the original `InnerMain()` on its own thread, the
 main thread plays the part of the PC hardware, and it goes through its title
@@ -47,8 +47,9 @@ the original was paced for.
 
 ## Building
 
-Requires CMake 3.21+, a C11 compiler, and SDL3. If SDL3 is not installed, CMake
-downloads and builds it automatically.
+Requires CMake 3.21+, a C11 and C++17 compiler, and SDL3. If SDL3 is not
+installed, CMake downloads and builds it automatically. The only C++ in the
+project is the wrapper around ymfm, which synthesises the AdLib's YM3812.
 
 ```bash
 git clone --recurse-submodules https://github.com/digows/cosmos.git
@@ -136,6 +137,9 @@ killed rather than quit — which is how most interesting captures end. This is
 how the sound effects were checked: the capture's frequencies were compared
 against the divisors decoded straight out of `SOUNDS.MNI`.
 
+`COSMO_OPL_LOG=1` traces every write to the AdLib's registers, which is how the
+music was found to be delivering all of its events to register zero.
+
 ## How it works
 
 The main thread plays the part of the PC hardware and a second thread plays the
@@ -165,6 +169,7 @@ free.
 
 ```
 vendor/cosmore/    upstream submodule, pinned and never modified
+vendor/ymfm/       YM3812 synthesiser, pinned and never modified
 cmake/             source preparation, run at configure time
 patches/           changes to upstream, one numbered patch each
 include/cosmo/     platform layer headers

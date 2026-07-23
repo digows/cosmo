@@ -3,11 +3,16 @@ cmake_minimum_required(VERSION 3.21)
 project(cosmo
     VERSION 0.1.0
     DESCRIPTION "Native port of Cosmo's Cosmic Adventure (Apogee, 1992)"
-    LANGUAGES C)
+    LANGUAGES C CXX)
 
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 set(CMAKE_C_EXTENSIONS OFF)
+
+# C++ is here for exactly one reason: ymfm, the YM3812 synthesiser.
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
@@ -70,6 +75,25 @@ else()
 endif()
 
 # --------------------------------------------------------------------------
+# ymfm -- the AdLib's YM3812
+# --------------------------------------------------------------------------
+
+# Only the OPL core is built. ymfm covers Yamaha's whole OPx family, and the
+# rest of it has no bearing on a 1992 AdLib. Its warnings are not ours to fix.
+if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/vendor/ymfm/src/ymfm_opl.cpp")
+    message(FATAL_ERROR
+        "vendor/ymfm is empty. Run: git submodule update --init --recursive")
+endif()
+
+add_library(ymfm STATIC
+    vendor/ymfm/src/ymfm_opl.cpp
+    vendor/ymfm/src/ymfm_adpcm.cpp
+    vendor/ymfm/src/ymfm_pcm.cpp)
+# SYSTEM so that warnings from ymfm's headers do not reach our -Werror build.
+target_include_directories(ymfm SYSTEM PUBLIC vendor/ymfm/src)
+target_compile_options(ymfm PRIVATE $<$<NOT:$<C_COMPILER_ID:MSVC>>:-w>)
+
+# --------------------------------------------------------------------------
 # Libraries
 # --------------------------------------------------------------------------
 
@@ -115,13 +139,16 @@ if(COSMO_BUILD_GAME AND NOT MSVC)
         src/platform/ports.c
         src/platform/interrupts.c
         src/platform/audio.c
+        src/platform/opl.cpp
         src/platform/input.c
         src/platform/platform_main.c)
     target_include_directories(cosmo_dos PRIVATE "${COSMORE_GEN_DIR}")
     target_compile_definitions(cosmo_dos PRIVATE EPISODE=1)
     target_compile_options(cosmo_dos PRIVATE
         -include "${CMAKE_CURRENT_SOURCE_DIR}/include/cosmo/dos_compat.h")
-    target_link_libraries(cosmo_dos PUBLIC cosmo_video PRIVATE cosmo_warnings)
+    target_link_libraries(cosmo_dos
+        PUBLIC cosmo_video
+        PRIVATE ymfm cosmo_warnings)
     add_dependencies(cosmo_dos cosmore_game)
 
     add_executable(cosmo $<TARGET_OBJECTS:cosmore_game>)

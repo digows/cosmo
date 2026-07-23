@@ -7,6 +7,7 @@
  * speaker gate, the joystick and the AdLib.
  */
 
+#include <stdio.h>
 #include <string.h>
 
 #include <SDL3/SDL.h>
@@ -14,6 +15,7 @@
 #include "cosmo/dos_compat.h"
 #include "cosmo/ega.h"
 #include "cosmo/hardware.h"
+#include "cosmo/opl.h"
 
 /* ------------------------------------------------------------------------ */
 /* Device state                                                             */
@@ -59,9 +61,94 @@ uint32_t speaker_state(void)
     return (uint32_t)SDL_GetAtomicInt(&speaker_snapshot);
 }
 
+void PlatformDelayMicroseconds(unsigned microseconds)
+{
+    uint64_t end = SDL_GetTicksNS() + (uint64_t)microseconds * 1000u;
+
+    /*
+     * Busy-wait. These are tens of microseconds and always on the game thread,
+     * so handing the scheduler a sleep request that rounds up to a millisecond
+     * would be both slower and less accurate than simply spinning.
+     */
+    while (SDL_GetTicksNS() < end) {
+        /* VOID */
+    }
+}
+
+unsigned long adlib_writes;
 static uint8_t adlib_register_index;
 static uint8_t adlib_registers[256];
-static uint8_t adlib_status = 0x00;
+
+/*
+ * The OPL2's two timers, which are what AdLib detection actually probes: the
+ * game starts timer 1, waits, and looks for its overflow flag in the status
+ * register. They are modelled here rather than in the synthesiser because they
+ * are a chip housekeeping function, unrelated to making sound.
+ *
+ * Timer 1 counts in 80 microsecond steps and timer 2 in 320, each from its
+ * preset up to 256.
+ */
+#define OPL_TIMER1_STEP_NS  80000u
+#define OPL_TIMER2_STEP_NS 320000u
+
+static struct {
+    uint8_t preset1, preset2;
+    uint8_t control;        /* register 0x04 */
+    uint64_t start1_ns, start2_ns;
+    bool running1, running2;
+    bool flag1, flag2;
+} opl;
+
+static void opl_timer_write_control(uint8_t value)
+{
+    /*
+     * Bit 7 is IRQ RESET, and the datasheet requires it to be set on its own:
+     * when present it clears the flags and nothing else happens.
+     */
+    if (value & 0x80) {
+        opl.flag1 = opl.flag2 = false;
+        return;
+    }
+
+    opl.control = value;
+
+    if ((value & 0x01) && !opl.running1) {
+        opl.start1_ns = SDL_GetTicksNS();
+        opl.running1 = true;
+    } else if (!(value & 0x01)) {
+        opl.running1 = false;
+    }
+
+    if ((value & 0x02) && !opl.running2) {
+        opl.start2_ns = SDL_GetTicksNS();
+        opl.running2 = true;
+    } else if (!(value & 0x02)) {
+        opl.running2 = false;
+    }
+}
+
+static uint8_t opl_status(void)
+{
+    uint64_t now = SDL_GetTicksNS();
+    uint8_t status = 0;
+
+    /* A masked timer still runs; it just cannot raise its flag. */
+    if (opl.running1 && !(opl.control & 0x40)) {
+        uint64_t period = (uint64_t)(256 - opl.preset1) * OPL_TIMER1_STEP_NS;
+        if (now - opl.start1_ns >= period) opl.flag1 = true;
+    }
+
+    if (opl.running2 && !(opl.control & 0x20)) {
+        uint64_t period = (uint64_t)(256 - opl.preset2) * OPL_TIMER2_STEP_NS;
+        if (now - opl.start2_ns >= period) opl.flag2 = true;
+    }
+
+    if (opl.flag1) status |= 0x40;
+    if (opl.flag2) status |= 0x20;
+    if (status) status |= 0x80;   /* bit 7 is the wired-or of both flags */
+
+    return status;
+}
 
 uint16_t pit_divisor(void)
 {
@@ -177,7 +264,27 @@ void outportb(int portid, unsigned char value)
 
     /* AdLib (OPL2) */
     case 0x0388: adlib_register_index = value; break;
-    case 0x0389: adlib_registers[adlib_register_index] = value; break;
+    case 0x0389:
+        adlib_writes++;
+        adlib_registers[adlib_register_index] = value;
+
+        switch (adlib_register_index) {
+        case 0x02: opl.preset1 = value; break;
+        case 0x03: opl.preset2 = value; break;
+        case 0x04: opl_timer_write_control(value); break;
+        default: break;
+        }
+
+        /*
+         * The synthesiser sees every write, including the timer registers.
+         * They are harmless to it, and passing them through keeps this from
+         * having to know which registers make sound.
+         */
+        opl_write(adlib_register_index, value);
+        if (SDL_getenv("COSMO_OPL_LOG")) {
+            fprintf(stderr, "opl %02X=%02X\n", adlib_register_index, value);
+        }
+        break;
 
     default:
         break;
@@ -206,13 +313,9 @@ unsigned char inportb(int portid)
     case 0x0201:
         return 0xF0;
 
-    /*
-     * AdLib status. Bits 5-7 are the timer flags the detection routine in
-     * game2.c looks for. Reporting zero means no AdLib is present, which is
-     * honest until the OPL2 is actually emulated.
-     */
+    /* AdLib status: the two timer overflow flags and their wired-or. */
     case 0x0388:
-        return adlib_status;
+        return opl_status();
 
     default:
         return 0xFF;
@@ -244,7 +347,8 @@ void hardware_init(void)
      */
     kbd.scancode = 0x80;
     memset(adlib_registers, 0, sizeof adlib_registers);
+    memset(&opl, 0, sizeof opl);
     adlib_register_index = 0;
-    adlib_status = 0x00;
+    opl_init();
     speaker_publish();
 }

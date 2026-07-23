@@ -49,6 +49,12 @@ unsigned char dos_vram_read(unsigned offset);
 unsigned long SaveInterruptFlag(void);
 void RestoreInterruptFlag(unsigned long saved);
 
+/*
+ * A real microsecond wait, replacing the calibrated busy-wait loop that lived
+ * in assembly. See patches/0005.
+ */
+void PlatformDelayMicroseconds(unsigned microseconds);
+
 /* Called when the game flips display pages; drives presentation. */
 void platform_page_flipped(void);
 

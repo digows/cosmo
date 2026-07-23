@@ -1,3 +1,6 @@
 [submodule "vendor/cosmore"]
 	path = vendor/cosmore
 	url = https://github.com/smitelli/cosmore.git
+[submodule "vendor/ymfm"]
+	path = vendor/ymfm
+	url = https://github.com/aaronsgiles/ymfm.git

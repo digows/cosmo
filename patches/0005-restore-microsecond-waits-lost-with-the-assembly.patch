@@ -1,0 +1,98 @@
+Restore the microsecond waits that were lost with the assembly
+
+ProfileCPU() and WaitWallclock() were built as a pair. The first counted how
+many iterations of a tight assembly loop fit between two timer interrupts; the
+second then busy-waited a requested number of microseconds by running that same
+loop the corresponding number of times.
+
+Both loops were inline assembly, so commenting the assembly out left ProfileCPU
+computing its calibration from a variable nothing writes, and WaitWallclock
+returning immediately. The AdLib detection in DetectAdLib() depends on a real
+100 microsecond wait -- it starts an OPL2 timer, waits, and checks whether the
+timer's flag has come on -- so with no wait at all the chip can never be found
+and the game stays silent.
+
+WaitWallclock's own documentation says it "waits for a period of microseconds
+equal to `loops`", so the calibrated globals become the microsecond counts they
+always stood for, and the wait is done by the clock rather than by counting
+instructions. That is what the calibration existed to approximate; on a machine
+with a usable clock the approximation is unnecessary.
+
+diff --git a/game2.c b/game2.c
+index 6244894..c68cb6d 100644
+--- a/game2.c
++++ b/game2.c
+@@ -206,38 +206,25 @@ static void ProfileCPU(void)
+     setvect(8, ProfileCPUService);
+     SetInterruptRate(1000);
+ 
+-    for (trial = 0, loops_ms = 0; trial < 10; trial++) {
+-        _DX = 0;  /* serves no apparent purpose */
+-        _CX = 0xffff;
+-        profCountPIT = _CX;  /* conceptually -1 */
+-
+-wait4zero:
+-        /* Wait until the profile service runs again, which will increment
+-        `profCountPIT` and stop this loop. */
+-        // ASM: or    [profCountPIT],0
+-        // ASM: jnz   wait4zero
+-
+-wait4one:
+-        /*
+-        CX decrements each iteration of this loop. When the profile service runs
+-        again, it will copy a snapshot of CX to `profCountCPU` and increment
+-        `profCountPIT`, which will stop this loop.
+-        */
+-        // ASM: test  [profCountPIT],1
+-        // ASM: jnz   done
+-        // ASM: loop  wait4one
+-done:
+-
+-        /* Hang onto the best-performing value */
+-        if (0xffff - profCountCPU > loops_ms) {
+-            loops_ms = 0xffff - profCountCPU;
+-        }
+-    }
++    /*
++    PORT: The calibration loop counted how many `test`/`jnz`/`loop` iterations
++    fit between two timer interrupts, so that WaitWallclock() could busy-wait a
++    given number of microseconds by counting iterations. That loop was inline
++    assembly and cannot survive translation.
++
++    Nothing is lost by dropping it. The three globals exist only to be handed
++    back to WaitWallclock(), whose own documentation says it "waits for a period
++    of microseconds equal to `loops`" -- so the calibrated values simply become
++    the microsecond counts they always stood for, and WaitWallclock() waits that
++    long by the clock instead of by counting instructions.
++    */
++    (void)trial;
++    (void)loops_ms;
++    (void)profCountCPU;
+ 
+-    loops_ms += loops_ms / 2;
+-    wallclock10us  = loops_ms / (1000 / 10);
+-    wallclock25us  = loops_ms / (1000 / 25);
+-    wallclock100us = loops_ms / (1000 / 100);
++    wallclock10us  = 10;
++    wallclock25us  = 25;
++    wallclock100us = 100;
+ 
+     SetPIT0Value(0);
+     setvect(8, savedInt8);
+@@ -253,14 +240,8 @@ static void WaitWallclock(word loops)
+ {
+     if (loops == 0) return;
+ 
+-    _CX = loops;
+-
+-wait:
+-    // ASM: test  [profCountPIT],0  /* ZF is always 1 */
+-    // ASM: jnz   done              /* jump is never taken */
+-    // ASM: loop  wait
+-done:
+-    ;  /* VOID */
++    /* PORT: `loops` is a microsecond count; see the note in ProfileCPU(). */
++    PlatformDelayMicroseconds(loops);
+ }
+ 
+ /*

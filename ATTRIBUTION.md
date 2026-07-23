@@ -35,6 +35,17 @@ Beyond the source, this project uses the pure C implementation of the drawing
 routines published in `C-DRAWING.md`, and the porting notes in
 `MODERN-COMPILERS.md`.
 
+## ymfm
+
+<https://github.com/aaronsgiles/ymfm> — © 2021 Aaron Giles, BSD 3-Clause.
+
+Emulates Yamaha's OPx family; this project uses only its YM3812 core, which is
+the chip on an AdLib card. Chosen over the more widely used Nuked-OPL3 because
+its licence carries no obligation when binaries are distributed, which keeps
+this repository uniformly permissive.
+
+Pinned commit: `17decfae857b92ab55fbb30ade2287ace095a381` (2025-01-28).
+
 ## Cosmodoc
 
 <https://cosmodoc.org/> — roughly 262,000 words documenting the internals of

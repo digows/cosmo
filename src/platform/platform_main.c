@@ -32,6 +32,8 @@ void InnerMain(int argc, char *argv[]);
  */
 extern volatile uint8_t isKeyDown[];
 extern uint8_t cmdWest, cmdEast, cmdNorth, cmdSouth, cmdJump, cmdBomb;
+extern uint8_t isAdLibPresent;
+extern unsigned long adlib_writes;
 
 #include "cosmo/audio.h"
 #include "cosmo/dos_compat.h"
@@ -397,10 +399,10 @@ int main(int argc, char *argv[])
 
             if (debug_enabled && now >= next_debug) {
                 fprintf(stderr,
-                        "[cosmo] pit=%u (%.1f Hz) int8 fired=%llu delivered=%llu"
+                        "[cosmo] pit=%u (%.1f Hz) adlib=%u oplwrites=%lu int8 fired=%llu delivered=%llu"
                         " | keys ctrl=%u alt=%u left=%u right=%u up=%u"
                         " | cmd jump=%u west=%u east=%u bomb=%u\n",
-                        pit_divisor(), hz,
+                        pit_divisor(), hz, (unsigned)isAdLibPresent, adlib_writes,
                         (unsigned long long)tick_attempts,
                         (unsigned long long)tick_delivered,
                         isKeyDown[0x1D], isKeyDown[0x38], isKeyDown[0x4B],

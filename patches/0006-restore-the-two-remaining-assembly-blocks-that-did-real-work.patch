@@ -1,0 +1,82 @@
+Restore the two remaining assembly blocks that did real work
+
+An audit of every line still commented out by the assembly transformation found
+two that were not timing padding but load-bearing logic.
+
+AdLibService() reads the music as a stream of 16-bit chunks, and three assembly
+instructions split each chunk into the OPL2 register address in its low byte
+and the value in its high byte. Without them both variables were left
+uninitialised, so every music event became a write of 0 to register 0. The
+music engine ran correctly the whole time -- the right number of events at the
+right tempo -- and delivered all of them to register zero. That is why the game
+was silent even with a working synthesiser attached.
+
+TimerInterruptService() accumulated the PIT divisor into a 16-bit counter and
+chained to the saved BIOS handler only when that counter carried out. Summing
+the divisor overflows 16 bits exactly once per original 18.2 Hz tick, which is
+how the system clock keeps its own time while the game runs the timer at 140 or
+560 Hz. With the assembly gone the BIOS handler was called on every single
+tick, and the interrupt acknowledgement that should have been the alternative
+branch ran alongside it rather than instead of it. Both are harmless while the
+saved vector is a stub, and neither would stay harmless.
+
+diff --git a/game2.c b/game2.c
+index c68cb6d..6c7fa20 100644
+--- a/game2.c
++++ b/game2.c
+@@ -313,9 +313,12 @@ static void AdLibService(void)
+ 
+         musicNextDue = musicTickCount + *musicDataPtr++;
+ 
+-        // ASM: mov   dx,[chunk]
+-        // ASM: mov   [chunkaddr],dl
+-        // ASM: mov   [chunkdata],dh
++        /*
++        PORT: The assembly split the 16-bit chunk into its two halves: the low
++        byte is the OPL2 register address and the high byte its value.
++        */
++        chunkaddr = (byte)(chunk & 0x00ff);
++        chunkdata = (byte)(chunk >> 8);
+ 
+         SetAdLibRegister(chunkaddr, chunkdata);
+ 
+@@ -415,16 +418,29 @@ static void interrupt TimerInterruptService(void)
+         }
+     }
+ 
+-    // ASM: mov   ax,[WORD PTR timerTickCount]
+-    // ASM: add   ax,[WORD PTR pit0Value]
+-    // ASM: mov   [WORD PTR timerTickCount],ax
+-    // ASM: jnc   acknowledge
+-    savedInt8();
+-    // ASM: jmp   done
+-acknowledge:
+-    outportb(0x0020, 0x20);
+-done:
+-    ;  /* VOID */
++    /*
++    PORT: The assembly accumulated the PIT divisor into a 16-bit counter and
++    chained to the BIOS handler only when that counter carried out. That is
++    what keeps the system clock ticking at its own 18.2 Hz while the game runs
++    the timer far faster: the divisor sums to 65536 exactly once per original
++    tick. Interrupts are acknowledged only when the BIOS is not being called,
++    since the BIOS handler acknowledges them itself.
++
++    Note the WORD PTR in the original: only the low half took part, so the high
++    half is preserved here.
++    */
++    {
++        word previous = (word)timerTickCount;
++        word sum = (word)(previous + (word)pit0Value);
++
++        timerTickCount = (timerTickCount & 0xffff0000L) | sum;
++
++        if (sum < previous) {  /* carry out of 16 bits */
++            savedInt8();
++        } else {
++            outportb(0x0020, 0x20);
++        }
++    }
+ }
+ 
+ /*

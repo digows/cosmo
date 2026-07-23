@@ -18,8 +18,13 @@
 
 #include "cosmo/audio.h"
 #include "cosmo/hardware.h"
+#include "cosmo/opl.h"
 
-#define SAMPLE_RATE 48000
+/*
+ * The YM3812's own rate. Generating there and letting SDL resample to the
+ * device keeps the synthesis on exactly the timing the register values assume.
+ */
+#define SAMPLE_RATE ((int)OPL_SAMPLE_RATE)
 
 /*
  * A small buffer matters here. Each sound sample lasts one timer service call,
@@ -32,7 +37,7 @@
  * The speaker was loud and square. A quarter of full scale keeps the harmonics
  * honest without being painful through headphones.
  */
-#define AMPLITUDE 8192
+#define AMPLITUDE 6000
 
 static SDL_AudioStream *stream;
 static double phase;          /* 0..1 across one square wave cycle */
@@ -125,7 +130,7 @@ void audio_record_to(const char *path)
 /* Generation                                                               */
 /* ------------------------------------------------------------------------ */
 
-static void render(int16_t *out, int frames)
+static void render_speaker(int16_t *out, int frames)
 {
     uint32_t state = speaker_state();
     uint16_t divisor = (uint16_t)(state & 0xFFFF);
@@ -148,6 +153,29 @@ static void render(int16_t *out, int frames)
 
         phase += step;
         if (phase >= 1.0) phase -= 1.0;
+    }
+}
+
+static void render(int16_t *out, int frames)
+{
+    int16_t speaker[BUFFER_FRAMES];
+
+    opl_generate(out, frames);
+    render_speaker(speaker, frames);
+
+    /*
+     * The AdLib and the speaker were separate pieces of hardware heard
+     * together, so they are simply summed. The clamp is a backstop for the
+     * rare moment when a loud effect lands on a loud passage; the levels are
+     * chosen so it is not reached in normal play.
+     */
+    for (int i = 0; i < frames; i++) {
+        int32_t mixed = (int32_t)out[i] + speaker[i];
+
+        if (mixed > 32767) mixed = 32767;
+        if (mixed < -32768) mixed = -32768;
+
+        out[i] = (int16_t)mixed;
     }
 }
 
