@@ -108,6 +108,46 @@ bool video_write_png(const char *path, int scale)
     return ok;
 }
 
+/*
+ * The largest whole-number scale that leaves the window on the screen.
+ *
+ * Three times 640x400, corrected for the aspect the pixels had, is 1920x1440 --
+ * taller than a 1080p display, which puts the title bar above the top of the
+ * screen where it cannot be reached. The scale is chosen to fit instead, and
+ * COSMO_SCALE overrides it for anyone who wants a particular size.
+ */
+#define WINDOW_FRAME_ALLOWANCE 64
+
+static int fitting_scale(int wanted)
+{
+    const char *requested = SDL_getenv("COSMO_SCALE");
+    SDL_Rect usable;
+    SDL_DisplayID display;
+    int scale;
+
+    if (requested) {
+        int value = SDL_atoi(requested);
+        if (value >= 1) return value;
+    }
+
+    display = SDL_GetPrimaryDisplay();
+    if (!display || !SDL_GetDisplayUsableBounds(display, &usable)) return wanted;
+
+    for (scale = wanted; scale > 1; scale--) {
+        int w = EGA_SCREEN_W * scale;
+        int h = (int)(EGA_SCREEN_H * scale * PIXEL_ASPECT);
+
+        /*
+         * The usable bounds already exclude the taskbar or menu bar; what they
+         * do not account for is the window's own title bar, which is what ends
+         * up off the top of the screen when the window is too tall.
+         */
+        if (w <= usable.w && h <= usable.h - WINDOW_FRAME_ALLOWANCE) break;
+    }
+
+    return scale;
+}
+
 bool video_init(const char *title, int scale)
 {
     int w, h;
@@ -118,6 +158,8 @@ bool video_init(const char *title, int scale)
         fprintf(stderr, "SDL_Init: %s\n", SDL_GetError());
         return false;
     }
+
+    scale = fitting_scale(scale);
 
     w = EGA_SCREEN_W * scale;
     h = (int)(EGA_SCREEN_H * scale * PIXEL_ASPECT);

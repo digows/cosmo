@@ -18,6 +18,7 @@
 
 static char data_dir[MAX_PATH_LEN];
 static char write_dir[MAX_PATH_LEN];
+static char program_dir[MAX_PATH_LEN];
 
 /* The extensions an episode's two group files carry. */
 static const char *const GROUP_EXTENSIONS[] = {"STN", "VOL"};
@@ -65,6 +66,40 @@ static bool group_path(char *dest, size_t size, const char *dir, int episode,
     if (SDL_strlcat(leaf, extension, sizeof leaf) >= sizeof leaf) return false;
 
     return path_join(dest, size, dir, leaf);
+}
+
+/*
+ * Work out where sibling executables are, from where SDL says the application's
+ * files are.
+ *
+ * In a bundle those are two different places. SDL_GetBasePath() points at
+ * Contents/Resources, because that is where an application's data belongs, but
+ * the programs are in Contents/MacOS. Reading the first as though it were the
+ * second is how the launcher came to look for the episodes among the artwork.
+ */
+static void resolve_program_dir(const char *base)
+{
+    static const char RESOURCES[] = "/Contents/Resources";
+    size_t base_length, suffix_length = sizeof RESOURCES - 1;
+
+    if (!base || !path_copy(program_dir, sizeof program_dir, base)) {
+        path_copy(program_dir, sizeof program_dir, ".");
+        return;
+    }
+
+    base_length = SDL_strlen(program_dir);
+    while (base_length > 1 && (program_dir[base_length - 1] == '/' ||
+                               program_dir[base_length - 1] == '\\')) {
+        program_dir[--base_length] = '\0';
+    }
+
+    if (base_length > suffix_length &&
+        SDL_strcasecmp(program_dir + base_length - suffix_length, RESOURCES) == 0)
+    {
+        /* Swap the last component: Contents/Resources -> Contents/MacOS. */
+        program_dir[base_length - suffix_length] = '\0';
+        SDL_strlcat(program_dir, "/Contents/MacOS", sizeof program_dir);
+    }
 }
 
 static bool dir_has_any_episode(const char *dir)
@@ -178,6 +213,8 @@ bool paths_init(void)
     const char *prefs;
     int i, episode;
 
+    resolve_program_dir(SDL_GetBasePath());
+
     /* Used in place when the data sits somewhere that takes the saves too. */
     for (i = 0; i < count; i++) {
         if (dir_has_any_episode(shipped[i]) && dir_is_writable(shipped[i])) {
@@ -226,6 +263,11 @@ const char *paths_data_dir(void)
 const char *paths_write_dir(void)
 {
     return write_dir;
+}
+
+const char *paths_program_dir(void)
+{
+    return program_dir;
 }
 
 bool paths_import_episode(const char *chosen_file, int episode)

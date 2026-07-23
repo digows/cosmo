@@ -38,6 +38,15 @@ const char *paths_data_dir(void);
 const char *paths_write_dir(void);
 
 /*
+ * Where the episode programs sit.
+ *
+ * Not the same as where the data is, and not what SDL_GetBasePath() returns
+ * either: inside a macOS bundle that hands back Contents/Resources, while the
+ * executables live one directory across in Contents/MacOS.
+ */
+const char *paths_program_dir(void);
+
+/*
  * Copy an episode's two group files into the data directory, given the path of
  * either one of them. Used when someone points the launcher at a copy of an
  * episode this port does not ship.

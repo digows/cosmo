@@ -53,6 +53,12 @@ jobs:
       - name: Package
         run: bash .github/scripts/package.sh macos build "${{ github.ref_name }}"
 
+      # Unpack what is about to be published and make sure the game actually
+      # starts from it. A menu that draws is not the same as an episode that
+      # runs, which v0.2.0 proved the hard way.
+      - name: Start the packaged game
+        run: bash .github/scripts/smoke-test.sh macos dist/*
+
       - uses: actions/upload-artifact@v7
         with:
           name: package-macos
@@ -87,6 +93,12 @@ jobs:
 
       - name: Package
         run: bash .github/scripts/package.sh linux build "${{ github.ref_name }}"
+
+      # Unpack what is about to be published and make sure the game actually
+      # starts from it. A menu that draws is not the same as an episode that
+      # runs, which v0.2.0 proved the hard way.
+      - name: Start the packaged game
+        run: bash .github/scripts/smoke-test.sh linux dist/*
 
       - uses: actions/upload-artifact@v7
         with:

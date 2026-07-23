@@ -368,18 +368,37 @@ static int replace_process(const char *program, char *argv[])
 
 static int run_episode(int number)
 {
-    const char *base = SDL_GetBasePath();
+    /*
+     * The episode programs are looked for in a subdirectory first and beside
+     * the launcher second.
+     *
+     * They cannot be merged into one executable: the episodes differ by
+     * preprocessor conditionals that include or exclude whole actor
+     * implementations, so each is genuinely different code with its own copy of
+     * the game's globals. What can be done is to keep them out of the way, so
+     * an unpacked folder shows one program to run rather than four.
+     */
+    static const char *const WHERE[] = {"episodes/", ""};
     char program[1024];
     char *child_argv[2];
+    SDL_PathInfo info;
+    size_t i;
+    bool found = false;
 
-    if (!base) {
-        fprintf(stderr, "cosmo: cannot locate the episode programs (%s)\n",
-                SDL_GetError());
-        return 1;
+    for (i = 0; i < SDL_arraysize(WHERE) && !found; i++) {
+        int written = snprintf(program, sizeof program, "%s/%scosmo%d%s",
+                               paths_program_dir(), WHERE[i], number,
+                               EPISODE_PROGRAM_SUFFIX);
+        if (written < 0 || (size_t)written >= sizeof program) continue;
+
+        found = SDL_GetPathInfo(program, &info);
     }
 
-    snprintf(program, sizeof program, "%scosmo%d%s",
-             base, number, EPISODE_PROGRAM_SUFFIX);
+    if (!found) {
+        fprintf(stderr, "cosmo: episode %d is not installed beside the "
+                        "launcher\n", number);
+        return 1;
+    }
 
     /* Give up the window before the process image is replaced. */
     video_shutdown();

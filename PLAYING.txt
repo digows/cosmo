@@ -51,6 +51,34 @@ is written on the way out, exactly as it was on DOS, where killing the program
 lost it the same way.
 
 
+The window
+----------
+
+It opens at the largest whole multiple of the original 640x400 that fits your
+screen, so the title bar always stays reachable. To choose the size yourself:
+
+    COSMO_SCALE=2 ./cosmo        (1 is the original size, 3 is large)
+
+Resizing is fine. The picture is letterboxed rather than stretched, so it never
+distorts.
+
+
+What is in this folder
+----------------------
+
+    cosmo          the launcher, and the only thing you need to run
+    episodes/      one program per episode
+    COSMO1.*       Episode 1's data
+
+The episodes are separate programs rather than one with a switch. They differ
+by preprocessor conditionals that include or exclude whole actor
+implementations, so each compiles to genuinely different code -- Apogee shipped
+three executables for the same reason. They sit in a subdirectory so there is
+one obvious thing to run.
+
+On macOS all of that is inside Cosmo.app, where none of it needs looking at.
+
+
 Episodes 2 and 3
 ----------------
 

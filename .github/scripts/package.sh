@@ -53,16 +53,22 @@ macos)
     ;;
 
 linux)
-    cp "$build/cosmo" "$build/cosmo1" "$build/cosmo2" "$build/cosmo3" "$root/"
+    # Only the launcher sits at the top. The episodes are programs in their own
+    # right, but nobody needs to see four of them to play one.
+    mkdir -p "$root/episodes"
+    cp "$build/cosmo" "$root/"
+    cp "$build/cosmo1" "$build/cosmo2" "$build/cosmo3" "$root/episodes/"
     cp "$repo/gamedata/COSMO1.STN" "$repo/gamedata/COSMO1.VOL" "$root/"
-    chmod +x "$root"/cosmo*
+    chmod +x "$root/cosmo" "$root/episodes"/cosmo*
     docs "$root"
     (cd "$staging" && tar czf "$dist/$name.tar.gz" "$name")
     ;;
 
 windows)
-    cp "$build/cosmo.exe" "$build/cosmo1.exe" "$build/cosmo2.exe" \
-       "$build/cosmo3.exe" "$root/"
+    mkdir -p "$root/episodes"
+    cp "$build/cosmo.exe" "$root/"
+    cp "$build/cosmo1.exe" "$build/cosmo2.exe" "$build/cosmo3.exe" \
+       "$root/episodes/"
     cp "$repo/gamedata/COSMO1.STN" "$repo/gamedata/COSMO1.VOL" "$root/"
     docs "$root"
     (cd "$staging" && zip -qr "$dist/$name.zip" "$name")
