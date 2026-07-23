@@ -14,9 +14,12 @@ find your copy.
 | `cosmo-*-windows.zip` | Windows, 64-bit |
 | `cosmo-*-linux.tar.gz` | Linux, x86-64 |
 
-macOS will refuse to open the application the first time, because it is not
-signed by an Apple developer account: right-click it, choose Open, and confirm
-once.
+macOS refuses to open this the first time, because it is not signed by a paid
+Apple developer account. To allow it, open **System Settings → Privacy &
+Security**, scroll to Security, and click **Open Anyway** next to the message
+about Cosmo. On macOS 15 and later that panel is the only route — right-clicking
+and choosing Open no longer works. From a terminal,
+`xattr -dr com.apple.quarantine /path/to/Cosmo.app` does the same in one step.
 
 Arrow keys move, **space** jumps, **alt** bombs, **F1** helps, **Q** then **Y**
 quits and saves. All of it is rebindable from the game's own menu. `PLAYING.txt`

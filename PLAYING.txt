@@ -7,9 +7,20 @@ A native port of the 1992 Apogee game. No DOS emulator.
 Starting it
 -----------
 
-macOS      Double-click Cosmo. The first time, macOS will refuse: it is not
-           signed by an Apple developer account. Right-click it, choose Open,
-           and confirm once. After that it opens normally.
+macOS      Double-click Cosmo. macOS will refuse the first time, because this
+           is not signed by a paid Apple developer account -- there is no way
+           to avoid that without one.
+
+           To allow it: open System Settings, go to Privacy & Security, scroll
+           down to Security, and click "Open Anyway" next to the message about
+           Cosmo. Confirm, and it opens normally from then on.
+
+           On macOS 15 and later that panel is the only route. Right-clicking
+           and choosing Open used to work and no longer does.
+
+           From a terminal, this does the same thing in one step:
+
+               xattr -dr com.apple.quarantine /path/to/Cosmo.app
 
 Windows    Run cosmo.exe.
 

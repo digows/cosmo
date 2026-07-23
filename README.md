@@ -24,6 +24,13 @@ macOS, Windows and Linux. Each download includes the shareware Episode 1 and
 plays as soon as it is unpacked; nothing to install. If you own Episodes 2 and
 3, the launcher will ask you to point it at your copy.
 
+macOS refuses to open this the first time, because it is not signed by a paid
+Apple developer account. To allow it, open **System Settings → Privacy &
+Security**, scroll to Security, and click **Open Anyway** next to the message
+about Cosmo. On macOS 15 and later that panel is the only route — right-clicking
+and choosing Open no longer works. From a terminal,
+`xattr -dr com.apple.quarantine /path/to/Cosmo.app` does the same in one step.
+
 ## What this is
 
 The starting point is the game's own code rather than a reimplementation. This
