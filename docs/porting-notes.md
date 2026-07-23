@@ -165,6 +165,49 @@ once a frame.
 
 ---
 
+## Making a fourth episode
+
+The three episodes are separate programs because their headers select which
+actor implementations get compiled in, but everything below that is data. That
+makes a fourth one a question of file formats rather than of engine work, and
+both formats needed turned out to be small.
+
+A group file is a header of 20-byte records — a 12-byte name, a 32-bit offset,
+a 32-bit length — followed by the data. The game only reads the first 960 bytes
+of that header, so no more than 48 entries are reachable however large the file
+is.
+
+A map is smaller still:
+
+```
+word    flags
+word    width          power of two, 32..2048
+word    actor words
+word[]  actors         triples of type, x, y; type 0 is the player's start
+word[]  tiles          one per cell, row-major
+```
+
+The flags word is the level's whole presentation, decoded in
+`InitializeLevel()`: bits 0-4 the backdrop, bit 5 rain, bits 6 and 7 whether
+the backdrop scrolls, bits 8-10 the palette animation, bits 11-15 the music.
+
+A tile below 0x50 is air, at or above 0x3E80 is masked so the backdrop shows
+through, and anything between is solid — the value being a byte offset into the
+tile bank every episode shares.
+
+[`tools/cosmo_data.py`](../tools/cosmo_data.py) reads and writes both, and
+round-trips all eleven of episode 1's maps byte for byte.
+[`tools/make-episode.py`](../tools/make-episode.py) uses it to generate a
+playable episode 4: a level with ground, a staircase, a gap and floating
+platforms, packed into `COSMO4.STN` and `COSMO4.VOL` with an
+`episode4.h` for the build.
+
+![A level that did not exist before, running](screenshots/episode4.png)
+
+What that leaves is the part no tooling solves: designing levels worth playing.
+The engine, the tile bank, the actor set and the music are all there, and 245
+actor types are addressable by number. Placing them well is game design.
+
 ## How things were checked
 
 Claims in this project are meant to be backed by measurement rather than by the

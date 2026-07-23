@@ -32,7 +32,7 @@
 #include "cosmo/group.h"
 #include "cosmo/video.h"
 
-#define EPISODE_COUNT 3
+#define EPISODE_COUNT 4
 #define FULLSCREEN_IMAGE_SIZE 32000
 
 /*
@@ -55,6 +55,7 @@ static struct episode episodes[EPISODE_COUNT] = {
     {1, "Forbidden Planet", false},
     {2, "Mad Scientist", false},
     {3, "Secret Lab", false},
+    {4, "New Episode", false},
 };
 
 static const char *datadir = ".";

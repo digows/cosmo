@@ -188,6 +188,12 @@ if(COSMO_BUILD_GAME)
     cosmo_add_episode(2)
     cosmo_add_episode(3)
 
+    # A fourth episode exists only if one has been generated; see
+    # tools/make-episode.py and patches/0008.
+    if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/episodes/episode4.h")
+        cosmo_add_episode(4)
+    endif()
+
     # The front door: finds which episodes have data present and runs one.
     add_executable(cosmo src/launcher.c)
     target_link_libraries(cosmo PRIVATE cosmo_video cosmo_warnings)

@@ -69,6 +69,16 @@ if(NOT CMAKE_MATCH_1)
 endif()
 file(WRITE "${COSMORE_GEN_DIR}/lowlevel.c" "${CMAKE_MATCH_1}")
 
+# An episode header that upstream does not have. The three shipped episodes
+# each have one in the submodule; a fourth is ours, so it is copied in beside
+# them rather than patched into an existing file.
+file(GLOB _extra_episodes "${CMAKE_CURRENT_SOURCE_DIR}/episodes/episode*.h")
+foreach(_ep IN LISTS _extra_episodes)
+    get_filename_component(_ep_name "${_ep}" NAME)
+    configure_file("${_ep}" "${COSMORE_GEN_DIR}/${_ep_name}" COPYONLY)
+    message(STATUS "Including generated ${_ep_name}")
+endforeach()
+
 # Anything the transformations above cannot express lives in patches/. Applying
 # them here, rather than committing modified copies of the sources, keeps the
 # delta from 1992 visible in review.
