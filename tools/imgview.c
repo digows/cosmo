@@ -18,12 +18,10 @@
 #include <string.h>
 
 #include "cosmo/ega.h"
+#include "cosmo/group.h"
 #include "cosmo/video.h"
 
 #define FULLSCREEN_IMAGE_SIZE 32000
-#define GROUP_HEADER_SIZE     960
-#define GROUP_ENTRY_SIZE      20
-#define GROUP_NAME_COMPARE    11
 
 typedef uint16_t word;
 
@@ -34,76 +32,19 @@ static const char *const fullscreen_images[] = {
 };
 #define IMAGE_COUNT ((int)(sizeof fullscreen_images / sizeof fullscreen_images[0]))
 
-static uint32_t read_le32(const unsigned char *p)
-{
-    return (uint32_t)p[0] | ((uint32_t)p[1] << 8) |
-           ((uint32_t)p[2] << 16) | ((uint32_t)p[3] << 24);
-}
-
-/*
- * Locate an entry in a group file. Mirrors GroupEntryFp() (game2.c:1472):
- * a 960-byte header of 20-byte records, each holding a 12-byte name followed
- * by a 32-bit offset and a 32-bit length.
- */
-static long group_find(const char *path, const char *entry_name, uint32_t *length)
-{
-    unsigned char header[GROUP_HEADER_SIZE];
-    FILE *fp = fopen(path, "rb");
-
-    if (!fp) return -1;
-
-    if (fread(header, 1, sizeof header, fp) != sizeof header) {
-        fclose(fp);
-        return -1;
-    }
-    fclose(fp);
-
-    for (size_t i = 0; i < sizeof header; i += GROUP_ENTRY_SIZE) {
-        if (header[i] == '\0') break;  /* no more entries */
-
-        if (strncmp((const char *)header + i, entry_name,
-                    GROUP_NAME_COMPARE) == 0) {
-            *length = read_le32(header + i + 16);
-            return (long)read_le32(header + i + 12);
-        }
-    }
-    return -1;
-}
-
 static bool load_entry(const char *datadir, const char *entry_name,
                        unsigned char *dest, size_t want, bool verbose)
 {
-    /* The game tries the STN first, then the VOL. */
-    static const char *const groups[] = {"COSMO1.STN", "COSMO1.VOL"};
+    size_t got = group_read(datadir, 1, entry_name, dest, want);
 
-    for (size_t g = 0; g < sizeof groups / sizeof groups[0]; g++) {
-        char path[1024];
-        uint32_t length = 0;
-        long offset;
-        FILE *fp;
-        size_t got;
-
-        snprintf(path, sizeof path, "%s/%s", datadir, groups[g]);
-        offset = group_find(path, entry_name, &length);
-        if (offset < 0) continue;
-
-        fp = fopen(path, "rb");
-        if (!fp) continue;
-        if (fseek(fp, offset, SEEK_SET) != 0) { fclose(fp); continue; }
-
-        got = fread(dest, 1, want, fp);
-        fclose(fp);
-
-        if (verbose) {
-            printf("  %s found in %s (offset %ld, length %u, read %zu)\n",
-                   entry_name, groups[g], offset, length, got);
-        }
-        return got == want;
+    if (got != want) {
+        fprintf(stderr, "  %s not found in the group files under %s/\n",
+                entry_name, datadir);
+        return false;
     }
 
-    fprintf(stderr, "  %s not found in any group file under %s/\n",
-            entry_name, datadir);
-    return false;
+    if (verbose) printf("  %s: %zu bytes\n", entry_name, got);
+    return true;
 }
 
 /* DrawFullscreenImage()'s loop: one plane at a time, 8000 bytes each. */

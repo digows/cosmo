@@ -101,7 +101,9 @@ target_compile_options(ymfm PRIVATE $<$<NOT:$<C_COMPILER_ID:MSVC>>:-w>)
 # machine without pulling SDL in.
 add_library(cosmo_core STATIC
     src/platform/ega.c
-    src/platform/png.c)
+    src/platform/png.c
+    src/platform/group.c
+    src/platform/font.c)
 target_include_directories(cosmo_core PUBLIC include)
 target_link_libraries(cosmo_core PRIVATE cosmo_warnings)
 
@@ -178,7 +180,7 @@ if(COSMO_BUILD_GAME AND NOT MSVC)
 
     # The front door: finds which episodes have data present and runs one.
     add_executable(cosmo src/launcher.c)
-    target_link_libraries(cosmo PRIVATE cosmo_core SDL3::SDL3 cosmo_warnings)
+    target_link_libraries(cosmo PRIVATE cosmo_video cosmo_warnings)
     add_dependencies(cosmo cosmo1 cosmo2 cosmo3)
 endif()
 

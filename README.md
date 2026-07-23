@@ -17,7 +17,7 @@ the actors, the collision handling, the bugs.
 | | |
 |:-:|:-:|
 | ![Forbidden Planet title screen](docs/screenshots/title1.png) | ![Credits](docs/screenshots/credit.png) |
-| ![Gameplay in the jungle](docs/screenshots/gameplay-jungle.png) | ![Gameplay in the tech level](docs/screenshots/gameplay-tech.png) |
+| ![Gameplay in the jungle](docs/screenshots/gameplay-jungle.png) | ![Episode launcher](docs/screenshots/launcher.png) |
 
 All four are produced by this port, on macOS, from the original 1992 data
 files — not captured from an emulator. The bottom two are the game actually
@@ -34,7 +34,7 @@ running its attract-mode demo.
 | Interrupt and timing layer (int 8 / int 9, PIT, PIC) | ✅ 140 Hz, verified |
 | **The game boots and reaches its title screen** | ✅ |
 | Map loading, scrolling, actors, the attract-mode demo | ✅ |
-| All three episodes | ✅ |
+| All three episodes, behind an in-game-style launcher | ✅ |
 | Keyboard, including jump while moving | ✅ verified by script |
 | PC speaker sound effects | ✅ verified against the game's sound data |
 | AdLib (OPL2) music, via ymfm | ✅ |
@@ -98,8 +98,9 @@ Runs the game. Leave it alone for a minute and it will play its attract-mode
 demo.
 
 `cosmo` is a launcher. It looks for which episodes have their data present and
-runs one, asking only when there is more than one to choose from. Name an
-episode to skip the question:
+runs one, asking only when there is more than one to choose from — and when it
+does ask, it asks in the game's own font on the game's own title art, drawn
+through the same emulated EGA. Name an episode to skip the menu:
 
 ```bash
 cd gamedata && ../build/default/cosmo 2
