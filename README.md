@@ -35,7 +35,7 @@ shareware episode.
 | Interrupt and timing layer (int 8 / int 9, PIT, PIC) | ✅ 140 Hz, verified |
 | **The game boots and reaches its title screen** | ✅ |
 | Map loading, scrolling, actors, the attract-mode demo | ✅ |
-| Keyboard | 🟡 wired, not yet played through |
+| Keyboard, including jump while moving | ✅ verified by script |
 | Joystick | ⬜ |
 | AdLib (OPL2) and PC speaker | ⬜ silent |
 
@@ -159,17 +159,24 @@ free.
 ```
 vendor/cosmore/    upstream submodule, pinned and never modified
 cmake/             source preparation, run at configure time
+patches/           changes to upstream, one numbered patch each
 include/cosmo/     platform layer headers
-src/platform/      emulated EGA, video, PNG writer
+src/platform/      emulated EGA, video, PNG writer, DOS runtime, hardware
 tools/             validation harnesses
-tests/             unit tests, no game data required
+tests/             unit tests and input scripts
 ```
 
-Source preparation applies exactly two transformations to upstream: it drops
-the `#include` lines for Borland headers with no modern equivalent, and
-comments out the 16-bit inline assembly. It runs in CMake rather than a shell
-script so it behaves the same on every platform, and the diff against the
-original stays auditable.
+Source preparation applies three mechanical transformations to upstream: it
+drops the `#include` lines for Borland headers with no modern equivalent,
+comments out the 16-bit inline assembly, and pins the base types to their
+original widths — `unsigned int` was 16 bits on DOS and the game leans on the
+wraparound. Anything those cannot express is a numbered patch under `patches/`,
+each with a preamble explaining the defect and why the change is correct.
+
+It all runs in CMake rather than a shell script, so it behaves the same on
+every platform, and each patch is fingerprinted before and after: a patch that
+reports success while changing nothing fails the configure step rather than
+silently doing nothing.
 
 ## License
 
