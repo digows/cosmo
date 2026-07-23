@@ -6,7 +6,10 @@ gamedata/*
 !gamedata/README.md
 
 *.o
+# Stray captures from running the game are noise; images that are part of the
+# documentation are not.
 *.png
+!docs/*.png
 !docs/screenshots/*.png
 .DS_Store
 .cache/
