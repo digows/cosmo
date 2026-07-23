@@ -64,18 +64,27 @@ EOF
 ) &
 pid=$!
 
-# Waiting on that process would measure the wrong thing. Windows _execv ends the
-# launcher and starts the episode as something else entirely, so the launcher
-# exits within a second of a perfectly successful handover. What matters is
-# whether the episode program is still there, asked for by name.
-sleep 25
+# "delivered=" counts the timer interrupts the game's own loop has consumed, and
+# the game prints it to an unbuffered stream as it runs. Whether that number is
+# still climbing is the one sign of life that means the same thing on every
+# platform. Asking the OS for the process does not: on Windows the launcher
+# _execv's into the episode, which then runs as a native process that MSYS
+# pgrep cannot see, so a perfectly healthy game looks gone.
+last_delivered() {
+    grep -o 'delivered=[0-9]*' "$log" 2>/dev/null | tail -1 | cut -d= -f2
+}
 
-if pgrep -f "cosmo1" > /dev/null 2>&1; then
-    episode_alive=yes
-else
-    episode_alive=no
-fi
+# Give it time to press through the menu and load a level -- which is where the
+# crash was -- then read the clock, wait, and read it again. Play keeps the
+# number moving; a crash freezes it.
+sleep 20
+before="$(last_delivered)"
+sleep 6
+after="$(last_delivered)"
 
+# Best-effort cleanup, both ways: taskkill reaches the native Windows process
+# the launcher started, pkill reaches the episode everywhere else.
+taskkill //F //IM cosmo1.exe > /dev/null 2>&1 || true
 pkill -9 -f "cosmo1" 2>/dev/null || true
 kill -9 "$pid" 2>/dev/null || true
 wait "$pid" 2>/dev/null || true
@@ -96,27 +105,24 @@ if grep -q 'No episode data' "$log"; then
     exit 1
 fi
 
-# "delivered=" counts timer interrupts the game's own loop consumed. A number
-# above zero means the 1992 code is running, not merely that a process started.
-delivered="$(grep -o 'delivered=[0-9]*' "$log" | tail -1 | cut -d= -f2 || true)"
+before="${before:-0}"
+after="${after:-0}"
 
-if [ -z "$delivered" ] || [ "$delivered" -le 0 ]; then
+if [ "$after" -le 0 ]; then
     echo "the game never ran: no timer interrupts were delivered" >&2
     exit 1
 fi
 
-echo "the game ran and consumed $delivered timer interrupts"
+echo "the game's clock read $before, then $after six seconds later"
 
-if [ "$episode_alive" = yes ]; then
-    echo "and it was still playing when the time was up"
+if [ "$after" -gt "$before" ]; then
+    echo "still advancing, so it was still playing"
     exit 0
 fi
 
-echo "the episode program is gone" >&2
-
 if grep -q 'the game returned' "$log"; then
-    echo "it finished on its own, which is not what it was asked to do" >&2
+    echo "it stopped on its own, which is not what it was asked to do" >&2
 else
-    echo "with nothing logged on the way out, so it died rather than quit" >&2
+    echo "the clock stopped without a word, so it died rather than quit" >&2
 fi
 exit 1
