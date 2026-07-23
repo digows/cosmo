@@ -4,7 +4,7 @@ A source port of **Cosmo's Cosmic Adventure: Forbidden Planet** (Apogee
 Software, 1992) that runs natively on modern machines. No DOSBox, no emulator,
 no virtual machine — the original game's own code, compiled for your computer.
 
-[![CI](https://github.com/digows/cosmos/actions/workflows/ci.yml/badge.svg)](https://github.com/digows/cosmos/actions/workflows/ci.yml)
+[![CI](https://github.com/digows/cosmo/actions/workflows/ci.yml/badge.svg)](https://github.com/digows/cosmo/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 ![Platforms: macOS, Linux, Windows](https://img.shields.io/badge/platforms-macOS%20%7C%20Linux%20%7C%20Windows-lightgrey)
 ![Language: C](https://img.shields.io/badge/language-C11-orange)
@@ -16,6 +16,13 @@ no virtual machine — the original game's own code, compiled for your computer.
 
 Every screenshot is produced by this port, on macOS, from the original 1992 data
 files — not captured from an emulator.
+
+## Download and play
+
+**[Get the latest release](https://github.com/digows/cosmo/releases/latest)** —
+macOS, Windows and Linux. Each download includes the shareware Episode 1 and
+plays as soon as it is unpacked; nothing to install. If you own Episodes 2 and
+3, the launcher will ask you to point it at your copy.
 
 ## What this is
 
@@ -38,6 +45,7 @@ If you want the story of what broke along the way, that is in
 | Subsystem | State |
 |---|---|
 | All three episodes, behind an in-game-style launcher | ✅ |
+| Application bundle with an icon, and downloads that just run | ✅ |
 | Emulated EGA — write modes, latches, bit mask, map mask, set/reset | ✅ unit tested |
 | Planar decode, palette, SDL3 presentation | ✅ unit tested |
 | Interrupt and timing layer — int 8 / int 9, PIT, PIC | ✅ 140 Hz, measured |
@@ -62,8 +70,8 @@ installed, CMake downloads and builds it. The only C++ in the project is the
 wrapper around ymfm, which synthesises the AdLib's YM3812.
 
 ```bash
-git clone --recurse-submodules https://github.com/digows/cosmos.git
-cd cosmos
+git clone --recurse-submodules https://github.com/digows/cosmo.git
+cd cosmo
 cmake --preset default
 cmake --build --preset default
 ctest --preset default
@@ -85,6 +93,11 @@ Homebrew package is single-architecture:
 cmake --preset macos-universal && cmake --build --preset macos-universal
 ```
 
+`-DCOSMO_BUNDLE=ON` builds what the releases ship rather than a terminal
+program: `Cosmo.app` with an icon on macOS, and on Windows an icon, no console
+window, and the MinGW runtime linked in rather than left to three DLLs that
+have to travel alongside.
+
 ### Checking other platforms without spending CI
 
 Two container recipes reproduce the Linux and Windows jobs on any machine with
@@ -101,12 +114,16 @@ Both have caught real defects before they reached a runner.
 
 ## Game data
 
-The assets belong to Apogee Software and are **not** in this repository.
+The assets belong to Apogee Software and are **not** in this repository. The
+release downloads include Episode 1, which Apogee distributed freely; a build
+from source needs it putting in place.
 
-Put `COSMO1.STN` and `COSMO1.VOL` in the directory you run the game from, and
-the episode 2 and 3 files beside them if you have those. Episode 1 is shareware
-and freely available; see [gamedata/README.md](gamedata/README.md) for where to
-get it, with checksums.
+`COSMO1.STN` and `COSMO1.VOL` are looked for beside the program, inside the
+application bundle on macOS, and in the directory the game was started from, in
+that order. Whichever is found first is used, and if it can be written to the
+saves go there too — so an unpacked folder carries its own. See
+[gamedata/README.md](gamedata/README.md) for where to get the data, with
+checksums.
 
 If a `COSMOn.CFG` is already present it wins over this port's defaults,
 including the jump key — the original distributions shipped one with ctrl.
@@ -115,18 +132,18 @@ Delete it to get the defaults, or rebind in game.
 ## Running
 
 ```bash
-cd gamedata && ../build/default/cosmo
+./build/default/cosmo
 ```
 
 Leave it alone for a minute and it plays its attract-mode demo.
 
-`cosmo` is a launcher. It finds which episodes have their data present and runs
-one, asking only when there is more than one to choose from — and when it asks,
-it asks in the game's own font on the game's own title art, drawn through the
-same emulated EGA. Name an episode to skip the menu:
+`cosmo` is a launcher: it lists the episodes, marks the ones whose data is
+missing, and offers a file picker for those — and it does the listing in the
+game's own font on the game's own title art, drawn through the same emulated
+EGA. Name an episode to skip the menu:
 
 ```bash
-cd gamedata && ../build/default/cosmo 2
+./build/default/cosmo 2
 ```
 
 The three episodes are separate programs — `cosmo1`, `cosmo2`, `cosmo3` — which

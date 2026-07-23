@@ -50,4 +50,7 @@ void video_set_title(const char *title);
  * callers do not need to include SDL headers. */
 void video_delay(uint32_t ms);
 
+/* The window, for anything that has to be parented to it. NULL before init. */
+struct SDL_Window *video_get_window(void);
+
 #endif /* COSMO_VIDEO_H */

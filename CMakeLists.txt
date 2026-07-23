@@ -23,6 +23,7 @@ option(COSMO_WERROR "Treat warnings as errors" OFF)
 option(COSMO_FETCH_SDL "Always build SDL3 from source instead of using a system copy" OFF)
 option(COSMO_BUILD_TESTS "Build the test suite" ON)
 option(COSMO_BUILD_GAME "Build the game itself from the Cosmore sources" ON)
+option(COSMO_BUNDLE "Build as an application rather than a terminal program" OFF)
 
 # --------------------------------------------------------------------------
 # Warnings
@@ -103,6 +104,33 @@ target_include_directories(ymfm SYSTEM PUBLIC vendor/ymfm/src)
 target_compile_options(ymfm PRIVATE ${COSMO_NO_WARNINGS})
 
 # --------------------------------------------------------------------------
+# Application packaging
+# --------------------------------------------------------------------------
+#
+# COSMO_BUNDLE turns the game from something started in a terminal into
+# something double-clicked: a bundle with an icon on macOS, an icon and no
+# console window on Windows. It is off by default, because a plain binary is
+# easier to work on, and on in CI so that what is tested is what ships.
+
+set(COSMO_ICON_DIR "${CMAKE_CURRENT_SOURCE_DIR}/assets")
+
+if(COSMO_BUNDLE AND WIN32)
+    # A resource script is how an icon gets into a Windows executable. It is
+    # generated rather than committed so the path stays right.
+    set(COSMO_WIN_ICON_RC "${CMAKE_BINARY_DIR}/cosmo_icon.rc")
+    file(WRITE "${COSMO_WIN_ICON_RC}"
+         "1 ICON \"${COSMO_ICON_DIR}/icon.ico\"\n")
+
+    # MinGW links its own runtime dynamically by default, which means shipping
+    # libgcc_s_seh-1.dll, libstdc++-6.dll and libwinpthread-1.dll beside the
+    # game -- and a dialog about a missing DLL for anyone who unpacks only the
+    # executable. Linking them in avoids the whole subject.
+    if(MINGW)
+        add_link_options(-static-libgcc -static-libstdc++ -static)
+    endif()
+endif()
+
+# --------------------------------------------------------------------------
 # Libraries
 # --------------------------------------------------------------------------
 
@@ -116,8 +144,11 @@ add_library(cosmo_core STATIC
 target_include_directories(cosmo_core PUBLIC include)
 target_link_libraries(cosmo_core PRIVATE cosmo_warnings)
 
+# paths.c belongs here rather than in core: working out where an application's
+# data lives means asking SDL, and core is kept free of it.
 add_library(cosmo_video STATIC
-    src/platform/video.c)
+    src/platform/video.c
+    src/platform/paths.c)
 target_link_libraries(cosmo_video
     PUBLIC cosmo_core SDL3::SDL3
     PRIVATE cosmo_warnings)
@@ -178,7 +209,12 @@ if(COSMO_BUILD_GAME)
         target_link_libraries(cosmo_lowlevel${episode}
             PUBLIC cosmo_core PRIVATE cosmo_warnings)
 
-        add_executable(cosmo${episode} $<TARGET_OBJECTS:cosmore_game${episode}>)
+        if(COSMO_BUNDLE AND WIN32)
+            add_executable(cosmo${episode} WIN32
+                $<TARGET_OBJECTS:cosmore_game${episode}> "${COSMO_WIN_ICON_RC}")
+        else()
+            add_executable(cosmo${episode} $<TARGET_OBJECTS:cosmore_game${episode}>)
+        endif()
         target_link_libraries(cosmo${episode}
             PRIVATE cosmo_lowlevel${episode} cosmo_platform)
         add_dependencies(cosmo${episode} cosmore_game${episode})
@@ -192,12 +228,68 @@ if(COSMO_BUILD_GAME)
     # tools/make-episode.py and patches/0008.
     if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/episodes/episode4.h")
         cosmo_add_episode(4)
+        set(COSMO_EPISODE4 ON)
     endif()
 
     # The front door: finds which episodes have data present and runs one.
-    add_executable(cosmo src/launcher.c)
+    if(COSMO_BUNDLE AND WIN32)
+        # An icon, and no console window behind the game.
+        add_executable(cosmo WIN32 src/launcher.c "${COSMO_WIN_ICON_RC}")
+    else()
+        add_executable(cosmo src/launcher.c)
+    endif()
     target_link_libraries(cosmo PRIVATE cosmo_video cosmo_warnings)
     add_dependencies(cosmo cosmo1 cosmo2 cosmo3)
+
+    if(COSMO_EPISODE4)
+        target_compile_definitions(cosmo PRIVATE COSMO_HAVE_EPISODE4)
+        add_dependencies(cosmo cosmo4)
+    endif()
+
+    # ----------------------------------------------------------------------
+    # macOS application bundle
+    # ----------------------------------------------------------------------
+    #
+    # The launcher is the bundle's program. The episode programs sit beside it
+    # in Contents/MacOS, which is where SDL_GetBasePath() points, so the
+    # launcher finds them the same way it does anywhere else.
+    #
+    # The game data is deliberately not placed here. It belongs to Apogee and
+    # is not in this repository; whoever assembles a release drops it into
+    # Contents/Resources, and paths.c looks there.
+    if(COSMO_BUNDLE AND APPLE)
+        set_target_properties(cosmo PROPERTIES
+            MACOSX_BUNDLE TRUE
+            OUTPUT_NAME "Cosmo"
+            MACOSX_BUNDLE_BUNDLE_NAME "Cosmo"
+            MACOSX_BUNDLE_GUI_IDENTIFIER "com.digows.cosmo"
+            MACOSX_BUNDLE_BUNDLE_VERSION "${PROJECT_VERSION}"
+            MACOSX_BUNDLE_SHORT_VERSION_STRING "${PROJECT_VERSION}"
+            MACOSX_BUNDLE_ICON_FILE "icon"
+            MACOSX_BUNDLE_COPYRIGHT
+                "Game (c) 1992 Apogee Software. Port under the MIT licence.")
+
+        set(_bundle "$<TARGET_BUNDLE_CONTENT_DIR:cosmo>")
+
+        add_custom_command(TARGET cosmo POST_BUILD
+            COMMAND "${CMAKE_COMMAND}" -E make_directory "${_bundle}/Resources"
+            COMMAND "${CMAKE_COMMAND}" -E copy_if_different
+                    "${COSMO_ICON_DIR}/icon.icns" "${_bundle}/Resources/icon.icns"
+            COMMENT "Adding the icon to Cosmo.app")
+
+        foreach(_ep 1 2 3)
+            add_custom_command(TARGET cosmo POST_BUILD
+                COMMAND "${CMAKE_COMMAND}" -E copy_if_different
+                        "$<TARGET_FILE:cosmo${_ep}>" "${_bundle}/MacOS/"
+                COMMENT "Adding episode ${_ep} to Cosmo.app")
+        endforeach()
+
+        if(COSMO_EPISODE4)
+            add_custom_command(TARGET cosmo POST_BUILD
+                COMMAND "${CMAKE_COMMAND}" -E copy_if_different
+                        "$<TARGET_FILE:cosmo4>" "${_bundle}/MacOS/")
+        endif()
+    endif()
 endif()
 
 # --------------------------------------------------------------------------

@@ -1,0 +1,76 @@
+Cosmo's Cosmic Adventure
+========================
+
+A native port of the 1992 Apogee game. No DOS emulator.
+
+
+Starting it
+-----------
+
+macOS      Double-click Cosmo. The first time, macOS will refuse: it is not
+           signed by an Apple developer account. Right-click it, choose Open,
+           and confirm once. After that it opens normally.
+
+Windows    Run cosmo.exe.
+
+Linux      Run ./cosmo. If your desktop will not start it from a file manager,
+           run it from a terminal.
+
+Episode 1 is included, so it plays straight away.
+
+
+Controls
+--------
+
+Arrow keys    move
+Space         jump
+Alt           bomb
+F1            help, in game
+Q then Y      quit, saving your settings and high scores
+
+All six can be rebound from the game's own menu: press G at the main menu for
+Game Redefine, then K for Keyboard redefine.
+
+The original used ctrl to jump. Space is this port's one deliberate change,
+because ctrl with an arrow key is a window manager shortcut on most systems
+today. On macOS, Command jumps as well.
+
+Quit through the game rather than closing the window. The configuration file
+is written on the way out, exactly as it was on DOS, where killing the program
+lost it the same way.
+
+
+Episodes 2 and 3
+----------------
+
+Only Episode 1 was shareware. Episodes 2 and 3 were the paid ones and are still
+sold by Apogee, so they cannot be included here.
+
+If you already own them, choose the episode in the launcher and it will ask you
+to find your copy. Point it at COSMO2.STN or COSMO3.STN and both files are
+installed for you; they will be there next time.
+
+
+Where your saves go
+-------------------
+
+If the folder this was unpacked into can be written to, the game keeps
+everything right there, so a copy on a USB stick carries its own saves.
+
+The macOS application cannot write inside itself, so it uses
+~/Library/Application Support/digows/Cosmo instead, and copies the game data
+there the first time it runs.
+
+
+Credits
+-------
+
+Cosmo's Cosmic Adventure, its artwork and its music are Copyright (c) 1992
+Apogee Software, Ltd. Episode 1 is included as the freely distributable
+shareware release.
+
+This port is built on Cosmore, Scott Smitelli's reconstruction of the original
+source, and uses ymfm by Aaron Giles to synthesise the AdLib. Its own code is
+MIT licensed. Full credits are in ATTRIBUTION.md.
+
+Source, and the story of what it took:  https://github.com/digows/cosmo

@@ -12,6 +12,7 @@ on:
       - 'docs/**'
       - 'LICENSE'
       - '.gitattributes'
+      - '.gitignore'
   pull_request:
     paths-ignore: *docs
   workflow_dispatch:
@@ -20,7 +21,12 @@ on:
 # package. It makes the three jobs behave the same way, and it is what makes
 # the artifacts self-contained: nothing to install before running them.
 env:
-  CMAKE_FLAGS: -DCOSMO_WERROR=ON -DCOSMO_FETCH_SDL=ON -DCMAKE_BUILD_TYPE=Release
+  # COSMO_BUNDLE is on here as well as in the release workflow, so what CI
+  # exercises is the same shape as what ships: an application with an icon
+  # rather than a terminal program.
+  CMAKE_FLAGS: >-
+    -DCOSMO_WERROR=ON -DCOSMO_FETCH_SDL=ON -DCOSMO_BUNDLE=ON
+    -DCMAKE_BUILD_TYPE=Release
 
 jobs:
   # Single architecture on purpose. GitHub bills macOS minutes at ten times the
@@ -48,12 +54,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: cosmo-macos-arm64
-          path: |
-            build/cosmo
-            build/cosmo1
-            build/cosmo2
-            build/cosmo3
-            build/imgview
+          path: build/Cosmo.app
 
   linux:
     name: Linux
@@ -124,15 +125,28 @@ jobs:
             mingw-w64-x86_64-ninja
 
       - name: Configure
-        run: >
-          cmake -S . -B build -G Ninja
-          -DCOSMO_WERROR=ON -DCOSMO_FETCH_SDL=ON -DCMAKE_BUILD_TYPE=Release
+        run: cmake -S . -B build -G Ninja $CMAKE_FLAGS
 
       - name: Build
         run: cmake --build build -j3
 
       - name: Test
         run: ctest --test-dir build --output-on-failure
+
+      # v0.1.0 shipped executables Windows would not start, because MinGW links
+      # its runtime dynamically and the DLLs were not beside them. They are
+      # linked in now; this is what keeps them that way.
+      - name: Check nothing depends on the MinGW runtime
+        run: |
+          failed=0
+          for exe in build/*.exe; do
+            if objdump -p "$exe" | grep -i 'DLL Name' | \
+               grep -Ei 'libgcc|libstdc\+\+|libwinpthread'; then
+              echo "$exe links a runtime DLL that is not shipped"
+              failed=1
+            fi
+          done
+          exit $failed
 
       - uses: actions/upload-artifact@v4
         with:
@@ -143,39 +157,3 @@ jobs:
             build/cosmo2.exe
             build/cosmo3.exe
             build/imgview.exe
-
-  # Only on a tag. This is the expensive one -- two architectures on a runner
-  # billed at ten times the Linux rate -- so it does not run per commit.
-  release-macos:
-    name: macOS (universal, tagged releases)
-    if: startsWith(github.ref, 'refs/tags/')
-    runs-on: macos-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          submodules: recursive
-
-      - name: Configure
-        run: >
-          cmake -S . -B build $CMAKE_FLAGS
-          -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64"
-          -DCMAKE_OSX_DEPLOYMENT_TARGET=11.0
-
-      - name: Build
-        run: cmake --build build -j3
-
-      - name: Verify both architectures
-        run: |
-          for binary in cosmo cosmo1 cosmo2 cosmo3 imgview; do
-            lipo -info "build/$binary"
-          done
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: cosmo-macos-universal
-          path: |
-            build/cosmo
-            build/cosmo1
-            build/cosmo2
-            build/cosmo3
-            build/imgview

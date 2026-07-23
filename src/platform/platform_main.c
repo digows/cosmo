@@ -41,6 +41,7 @@ extern unsigned long adlib_writes;
 #include "cosmo/hardware.h"
 #include "cosmo/input.h"
 #include "cosmo/video.h"
+#include "cosmo/paths.h"
 
 #define TARGET_PRESENT_HZ 60.0
 #define SCANCODE_QUEUE_SIZE 64
@@ -304,6 +305,24 @@ int main(int argc, char *argv[])
 
     argc_saved = argc;
     argv_saved = argv;
+
+    /*
+     * Settles where the group files are and moves there, so every bare
+     * filename in the 1992 code resolves the way it did on DOS. The launcher
+     * has usually done this already; doing it again is harmless and covers
+     * running an episode program directly.
+     */
+    if (!paths_init()) {
+        static const char *message =
+            "No episode data found.\n\n"
+            "COSMO1.STN and COSMO1.VOL must be beside the program, inside the "
+            "application bundle, or in the folder it was started from.";
+
+        fprintf(stderr, "cosmo: %s\n", message);
+        SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR,
+                                 "Cosmo's Cosmic Adventure", message, NULL);
+        return 1;
+    }
 
     hardware_init();
     interrupts_init();

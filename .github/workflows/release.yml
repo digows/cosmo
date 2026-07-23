@@ -1,0 +1,179 @@
+name: Release
+
+# Everything a release needs happens here. Nothing is assembled by hand, so a
+# release can be reproduced from its tag alone.
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to build (dry run; no release is published)'
+        required: false
+
+env:
+  CMAKE_FLAGS: >-
+    -DCOSMO_WERROR=ON -DCOSMO_FETCH_SDL=ON -DCOSMO_BUNDLE=ON
+    -DCMAKE_BUILD_TYPE=Release
+
+  # Episode 1 was Apogee's freely distributable shareware release and is what
+  # makes the download playable without owning anything. The checksums are
+  # pinned: a release should never carry data nobody has looked at.
+  SHAREWARE_URL: https://archive.org/download/CosmosCosmicAdventure/CosmosCosmicAdventure-ForbiddenPlanet-Adventure1Of3V1.20sw1992apogeeSoftwareLtd.action.zip
+  STN_SHA256: 55963b5331a7159fe6ca134e9ab807e59e6ef798057fc28a1081c1e6a273ff52
+  VOL_SHA256: f578a1b72423e83b363c5c019faac5b96124f39bc4a2ec4ee09cabc29f3a63fd
+
+jobs:
+  macos:
+    name: macOS (universal)
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Fetch the shareware episode
+        run: bash .github/scripts/fetch-shareware.sh gamedata
+
+      - name: Build
+        run: |
+          cmake -S . -B build $CMAKE_FLAGS \
+            -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64" \
+            -DCMAKE_OSX_DEPLOYMENT_TARGET=11.0
+          cmake --build build -j3
+
+      - name: Check both architectures are present
+        run: |
+          for binary in build/Cosmo.app/Contents/MacOS/*; do
+            lipo -info "$binary"
+            lipo -info "$binary" | grep -q 'arm64' || exit 1
+            lipo -info "$binary" | grep -q 'x86_64' || exit 1
+          done
+
+      - name: Package
+        run: bash .github/scripts/package.sh macos build "${{ github.ref_name }}"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: package-macos
+          path: dist/*
+
+  linux:
+    name: Linux
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libasound2-dev libpulse-dev \
+            libx11-dev libxext-dev libxrandr-dev libxcursor-dev libxfixes-dev \
+            libxi-dev libxss-dev libxtst-dev libxkbcommon-dev \
+            libwayland-dev wayland-protocols libdecor-0-dev \
+            libdrm-dev libgbm-dev libgl1-mesa-dev libegl1-mesa-dev \
+            libdbus-1-dev libudev-dev libibus-1.0-dev
+
+      - name: Fetch the shareware episode
+        run: bash .github/scripts/fetch-shareware.sh gamedata
+
+      - name: Build
+        run: |
+          cmake -S . -B build $CMAKE_FLAGS
+          cmake --build build -j3
+
+      - name: Package
+        run: bash .github/scripts/package.sh linux build "${{ github.ref_name }}"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: package-linux
+          path: dist/*
+
+  windows:
+    name: Windows
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: msys2 {0}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: true
+          install: >-
+            git unzip
+            mingw-w64-x86_64-gcc
+            mingw-w64-x86_64-cmake
+            mingw-w64-x86_64-ninja
+
+      - name: Fetch the shareware episode
+        run: bash .github/scripts/fetch-shareware.sh gamedata
+
+      - name: Build
+        run: |
+          cmake -S . -B build -G Ninja $CMAKE_FLAGS
+          cmake --build build -j3
+
+      # The first release shipped executables that would not start: MinGW links
+      # its runtime dynamically by default, so Windows asked for
+      # libgcc_s_seh-1.dll and would have gone on asking for two more. The
+      # build links them in now, and this makes sure it stays that way.
+      - name: Check nothing depends on the MinGW runtime
+        run: |
+          failed=0
+          for exe in build/*.exe; do
+            echo "== $exe"
+            if objdump -p "$exe" | grep -i 'DLL Name' | \
+               grep -Ei 'libgcc|libstdc\+\+|libwinpthread'; then
+              echo "   ^^ links a runtime DLL that is not being shipped"
+              failed=1
+            fi
+          done
+          exit $failed
+
+      - name: Package
+        run: bash .github/scripts/package.sh windows build "${{ github.ref_name }}"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: package-windows
+          path: dist/*
+
+  publish:
+    name: Publish
+    needs: [macos, linux, windows]
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Collect
+        run: |
+          mkdir -p dist
+          find artifacts -type f \( -name '*.zip' -o -name '*.tar.gz' \) \
+            -exec mv {} dist/ \;
+          ls -la dist
+          (cd dist && sha256sum * > SHA256SUMS.txt)
+
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "${{ github.ref_name }}" \
+            --title "${{ github.ref_name }}" \
+            --notes-file .github/release-notes.md \
+            dist/*

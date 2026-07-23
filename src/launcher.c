@@ -30,18 +30,23 @@
 #include "cosmo/ega.h"
 #include "cosmo/font.h"
 #include "cosmo/group.h"
+#include "cosmo/paths.h"
 #include "cosmo/video.h"
 
-#define EPISODE_COUNT 4
+#ifdef COSMO_HAVE_EPISODE4
+#   define EPISODE_COUNT 4
+#else
+#   define EPISODE_COUNT 3
+#endif
 #define FULLSCREEN_IMAGE_SIZE 32000
 
 /*
- * Where the menu sits, in font tiles. Kept to the bottom third so it does not
+ * Where the menu sits, in font tiles. Kept low so it does not
  * cover the logo it is sitting on. The screen is 25 rows, so this reaches the
  * bottom exactly.
  */
-#define MENU_TOP     17
-#define MENU_HEIGHT   8
+#define MENU_TOP     15
+#define MENU_HEIGHT  10
 #define MENU_LEFT     3
 #define MENU_WIDTH   34
 
@@ -55,10 +60,12 @@ static struct episode episodes[EPISODE_COUNT] = {
     {1, "Forbidden Planet", false},
     {2, "Mad Scientist", false},
     {3, "Secret Lab", false},
+#ifdef COSMO_HAVE_EPISODE4
     {4, "New Episode", false},
+#endif
 };
 
-static const char *datadir = ".";
+
 
 /* ------------------------------------------------------------------------ */
 /* Drawing                                                                  */
@@ -73,7 +80,7 @@ static bool draw_background(int episode)
     unsigned char image[FULLSCREEN_IMAGE_SIZE];
     unsigned mask = 0x0100;
 
-    if (group_read(datadir, episode, "PRETITLE.MNI", image, sizeof image)
+    if (group_read(paths_data_dir(), episode, "PRETITLE.MNI", image, sizeof image)
             != FULLSCREEN_IMAGE_SIZE) {
         return false;
     }
@@ -117,22 +124,28 @@ static void draw_menu(int selected)
 
     font_draw_centered(MENU_TOP + 1, "Select an episode");
 
+    /*
+     * Every episode is listed, including the ones with no data. Hiding those
+     * would hide the only route to installing them, and an episode marked as
+     * missing is more use than an episode that is simply absent.
+     */
     for (int i = 0; i < EPISODE_COUNT; i++) {
-        if (!episodes[i].present) continue;
-
         /*
          * 0x1C is the right arrow in this font. The game's own keyNames[]
          * table uses it for the right cursor key, along with 0x18, 0x19 and
          * 0x1B for the other three -- not the CP437 assignments, but this is
          * the game's font and those are the glyphs in it.
          */
-        snprintf(line, sizeof line, "%c %d) %s",
+        snprintf(line, sizeof line, "%c %d) %s%s",
                  (i == selected) ? '\x1C' : ' ',
-                 episodes[i].number, episodes[i].title);
+                 episodes[i].number, episodes[i].title,
+                 episodes[i].present ? "" : " ...");
         font_draw(MENU_LEFT + 4, row, line);
         row++;
     }
 
+    font_draw_centered(MENU_TOP + MENU_HEIGHT - 2,
+                       "... not installed - pick to locate");
     font_draw_centered(MENU_TOP + MENU_HEIGHT - 1, "Enter to play, Esc to quit");
 }
 
@@ -148,13 +161,96 @@ static int first_present(void)
     return -1;
 }
 
+/*
+ * Every episode can be moved to, including the ones with no data. Choosing one
+ * of those is how someone points the launcher at a copy they own, so refusing
+ * to select them would hide the only way in.
+ */
 static int step_selection(int selected, int direction)
 {
-    for (int tries = 0; tries < EPISODE_COUNT; tries++) {
-        selected = (selected + direction + EPISODE_COUNT) % EPISODE_COUNT;
-        if (episodes[selected].present) break;
+    return (selected + direction + EPISODE_COUNT) % EPISODE_COUNT;
+}
+
+/* ------------------------------------------------------------------------ */
+/* Installing an episode this port does not ship                             */
+/* ------------------------------------------------------------------------ */
+
+static int  import_state;    /* 0 while the dialog is open, 1 done, -1 failed */
+static int  import_episode;
+
+static void SDLCALL import_chosen(void *userdata, const char *const *files,
+                                  int filter)
+{
+    (void)userdata;
+    (void)filter;
+
+    if (!files || !*files) {          /* cancelled */
+        import_state = -1;
+        return;
     }
-    return selected;
+
+    import_state = paths_import_episode(*files, import_episode) ? 1 : -1;
+}
+
+/*
+ * Explain what is missing, then let the file picker do the finding. Both group
+ * files are copied, whichever of the two was chosen.
+ */
+static bool offer_import(int episode)
+{
+    static const SDL_DialogFileFilter filters[] = {
+        {"Cosmo episode data", "stn;vol"},
+        {"All files", "*"},
+    };
+    char message[512];
+
+    snprintf(message, sizeof message,
+             "Episode %d is not included.\n\n"
+             "Only episode 1 is shareware. Episodes 2 and 3 were the paid "
+             "ones and are still sold by Apogee.\n\n"
+             "If you already own a copy, choose its COSMO%d.STN file on the "
+             "next screen and it will be installed alongside episode 1.",
+             episode, episode);
+
+    SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_INFORMATION,
+                             "Cosmo's Cosmic Adventure", message,
+                             video_get_window());
+
+    import_episode = episode;
+    import_state = 0;
+
+    SDL_ShowOpenFileDialog(import_chosen, NULL, video_get_window(),
+                           filters, SDL_arraysize(filters), NULL, false);
+
+    /* The callback arrives on the main thread, so events have to keep moving. */
+    while (import_state == 0) {
+        SDL_Event event;
+        while (SDL_PollEvent(&event)) {
+            if (event.type == SDL_EVENT_QUIT) return false;
+        }
+        SDL_Delay(16);
+    }
+
+    if (import_state < 0) return false;
+
+    SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_INFORMATION,
+                             "Cosmo's Cosmic Adventure",
+                             "Installed. It will be there next time too.",
+                             video_get_window());
+    return true;
+}
+
+/* Act on a menu choice, installing the episode first if it is not there. */
+static int choose_episode(int selected)
+{
+    if (episodes[selected].present) return episodes[selected].number;
+
+    if (!offer_import(episodes[selected].number)) return 0;
+
+    episodes[selected].present =
+        group_episode_present(paths_data_dir(), episodes[selected].number);
+
+    return episodes[selected].present ? episodes[selected].number : 0;
 }
 
 /* Returns the chosen episode number, or 0 if the user quit. */
@@ -206,12 +302,20 @@ static int run_menu(void)
 
             case SDLK_RETURN:
             case SDLK_KP_ENTER:
-            case SDLK_SPACE:
-                return episodes[selected].number;
+            case SDLK_SPACE: {
+                int chosen = choose_episode(selected);
+                if (chosen) return chosen;
+                redraw = true;
+                break;
+            }
 
-            case SDLK_1: case SDLK_2: case SDLK_3: {
+            case SDLK_1: case SDLK_2: case SDLK_3: case SDLK_4: {
                 int wanted = (int)(event.key.key - SDLK_1);
-                if (episodes[wanted].present) return episodes[wanted].number;
+                if (wanted < EPISODE_COUNT) {
+                    int chosen = choose_episode(wanted);
+                    if (chosen) return chosen;
+                    redraw = true;
+                }
                 break;
             }
 
@@ -228,11 +332,12 @@ static int run_menu(void)
 static void report_missing_data(void)
 {
     static const char *message =
-        "No episode data found in this directory.\n\n"
-        "Put COSMO1.STN and COSMO1.VOL (or the files for episodes 2 or 3)\n"
-        "in the directory you run the game from.\n\n"
-        "Episode 1 is shareware and freely available; episodes 2 and 3 are\n"
-        "sold by Apogee. See gamedata/README.md.";
+        "No episode data found.\n\n"
+        "The game looks for COSMO1.STN and COSMO1.VOL beside the program, "
+        "inside the application bundle, and in the folder it was started "
+        "from.\n\n"
+        "Episode 1 is shareware and freely available; episodes 2 and 3 are "
+        "sold by Apogee.";
 
     fprintf(stderr, "cosmo: %s\n", message);
     SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR,
@@ -261,11 +366,11 @@ static int replace_process(const char *program, char *argv[])
 #endif
 }
 
-static int run_episode(int number, char *write_path)
+static int run_episode(int number)
 {
     const char *base = SDL_GetBasePath();
     char program[1024];
-    char *child_argv[3];
+    char *child_argv[2];
 
     if (!base) {
         fprintf(stderr, "cosmo: cannot locate the episode programs (%s)\n",
@@ -279,9 +384,15 @@ static int run_episode(int number, char *write_path)
     /* Give up the window before the process image is replaced. */
     video_shutdown();
 
+    /*
+     * No write path is handed over. paths_init() has already made the working
+     * directory both the source of the group files and somewhere the saves can
+     * go, so the game's own relative paths mean the right thing -- which also
+     * avoids JoinPath(), whose 80-byte static buffer joins with a DOS
+     * separator and never terminates its result.
+     */
     child_argv[0] = program;
-    child_argv[1] = write_path;   /* the game's write path, or NULL */
-    child_argv[2] = NULL;
+    child_argv[1] = NULL;
 
     replace_process(program, child_argv);
 
@@ -296,6 +407,16 @@ int main(int argc, char *argv[])
     int number = 0;
 
     /*
+     * Before anything looks for a file. This settles where the data is and
+     * moves there, so the 1992 code's bare filenames resolve the way they did
+     * when a program started in the directory it lived in.
+     */
+    if (!paths_init()) {
+        report_missing_data();
+        return 1;
+    }
+
+    /*
      * An episode can be named outright, both to skip the menu and to keep the
      * launcher scriptable.
      */
@@ -305,17 +426,16 @@ int main(int argc, char *argv[])
     }
 
     for (int i = 0; i < EPISODE_COUNT; i++) {
-        episodes[i].present = group_episode_present(datadir, episodes[i].number);
+        episodes[i].present = group_episode_present(paths_data_dir(), episodes[i].number);
         if (episodes[i].present) found++;
     }
 
-    if (found == 0) {
-        report_missing_data();
-        return 1;
-    }
-
-    /* With one episode installed there is nothing worth asking about. */
-    if (number == 0 && found == 1) number = episodes[first_present()].number;
+    /*
+     * The menu is shown even with a single episode installed. It is the only
+     * place that explains how to add the two this port cannot ship, so
+     * skipping it would hide them entirely.
+     */
+    (void)found;
 
     if (number == 0) {
         int background = episodes[first_present()].number;
@@ -325,7 +445,7 @@ int main(int argc, char *argv[])
 
         if (!video_init("Cosmo's Cosmic Adventure", 3)) return 1;
 
-        if (!font_load(datadir, background) || !draw_background(background)) {
+        if (!font_load(paths_data_dir(), background) || !draw_background(background)) {
             fprintf(stderr, "cosmo: episode data is present but unreadable\n");
             video_shutdown();
             return 1;
@@ -342,5 +462,5 @@ int main(int argc, char *argv[])
         }
     }
 
-    return run_episode(number, (argc > 2) ? argv[2] : NULL);
+    return run_episode(number);
 }

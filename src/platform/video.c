@@ -27,6 +27,11 @@
 #define PIXEL_ASPECT 1.2
 
 static SDL_Window   *window;
+
+SDL_Window *video_get_window(void)
+{
+    return window;
+}
 static SDL_Renderer *renderer;
 static SDL_Texture  *texture;
 
