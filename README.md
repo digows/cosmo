@@ -102,6 +102,33 @@ Two environment variables help with debugging and automated comparison:
 and `COSMO_SHOT_PATH=prefix COSMO_SHOT_MS=500,3000` writes screenshots at fixed
 moments after startup. `F12` takes one at any time.
 
+## Controls
+
+Arrow keys move, **Ctrl** jumps, **Alt** throws a bomb — the game's own
+defaults. They can be rebound from the game's menu.
+
+On macOS, **Command also jumps**. This is not a preference: macOS binds
+Control with Left, Right, Up and Down to Mission Control, so the one
+combination the game needs most — jump while moving — never reaches the
+application. Option is not claimed, so bombs already work with the arrows;
+Command fills the same gap for jumping.
+
+## Testing without a keyboard
+
+`COSMO_SCRIPT` points at a file of timed key events, which drives the game
+without anyone at the keyboard. Together with `COSMO_SHOT_MS` it reproduces a
+bug or checks a behaviour in one run:
+
+```bash
+COSMO_SCRIPT=../tests/scripts/jump-while-walking.txt \
+COSMO_DEBUG=1 ../build/default/cosmo
+```
+
+Each line is `<milliseconds> <down|up|tap> <key>`. `COSMO_DEBUG=1` reports the
+timer rate, interrupt delivery, and the game's own key and command state once a
+second, which is how the jump-while-walking behaviour above was confirmed to
+work at the emulation level before being traced to the window system.
+
 ## How it works
 
 The main thread plays the part of the PC hardware and a second thread plays the

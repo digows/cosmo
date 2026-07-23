@@ -114,6 +114,7 @@ if(COSMO_BUILD_GAME AND NOT MSVC)
         src/platform/dos_compat.c
         src/platform/ports.c
         src/platform/interrupts.c
+        src/platform/input.c
         src/platform/platform_main.c)
     target_include_directories(cosmo_dos PRIVATE "${COSMORE_GEN_DIR}")
     target_compile_definitions(cosmo_dos PRIVATE EPISODE=1)

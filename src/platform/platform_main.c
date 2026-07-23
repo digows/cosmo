@@ -26,9 +26,17 @@
  */
 void InnerMain(int argc, char *argv[]);
 
+/*
+ * The game's own key and command state, for COSMO_DEBUG reporting. `bbool` is
+ * a byte and `isKeyDown` is indexed by scancode.
+ */
+extern volatile uint8_t isKeyDown[];
+extern uint8_t cmdWest, cmdEast, cmdNorth, cmdSouth, cmdJump, cmdBomb;
+
 #include "cosmo/dos_compat.h"
 #include "cosmo/ega.h"
 #include "cosmo/hardware.h"
+#include "cosmo/input.h"
 #include "cosmo/video.h"
 
 #define TARGET_PRESENT_HZ 60.0
@@ -80,7 +88,16 @@ static uint8_t sdl_to_xt(SDL_Scancode sc)
     case SDL_SCANCODE_RIGHTBRACKET: return 0x1B;
     case SDL_SCANCODE_RETURN:       return 0x1C;
     case SDL_SCANCODE_LCTRL:
-    case SDL_SCANCODE_RCTRL:        return 0x1D;
+    case SDL_SCANCODE_RCTRL:
+    /*
+     * Command reports as Ctrl. The game's default jump key is Ctrl, but macOS
+     * claims Control with Left, Right and Up for Mission Control, so the
+     * combination the game needs most never reaches us. Command is not
+     * spoken for, so it gives the player a jump key that works with the
+     * arrows out of the box.
+     */
+    case SDL_SCANCODE_LGUI:
+    case SDL_SCANCODE_RGUI:         return 0x1D;
     case SDL_SCANCODE_A:            return 0x1E;
     case SDL_SCANCODE_S:            return 0x1F;
     case SDL_SCANCODE_D:            return 0x20;
@@ -150,6 +167,39 @@ static void queue_scancode(uint8_t code)
     if (next == queue_head) return;  /* full; the oldest keystrokes win */
     scancode_queue[queue_tail] = code;
     queue_tail = next;
+}
+
+/*
+ * Which physical keys we have reported as held. macOS does not always deliver
+ * a key-up: holding Command suppresses them for other keys, and switching away
+ * from the window drops them entirely. Either way the game would be left
+ * believing a key is still down and Cosmo would walk into a wall forever.
+ * Reconciling against SDL's own view once a frame catches all of it.
+ */
+static bool key_held[SDL_SCANCODE_COUNT];
+
+static void release_key(SDL_Scancode sc)
+{
+    uint8_t code = sdl_to_xt(sc);
+
+    if (code) queue_scancode((uint8_t)(code | 0x80));
+    key_held[sc] = false;
+}
+
+static void reconcile_held_keys(void)
+{
+    const bool *state = SDL_GetKeyboardState(NULL);
+
+    for (int sc = 0; sc < SDL_SCANCODE_COUNT; sc++) {
+        if (key_held[sc] && !state[sc]) release_key((SDL_Scancode)sc);
+    }
+}
+
+static void release_all_keys(void)
+{
+    for (int sc = 0; sc < SDL_SCANCODE_COUNT; sc++) {
+        if (key_held[sc]) release_key((SDL_Scancode)sc);
+    }
 }
 
 static void drain_scancodes(void)
@@ -256,6 +306,7 @@ int main(int argc, char *argv[])
     interrupts_init();
     ega_init();
     screenshots_configure();
+    input_script_load(SDL_getenv("COSMO_SCRIPT"));
 
     if (!video_init("Cosmo's Cosmic Adventure", 3)) return 1;
 
@@ -287,6 +338,8 @@ int main(int argc, char *argv[])
                  */
                 video_shutdown();
                 exit(EXIT_SUCCESS);
+            } else if (event.type == SDL_EVENT_WINDOW_FOCUS_LOST) {
+                release_all_keys();
             } else if (event.type == SDL_EVENT_KEY_DOWN && !event.key.repeat) {
                 uint8_t code;
 
@@ -299,10 +352,25 @@ int main(int argc, char *argv[])
                 }
 
                 code = sdl_to_xt(event.key.scancode);
-                if (code) queue_scancode(code);
+                if (code) {
+                    queue_scancode(code);
+                    key_held[event.key.scancode] = true;
+                }
             } else if (event.type == SDL_EVENT_KEY_UP) {
                 uint8_t code = sdl_to_xt(event.key.scancode);
-                if (code) queue_scancode((uint8_t)(code | 0x80));
+                if (code) {
+                    queue_scancode((uint8_t)(code | 0x80));
+                    key_held[event.key.scancode] = false;
+                }
+            }
+        }
+
+        if (input_script_active()) {
+            uint32_t elapsed = (uint32_t)(SDL_GetTicks() - start_ms);
+            uint8_t code;
+
+            while ((code = input_script_next(elapsed)) != 0) {
+                queue_scancode(code);
             }
         }
 
@@ -323,10 +391,15 @@ int main(int argc, char *argv[])
 
             if (debug_enabled && now >= next_debug) {
                 fprintf(stderr,
-                        "[cosmo] pit=%u (%.1f Hz) int8 fired=%llu delivered=%llu\n",
+                        "[cosmo] pit=%u (%.1f Hz) int8 fired=%llu delivered=%llu"
+                        " | keys ctrl=%u alt=%u left=%u right=%u up=%u"
+                        " | cmd jump=%u west=%u east=%u bomb=%u\n",
                         pit_divisor(), hz,
                         (unsigned long long)tick_attempts,
-                        (unsigned long long)tick_delivered);
+                        (unsigned long long)tick_delivered,
+                        isKeyDown[0x1D], isKeyDown[0x38], isKeyDown[0x4B],
+                        isKeyDown[0x4D], isKeyDown[0x48],
+                        cmdJump, cmdWest, cmdEast, cmdBomb);
                 next_debug = now + freq;
             }
 
@@ -348,6 +421,7 @@ int main(int argc, char *argv[])
             SDL_SetAtomicInt(&frame_pending, 0);
             next_frame = now + (uint64_t)((double)freq / TARGET_PRESENT_HZ);
             screenshots_update((uint32_t)(SDL_GetTicks() - start_ms));
+            if (!input_script_active()) reconcile_held_keys();
         }
 
         SDL_DelayNS(250000);  /* 0.25 ms; keeps the loop from spinning hot */

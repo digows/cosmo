@@ -1,0 +1,36 @@
+# Reproduces: jump combined with a direction.
+#
+# Clears the title, menu and opening dialogs, then holds a direction and
+# presses jump without letting go. Run with COSMO_DEBUG=1 to see whether the
+# game's own cmdJump and cmdWest/cmdEast are set at the same time.
+
+12000 tap space
+13500 tap space
+15000 tap space
+16500 tap space
+18000 tap space
+19500 tap space
+21000 tap space
+22500 tap space
+24000 tap space
+25500 tap space
+27000 tap space
+28500 tap space
+30000 tap space
+31500 tap space
+33000 tap space
+34500 tap space
+
+# Jump alone, held for two full seconds so a once-a-second sample catches it.
+38000 down ctrl
+40000 up ctrl
+
+# Left alone.
+42000 down left
+44000 up left
+
+# Left and jump together, both held for three seconds.
+46000 down left
+47000 down ctrl
+50000 up ctrl
+50500 up left
