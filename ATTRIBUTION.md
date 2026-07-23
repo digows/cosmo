@@ -15,9 +15,6 @@
 All rights to the game, its assets and its trademarks belong to Apogee
 Software. No game asset is redistributed by this repository.
 
-The game is still sold on Steam, GOG and Zoom Platform. Episode 1 was
-distributed as shareware and is freely redistributable.
-
 ## Cosmore
 
 <https://github.com/smitelli/cosmore> — © 2020-2024 Scott Smitelli and

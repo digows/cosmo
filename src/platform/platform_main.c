@@ -400,13 +400,13 @@ int main(int argc, char *argv[])
             if (debug_enabled && now >= next_debug) {
                 fprintf(stderr,
                         "[cosmo] pit=%u (%.1f Hz) adlib=%u oplwrites=%lu int8 fired=%llu delivered=%llu"
-                        " | keys ctrl=%u alt=%u left=%u right=%u up=%u"
+                        " | keys space=%u ctrl=%u alt=%u left=%u right=%u"
                         " | cmd jump=%u west=%u east=%u bomb=%u\n",
                         pit_divisor(), hz, (unsigned)isAdLibPresent, adlib_writes,
                         (unsigned long long)tick_attempts,
                         (unsigned long long)tick_delivered,
-                        isKeyDown[0x1D], isKeyDown[0x38], isKeyDown[0x4B],
-                        isKeyDown[0x4D], isKeyDown[0x48],
+                        isKeyDown[0x39], isKeyDown[0x1D], isKeyDown[0x38],
+                        isKeyDown[0x4B], isKeyDown[0x4D],
                         cmdJump, cmdWest, cmdEast, cmdBomb);
                 next_debug = now + freq;
             }

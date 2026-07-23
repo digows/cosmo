@@ -1,0 +1,34 @@
+Default to space for jump
+
+Unlike the others, this patch is not a bug fix. It deliberately changes the
+game's behaviour, and is kept separate so that is obvious in review.
+
+The original ships ctrl as the jump key, which was ordinary in 1992 and is not
+any more -- space has been the platformer convention for decades. It is also
+the binding least likely to be fought over by a window manager: macOS claims
+control with every arrow key for Mission Control, so the original default
+cannot be combined with movement there at all.
+
+Space is free during play. The game reads it in menus, to begin a new game, and
+in dialogs, where it hurries the typewriter effect along, but ProcessGameInput
+never looks at it, so nothing in-game is displaced.
+
+Bomb stays on alt, which nothing claims.
+
+Anyone who prefers the original can set it back from the game's own Keyboard
+Redefine menu, and the choice is saved to COSMO1.CFG.
+
+diff --git a/game2.c b/game2.c
+index 6c7fa20..8018c95 100644
+--- a/game2.c
++++ b/game2.c
+@@ -2960,7 +2960,8 @@ void LoadConfigurationData(char *filename)
+         scancodeSouth = SCANCODE_KP_2;
+         scancodeWest = SCANCODE_KP_4;
+         scancodeEast = SCANCODE_KP_6;
+-        scancodeJump = SCANCODE_CTRL;
++        /* PORT: space rather than the original's ctrl; see patches/0007. */
++        scancodeJump = SCANCODE_SPACE;
+         scancodeBomb = SCANCODE_ALT;
+         isMusicEnabled = true;
+         isSoundEnabled = true;

@@ -1,8 +1,10 @@
-# Reproduces: jump combined with a direction.
+# Jump combined with a direction.
 #
 # Clears the title, menu and opening dialogs, then holds a direction and
 # presses jump without letting go. Run with COSMO_DEBUG=1 to see whether the
 # game's own cmdJump and cmdWest/cmdEast are set at the same time.
+#
+# Jump is space, the default this port ships; see patches/0007.
 
 12000 tap space
 13500 tap space
@@ -22,8 +24,8 @@
 34500 tap space
 
 # Jump alone, held for two full seconds so a once-a-second sample catches it.
-38000 down ctrl
-40000 up ctrl
+38000 down space
+40000 up space
 
 # Left alone.
 42000 down left
@@ -31,6 +33,6 @@
 
 # Left and jump together, both held for three seconds.
 46000 down left
-47000 down ctrl
-50000 up ctrl
+47000 down space
+50000 up space
 50500 up left

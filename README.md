@@ -21,8 +21,7 @@ the actors, the collision handling, the bugs.
 
 All four are produced by this port, on macOS, from the original 1992 data
 files — not captured from an emulator. The bottom two are the game actually
-running its attract-mode demo. The artwork is from the freely redistributable
-shareware episode.
+running its attract-mode demo.
 
 ## Status
 
@@ -106,8 +105,12 @@ moments after startup. `F12` takes one at any time.
 
 ## Controls
 
-Arrow keys move, **Ctrl** jumps, **Alt** throws a bomb — the game's own
-defaults.
+Arrow keys move, **Space** jumps, **Alt** throws a bomb.
+
+The original shipped ctrl for jump, which was ordinary in 1992; space has been
+the platformer convention for a long time since, and it is also the binding no
+window manager fights over. That is the one deliberate change this port makes
+to the game's behaviour — see [patches/0007](patches/). Bomb is unchanged.
 
 All six can be rebound from the game's own menu: **G** for Game Redefine at the
 main menu, then **K** for Keyboard redefine. The choice is written to
@@ -116,11 +119,10 @@ between runs — but only on a clean exit. Quit through the game (**Q**, then
 **Y**) rather than closing the window, exactly as on DOS, where killing the
 program lost the file the same way.
 
-On macOS, **Command also jumps**. This is not a preference: macOS binds
-Control with Left, Right, Up and Down to Mission Control, so the one
-combination the game needs most — jump while moving — never reaches the
-application. Option is not claimed, so bombs already work with the arrows;
-Command fills the same gap for jumping.
+On macOS, Command reports as Control. That matters if you rebind jump back to
+ctrl: macOS binds Control with every arrow key to Mission Control, so ctrl and
+a direction — jump while moving — never reaches the application at all.
+Command is not claimed, and fills that gap.
 
 ## Testing without a keyboard
 
