@@ -1,8 +1,6 @@
-# Patches are matched line by line against the sources CMake generates, and
-# CMake writes those with LF endings on every platform. Git must not rewrite
-# the patches on checkout -- a Windows clone defaults to core.autocrlf=true,
-# which would turn every context line into one that cannot match, and the
-# build would stop with "reported success but changed nothing".
+# Keep the patches as they were written. This is hygiene rather than the thing
+# that makes them apply -- a Windows runner handed them over as CRLF regardless
+# of this, which is why the build applies them with --ignore-whitespace.
 *.patch text eol=lf
 
 # Input scripts are parsed line by line and read the same way everywhere.

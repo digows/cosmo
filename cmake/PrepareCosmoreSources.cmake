@@ -113,8 +113,15 @@ if(_cosmore_patches)
         get_filename_component(_patch_name "${_patch}" NAME)
         _cosmore_fingerprint(_before)
 
+        # --ignore-whitespace because the two sides can disagree about line
+        # endings and there is no one place to fix it. CMake's file(READ)
+        # strips carriage returns, so the generated sources come out LF on
+        # Unix, while file(WRITE) puts them back on Windows; git, meanwhile,
+        # may hand over the patch itself as CRLF. Every combination of the two
+        # has been checked, and this flag is what makes all four apply
+        # identically.
         execute_process(
-            COMMAND "${GIT_EXECUTABLE}" apply -p1 "${_patch}"
+            COMMAND "${GIT_EXECUTABLE}" apply -p1 --ignore-whitespace "${_patch}"
             WORKING_DIRECTORY "${COSMORE_GEN_DIR}"
             RESULT_VARIABLE _patch_result
             ERROR_VARIABLE _patch_error)
