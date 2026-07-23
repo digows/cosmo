@@ -1,0 +1,46 @@
+Make the save-slot filename writable
+
+SaveGameState and LoadGameState build the save filename by overwriting one
+character of a string in place:
+
+    static char *filename = FILENAME_BASE ".SV ";
+    ...
+    *(filename + SAVE_SLOT_INDEX) = slot_char;
+
+filename points at a string literal. On DOS, in real mode with no memory
+protection, a literal was writable, so stamping the slot digit over the
+trailing space worked and cost nothing. Compiled natively the literal lives in
+read-only memory, and that write is a fault.
+
+It faulted the instant a level started: InitializeLevel calls
+SaveGameState('T') to record the checkpoint a death restarts from, so the first
+thing a new game did was write to the literal and die -- which looked from the
+outside like the game crashing right after Begin. Nothing before a started
+level touched it, which is why the menus were fine and only playing was not.
+
+Declaring filename as an array rather than a pointer gives each function its
+own writable copy of the same bytes, so the in-place edit lands where it is
+allowed to. The initializer, its length, and every later use are unchanged.
+
+diff --git a/game1.c b/game1.c
+index 027948d..5c974bd 100644
+--- a/game1.c
++++ b/game1.c
+@@ -9322,7 +9322,7 @@ capable of exiting the game if a manipulated save file is loaded.
+ */
+ bbool LoadGameState(char slot_char)
+ {
+-    static char *filename = FILENAME_BASE ".SV ";
++    static char filename[] = FILENAME_BASE ".SV ";
+     FILE *fp;
+     int checksum;
+ 
+@@ -9364,7 +9364,7 @@ character, '1' through '9', or the letter 'T' for the temporary save file.
+ */
+ static void SaveGameState(char slot_char)
+ {
+-    static char *filename = FILENAME_BASE ".SV ";
++    static char filename[] = FILENAME_BASE ".SV ";
+     FILE *fp;
+     word checksum;
+ 
