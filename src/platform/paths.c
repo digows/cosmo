@@ -172,7 +172,7 @@ static void copy_episode(const char *from, const char *to, int episode)
 
 /*
  * The directories that might hold the data as shipped, most specific first.
- * `slots` must have room for four entries.
+ * `slots` must have room for five entries.
  */
 static int shipped_locations(char slots[][MAX_PATH_LEN])
 {
@@ -191,6 +191,16 @@ static int shipped_locations(char slots[][MAX_PATH_LEN])
          * trailing separator, which is trimmed so group.c can add its own.
          */
         if (path_join(slots[count], MAX_PATH_LEN, base, "../Resources")) count++;
+
+        /*
+         * An unpacked folder keeps each episode's program and its data together
+         * in episodes/. That is already where an episode program is started
+         * from, so its own base covers it; this is the launcher's route, which
+         * runs from the directory above and still has to read the group files
+         * to know which episodes are here.
+         */
+        if (path_join(slots[count], MAX_PATH_LEN, base, "episodes")) count++;
+
         if (path_copy(slots[count], MAX_PATH_LEN, base)) count++;
     }
 
@@ -208,7 +218,7 @@ static int shipped_locations(char slots[][MAX_PATH_LEN])
 
 bool paths_init(void)
 {
-    char shipped[4][MAX_PATH_LEN];
+    char shipped[5][MAX_PATH_LEN];
     int count = shipped_locations(shipped);
     const char *prefs;
     int i, episode;

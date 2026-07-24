@@ -53,12 +53,13 @@ macos)
     ;;
 
 linux)
-    # Only the launcher sits at the top. The episodes are programs in their own
-    # right, but nobody needs to see four of them to play one.
+    # Only the launcher sits at the top. episodes/ holds an episode's program
+    # and the data it reads, together, because those are the two halves of the
+    # same thing -- a folder named for the episodes should contain them.
     mkdir -p "$root/episodes"
     cp "$build/cosmo" "$root/"
     cp "$build/cosmo1" "$build/cosmo2" "$build/cosmo3" "$root/episodes/"
-    cp "$repo/gamedata/COSMO1.STN" "$repo/gamedata/COSMO1.VOL" "$root/"
+    cp "$repo/gamedata/COSMO1.STN" "$repo/gamedata/COSMO1.VOL" "$root/episodes/"
     chmod +x "$root/cosmo" "$root/episodes"/cosmo*
     docs "$root"
     (cd "$staging" && tar czf "$dist/$name.tar.gz" "$name")
@@ -69,7 +70,7 @@ windows)
     cp "$build/cosmo.exe" "$root/"
     cp "$build/cosmo1.exe" "$build/cosmo2.exe" "$build/cosmo3.exe" \
        "$root/episodes/"
-    cp "$repo/gamedata/COSMO1.STN" "$repo/gamedata/COSMO1.VOL" "$root/"
+    cp "$repo/gamedata/COSMO1.STN" "$repo/gamedata/COSMO1.VOL" "$root/episodes/"
     docs "$root"
     (cd "$staging" && zip -qr "$dist/$name.zip" "$name")
     ;;

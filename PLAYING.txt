@@ -67,14 +67,14 @@ What is in this folder
 ----------------------
 
     cosmo          the launcher, and the only thing you need to run
-    episodes/      one program per episode
-    COSMO1.*       Episode 1's data
+    episodes/      the episodes: one program each, and their data
 
 The episodes are separate programs rather than one with a switch. They differ
 by preprocessor conditionals that include or exclude whole actor
 implementations, so each compiles to genuinely different code -- Apogee shipped
-three executables for the same reason. They sit in a subdirectory so there is
-one obvious thing to run.
+three executables for the same reason. Each one sits beside the COSMO*.STN and
+COSMO*.VOL files it reads, in a subdirectory, so there is one obvious thing to
+run at the top.
 
 On macOS all of that is inside Cosmo.app, where none of it needs looking at.
 
@@ -94,7 +94,8 @@ Where your saves go
 -------------------
 
 If the folder this was unpacked into can be written to, the game keeps
-everything right there, so a copy on a USB stick carries its own saves.
+everything in episodes/, beside the data it saves against, so a copy on a USB
+stick carries its own saves.
 
 The macOS application cannot write inside itself, so it uses
 ~/Library/Application Support/digows/Cosmo instead, and copies the game data
