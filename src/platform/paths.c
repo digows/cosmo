@@ -19,6 +19,7 @@
 static char data_dir[MAX_PATH_LEN];
 static char write_dir[MAX_PATH_LEN];
 static char program_dir[MAX_PATH_LEN];
+static char install_dir[MAX_PATH_LEN];
 
 /* The extensions an episode's two group files carry. */
 static const char *const GROUP_EXTENSIONS[] = {"STN", "VOL"};
@@ -100,6 +101,20 @@ static void resolve_program_dir(const char *base)
         program_dir[base_length - suffix_length] = '\0';
         SDL_strlcat(program_dir, "/Contents/MacOS", sizeof program_dir);
     }
+}
+
+static void resolve_install_dir(void)
+{
+    size_t length = SDL_strlen(program_dir);
+    static const char episodes[] = "/episodes";
+    static const char windows_episodes[] = "\\episodes";
+    size_t suffix = sizeof episodes - 1;
+    SDL_strlcpy(install_dir, program_dir, sizeof install_dir);
+    if (length > suffix && SDL_strcasecmp(install_dir + length - suffix, episodes) == 0)
+        install_dir[length - suffix] = '\0';
+    else if (length > suffix &&
+             SDL_strcasecmp(install_dir + length - suffix, windows_episodes) == 0)
+        install_dir[length - suffix] = '\0';
 }
 
 static bool dir_has_any_episode(const char *dir)
@@ -224,6 +239,7 @@ bool paths_init(void)
     int i, episode;
 
     resolve_program_dir(SDL_GetBasePath());
+    resolve_install_dir();
 
     /* Used in place when the data sits somewhere that takes the saves too. */
     for (i = 0; i < count; i++) {
@@ -278,6 +294,11 @@ const char *paths_write_dir(void)
 const char *paths_program_dir(void)
 {
     return program_dir;
+}
+
+const char *paths_install_dir(void)
+{
+    return install_dir;
 }
 
 bool paths_import_episode(const char *chosen_file, int episode)

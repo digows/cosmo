@@ -1,9 +1,11 @@
-**Cosmo's Cosmic Adventure: Forbidden Planet** (Apogee, 1992), running
-natively. No DOSBox, no emulator.
+Cosmo's Cosmic Adventure now supports optional mods alongside the native port.
+The launcher can discover and enable mods, and this release includes the
+optional Soft Audio mod with alternate music and filtered sound effects.
 
 Every download includes the shareware Episode 1 and plays as soon as it is
-unpacked. On macOS it is an application you double-click; on Windows and Linux,
-a folder with the game in it.
+unpacked. The bundled Soft Audio mod is off by default; enable it from the
+launcher’s **Mods** screen. On macOS the game is an application you double-click;
+on Windows and Linux, a folder with the game in it.
 
 If you own Episodes 2 and 3, choose them in the launcher and it will ask you to
 find your copy.
@@ -41,7 +43,8 @@ AdLib.
 
 *Cosmo's Cosmic Adventure*, its artwork and its music are © 1992 Apogee
 Software, Ltd. Episode 1 is included as the freely distributable shareware
-release. Episodes 2 and 3 are not included and are still sold.
+release. Episodes 2 and 3 are not included and are still sold. The optional mod
+audio is derived from Episode 1's shareware data.
 
 This port's code is MIT. Cosmore is MIT, © Scott Smitelli and contributors;
 ymfm is BSD 3-Clause, © Aaron Giles. Full credits are in

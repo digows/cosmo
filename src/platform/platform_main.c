@@ -34,6 +34,8 @@ extern volatile uint8_t isKeyDown[];
 extern uint8_t cmdWest, cmdEast, cmdNorth, cmdSouth, cmdJump, cmdBomb;
 extern uint8_t isAdLibPresent;
 extern unsigned long adlib_writes;
+extern uint8_t scancodeWest, scancodeEast, scancodeNorth, scancodeSouth;
+extern uint8_t scancodeJump, scancodeBomb;
 
 #include "cosmo/audio.h"
 #include "cosmo/dos_compat.h"
@@ -42,6 +44,7 @@ extern unsigned long adlib_writes;
 #include "cosmo/input.h"
 #include "cosmo/video.h"
 #include "cosmo/paths.h"
+#include "cosmo/mods.h"
 
 #ifdef _WIN32
 #   include <windows.h>
@@ -55,6 +58,37 @@ static SDL_AtomicInt frame_pending;
 
 static int argc_saved;
 static char **argv_saved;
+
+FILE *platform_open_mod_asset(int episode, const char *asset_name,
+                              uint32_t *length)
+{
+    return mods_open_override(paths_data_dir(),episode,asset_name,length);
+}
+
+int PlatformPlayMP3Music(char *asset_name)
+{
+    char path[1024];
+    return mods_music_override(asset_name,path,sizeof path) &&
+           audio_music_play_mp3(path);
+}
+
+void PlatformStopMP3Music(void)
+{
+    audio_music_stop_mp3();
+}
+
+int PlatformPlayMP3Sound(unsigned sound_number)
+{
+    char path[1024];
+    audio_sound_stop_mp3();
+    return mods_sound_override(sound_number,path,sizeof path) &&
+           audio_sound_play_asset(path);
+}
+
+void PlatformStopMP3Sound(void)
+{
+    audio_sound_stop_mp3();
+}
 
 /* ------------------------------------------------------------------------ */
 /* Keyboard translation                                                      */
@@ -185,12 +219,19 @@ static void queue_scancode(uint8_t code)
  * Reconciling against SDL's own view once a frame catches all of it.
  */
 static bool key_held[SDL_SCANCODE_COUNT];
+static bool gamepad_action_held[10];
+static uint8_t gamepad_action_code[10];
+static SDL_Gamepad *gamepad;
+static bool gamepad_scan_done;
+static bool window_focused = true;
+static bool another_gamepad_action_holds(int action, uint8_t code);
 
 static void release_key(SDL_Scancode sc)
 {
     uint8_t code = sdl_to_xt(sc);
 
-    if (code) queue_scancode((uint8_t)(code | 0x80));
+    if (code && !another_gamepad_action_holds(-1, code))
+        queue_scancode((uint8_t)(code | 0x80));
     key_held[sc] = false;
 }
 
@@ -219,6 +260,110 @@ static void drain_scancodes(void)
 
         queue_head = (queue_head + 1) % SCANCODE_QUEUE_SIZE;
     }
+}
+
+/* ------------------------------------------------------------------------ */
+/* Gamepad input                                                             */
+/* ------------------------------------------------------------------------ */
+
+static bool keyboard_holds_xt(uint8_t code)
+{
+    for (int sc = 0; sc < SDL_SCANCODE_COUNT; ++sc)
+        if (key_held[sc] && sdl_to_xt((SDL_Scancode)sc) == code) return true;
+    return false;
+}
+
+static bool another_gamepad_action_holds(int action, uint8_t code)
+{
+    for (int i = 0; i < 10; ++i)
+        if (i != action && gamepad_action_held[i] && gamepad_action_code[i] == code)
+            return true;
+    return false;
+}
+
+static void gamepad_action(int action, uint8_t code, bool down)
+{
+    if (gamepad_action_held[action] &&
+        (gamepad_action_code[action] != code || !down)) {
+        uint8_t old = gamepad_action_code[action];
+        gamepad_action_held[action] = false;
+        if (!keyboard_holds_xt(old) && !another_gamepad_action_holds(action, old))
+            queue_scancode((uint8_t)(old | 0x80));
+    }
+    if (down && code && !gamepad_action_held[action]) {
+        gamepad_action_code[action] = code;
+        gamepad_action_held[action] = true;
+        queue_scancode(code);
+    }
+}
+
+static void release_gamepad_actions(void)
+{
+    for (int i = 0; i < 10; ++i)
+        gamepad_action(i, gamepad_action_code[i], false);
+}
+
+static void gamepad_open_first(void)
+{
+    int count = 0;
+    SDL_JoystickID *ids;
+    if (gamepad || gamepad_scan_done) return;
+    gamepad_scan_done = true;
+    ids = SDL_GetGamepads(&count);
+    if (!ids) return;
+    for (int i = 0; i < count; ++i) {
+        if (SDL_IsGamepad(ids[i])) {
+            gamepad = SDL_OpenGamepad(ids[i]);
+            if (gamepad) break;
+        }
+    }
+    SDL_free(ids);
+    if (gamepad) SDL_Log("Controller connected: %s", SDL_GetGamepadName(gamepad));
+}
+
+static void gamepad_close(void)
+{
+    release_gamepad_actions();
+    if (gamepad) SDL_CloseGamepad(gamepad);
+    gamepad = NULL;
+}
+
+static bool gamepad_button(SDL_GamepadButton button)
+{
+    return gamepad && SDL_GetGamepadButton(gamepad, button);
+}
+
+static void update_gamepad(bool focused)
+{
+    bool west = false, east = false, north = false, south = false;
+    if (!gamepad) gamepad_open_first();
+    if (!gamepad || !focused) {
+        release_gamepad_actions();
+        return;
+    }
+
+    Sint16 x = SDL_GetGamepadAxis(gamepad, SDL_GAMEPAD_AXIS_LEFTX);
+    Sint16 y = SDL_GetGamepadAxis(gamepad, SDL_GAMEPAD_AXIS_LEFTY);
+    const Sint16 deadzone = 10000;
+    west = x < -deadzone || SDL_GetGamepadButton(gamepad, SDL_GAMEPAD_BUTTON_DPAD_LEFT);
+    east = x > deadzone || SDL_GetGamepadButton(gamepad, SDL_GAMEPAD_BUTTON_DPAD_RIGHT);
+    north = y < -deadzone || SDL_GetGamepadButton(gamepad, SDL_GAMEPAD_BUTTON_DPAD_UP);
+    south = y > deadzone || SDL_GetGamepadButton(gamepad, SDL_GAMEPAD_BUTTON_DPAD_DOWN);
+
+    gamepad_action(0, scancodeWest, west);
+    gamepad_action(1, scancodeEast, east);
+    gamepad_action(2, scancodeNorth, north);
+    gamepad_action(3, scancodeSouth, south);
+    gamepad_action(4, scancodeJump, gamepad_button(SDL_GAMEPAD_BUTTON_SOUTH));
+    gamepad_action(5, scancodeBomb, gamepad_button(SDL_GAMEPAD_BUTTON_EAST));
+    /* A also confirms title and menu prompts; Start works as Enter. */
+    gamepad_action(6, scancodeJump == 0x39 ? 0 : 0x39,
+                   gamepad_button(SDL_GAMEPAD_BUTTON_SOUTH));
+    gamepad_action(7, 0x1C, gamepad_button(SDL_GAMEPAD_BUTTON_START));
+    /* Back/View/Select opens the same help menu as F1. */
+    gamepad_action(8, 0x3B, gamepad_button(SDL_GAMEPAD_BUTTON_BACK));
+    /* Left shoulder acts as Escape in menus. */
+    gamepad_action(9, 0x01, gamepad_button(SDL_GAMEPAD_BUTTON_LEFT_SHOULDER));
 }
 
 /* ------------------------------------------------------------------------ */
@@ -385,6 +530,9 @@ int main(int argc, char *argv[])
 
     logging_init();
 
+    if (!mods_init(paths_install_dir(), paths_write_dir()))
+        SDL_Log("Cosmo mods: initialization failed; continuing without mods");
+
     hardware_init();
     interrupts_init();
     ega_init();
@@ -424,10 +572,26 @@ int main(int argc, char *argv[])
                  * never return.
                  */
                 audio_shutdown();
+                gamepad_close();
                 video_shutdown();
                 exit(EXIT_SUCCESS);
             } else if (event.type == SDL_EVENT_WINDOW_FOCUS_LOST) {
+                window_focused = false;
                 release_all_keys();
+                release_gamepad_actions();
+            } else if (event.type == SDL_EVENT_WINDOW_FOCUS_GAINED) {
+                window_focused = true;
+            } else if (event.type == SDL_EVENT_GAMEPAD_ADDED) {
+                if (!gamepad) {
+                    gamepad = SDL_OpenGamepad(event.gdevice.which);
+                    if (gamepad)
+                        SDL_Log("Controller connected: %s", SDL_GetGamepadName(gamepad));
+                }
+            } else if (event.type == SDL_EVENT_GAMEPAD_REMOVED) {
+                if (gamepad && SDL_GetGamepadID(gamepad) == event.gdevice.which) {
+                    gamepad_close();
+                    gamepad_scan_done = false;
+                }
             } else if (event.type == SDL_EVENT_KEY_DOWN && !event.key.repeat) {
                 uint8_t code;
 
@@ -445,13 +609,11 @@ int main(int argc, char *argv[])
                     key_held[event.key.scancode] = true;
                 }
             } else if (event.type == SDL_EVENT_KEY_UP) {
-                uint8_t code = sdl_to_xt(event.key.scancode);
-                if (code) {
-                    queue_scancode((uint8_t)(code | 0x80));
-                    key_held[event.key.scancode] = false;
-                }
+                release_key(event.key.scancode);
             }
         }
+
+        update_gamepad(window_focused);
 
         if (input_script_active()) {
             uint32_t elapsed = (uint32_t)(SDL_GetTicks() - start_ms);
@@ -517,6 +679,7 @@ int main(int argc, char *argv[])
 
     SDL_WaitThread(thread, NULL);
     audio_shutdown();
+    gamepad_close();
     video_shutdown();
     return 0;
 }

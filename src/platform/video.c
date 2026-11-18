@@ -13,6 +13,7 @@
 #include <SDL3/SDL.h>
 
 #include "cosmo/ega.h"
+#include "cosmo/mods.h"
 #include "cosmo/png.h"
 #include "cosmo/video.h"
 
@@ -26,6 +27,74 @@
  */
 #define PIXEL_ASPECT 1.2
 
+/* A restrained CRT look that stays inexpensive in the software renderer. */
+static void apply_crt_shader(uint8_t *rgb)
+{
+    static uint8_t softened[FB_BYTES];
+    static const unsigned weights[3] = {1, 2, 1};
+
+    /* A small separable Gaussian approximates the spread of phosphor light. */
+    for (int y = 0; y < EGA_SCREEN_H; ++y) {
+        for (int x = 0; x < EGA_SCREEN_W; ++x) {
+            size_t dst = ((size_t)y * EGA_SCREEN_W + (size_t)x) * 3;
+            for (int c = 0; c < 3; ++c) {
+                unsigned sum = 0;
+                for (int tap = -1; tap <= 1; ++tap) {
+                    int sx = x + tap;
+                    if (sx < 0) sx = 0;
+                    if (sx >= EGA_SCREEN_W) sx = EGA_SCREEN_W - 1;
+                    size_t src = ((size_t)y * EGA_SCREEN_W + (size_t)sx) * 3;
+                    sum += rgb[src + (size_t)c] * weights[tap + 1];
+                }
+                softened[dst + (size_t)c] = (uint8_t)((sum + 2) / 4);
+            }
+        }
+    }
+    for (int y = 0; y < EGA_SCREEN_H; ++y) {
+        for (int x = 0; x < EGA_SCREEN_W; ++x) {
+            size_t dst = ((size_t)y * EGA_SCREEN_W + (size_t)x) * 3;
+            for (int c = 0; c < 3; ++c) {
+                unsigned sum = 0;
+                for (int tap = -1; tap <= 1; ++tap) {
+                    int sy = y + tap;
+                    if (sy < 0) sy = 0;
+                    if (sy >= EGA_SCREEN_H) sy = EGA_SCREEN_H - 1;
+                    size_t src = ((size_t)sy * EGA_SCREEN_W + (size_t)x) * 3;
+                    sum += softened[src + (size_t)c] * weights[tap + 1];
+                }
+                uint8_t filtered = (uint8_t)((sum + 2) / 4);
+                rgb[dst + (size_t)c] = (uint8_t)(
+                    ((unsigned)rgb[dst + (size_t)c] + filtered + 1) / 2);
+            }
+        }
+    }
+    for (int y = 0; y < EGA_SCREEN_H; ++y) {
+        float ny = ((float)y + 0.5f) / (float)EGA_SCREEN_H * 2.0f - 1.0f;
+        for (int x = 0; x < EGA_SCREEN_W; ++x) {
+            float nx = ((float)x + 0.5f) / (float)EGA_SCREEN_W * 2.0f - 1.0f;
+            float edge = 1.0f - 0.04f * (nx * nx + ny * ny);
+            uint8_t *pixel = rgb + ((size_t)y * EGA_SCREEN_W + (size_t)x) * 3;
+            pixel[0] = (uint8_t)((float)pixel[0] * edge);
+            pixel[1] = (uint8_t)((float)pixel[1] * edge);
+            pixel[2] = (uint8_t)((float)pixel[2] * edge);
+        }
+    }
+}
+
+static void apply_crt_scanlines(uint8_t *rgb)
+{
+    for (int y = 0; y < EGA_SCREEN_H; ++y) {
+        float scanline = (y & 1) ? 0.93f : 1.0f;
+        for (int x = 0; x < EGA_SCREEN_W; ++x) {
+            uint8_t *pixel = rgb + ((size_t)y * EGA_SCREEN_W + (size_t)x) * 3;
+            float intensity = scanline;
+            pixel[0] = (uint8_t)((float)pixel[0] * intensity);
+            pixel[1] = (uint8_t)((float)pixel[1] * intensity);
+            pixel[2] = (uint8_t)((float)pixel[2] * intensity);
+        }
+    }
+}
+
 static SDL_Window   *window;
 
 SDL_Window *video_get_window(void)
@@ -37,6 +106,7 @@ static SDL_Texture  *texture;
 
 void video_render_rgb(uint8_t *out)
 {
+    uint8_t *framebuffer = out;
     uint8_t lut[16][3];
     uint32_t base = ega.display_start;
 
@@ -64,6 +134,9 @@ void video_render_rgb(uint8_t *out)
             *out++ = lut[index][2];
         }
     }
+
+    if (mods_crt_shader_enabled()) apply_crt_shader(framebuffer);
+    if (mods_crt_scanlines_enabled()) apply_crt_scanlines(framebuffer);
 }
 
 bool video_write_png(const char *path, int scale)
@@ -154,7 +227,7 @@ bool video_init(const char *title, int scale)
 
     if (scale < 1) scale = 3;
 
-    if (!SDL_Init(SDL_INIT_VIDEO)) {
+    if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_GAMEPAD)) {
         fprintf(stderr, "SDL_Init: %s\n", SDL_GetError());
         return false;
     }

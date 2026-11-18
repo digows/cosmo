@@ -40,6 +40,7 @@ macos)
     cp -R "$build/Cosmo.app" "$root/"
     cp "$repo/gamedata/COSMO1.STN" "$repo/gamedata/COSMO1.VOL" \
        "$root/Cosmo.app/Contents/Resources/"
+    cp -R "$repo/Mods" "$root/Cosmo.app/Contents/MacOS/"
     docs "$root"
 
     # Ad-hoc signing. Not a developer certificate -- it does not stop Gatekeeper
@@ -60,6 +61,7 @@ linux)
     cp "$build/cosmo" "$root/"
     cp "$build/cosmo1" "$build/cosmo2" "$build/cosmo3" "$root/episodes/"
     cp "$repo/gamedata/COSMO1.STN" "$repo/gamedata/COSMO1.VOL" "$root/episodes/"
+    cp -R "$repo/Mods" "$root/"
     chmod +x "$root/cosmo" "$root/episodes"/cosmo*
     docs "$root"
     (cd "$staging" && tar czf "$dist/$name.tar.gz" "$name")
@@ -71,6 +73,7 @@ windows)
     cp "$build/cosmo1.exe" "$build/cosmo2.exe" "$build/cosmo3.exe" \
        "$root/episodes/"
     cp "$repo/gamedata/COSMO1.STN" "$repo/gamedata/COSMO1.VOL" "$root/episodes/"
+    cp -R "$repo/Mods" "$root/"
     docs "$root"
     (cd "$staging" && zip -qr "$dist/$name.zip" "$name")
     ;;

@@ -39,6 +39,18 @@ Alt           bomb
 F1            help, in game
 Q then Y      quit, saving your settings and high scores
 
+Xbox-style controllers are supported. Use the D-pad or left stick to move,
+A to jump, confirm, or answer yes; B to drop a bomb or answer no; Start
+confirms menu prompts; Back/View (Select) opens the F1 help menu; LB acts as
+Escape. The game uses your current key bindings for movement,
+jumping, and bombs.
+
+On the title menu, Up/Down or the D-pad/left stick moves the selection marker;
+A or Start chooses the highlighted option.
+
+At save/restore prompts, Up/Down selects a slot from 1 to 9, A or Start
+confirms it, and B cancels.
+
 All six can be rebound from the game's own menu: press G at the main menu for
 Game Redefine, then K for Keyboard redefine.
 

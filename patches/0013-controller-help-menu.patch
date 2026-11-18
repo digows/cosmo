@@ -1,0 +1,50 @@
+diff --git a/game1.c b/game1.c
+index 900aef5..c5ad445 100644
+--- a/game1.c
++++ b/game1.c
+@@ -9628,16 +9628,45 @@ if the game should continue, restart on a different level, or exit.
+ static byte ShowHelpMenu(void)
+ {
+     word x = UnfoldTextFrame(2, 12, 22, "HELP MENU", "Press ESC to quit.");
++    static const byte menu_keys[] = {
++        SCANCODE_S, SCANCODE_R, SCANCODE_H, SCANCODE_G, SCANCODE_V, SCANCODE_Q
++    };
++    static const byte menu_rows[] = {5, 6, 7, 8, 9, 10};
++    byte selection = 0;
++
+     DrawTextLine(x, 5,  " S)ave your game");
+     DrawTextLine(x, 6,  " R)estore a game");
+     DrawTextLine(x, 7,  " H)elp");
+     DrawTextLine(x, 8,  " G)ame redefine");
+     DrawTextLine(x, 9,  " V)iew High Scores");
+     DrawTextLine(x, 10, " Q)uit Game");
++    DrawTextLine(x, menu_rows[selection], ">");
+ 
+     for (;;) {
+         byte scancode = WaitSpinner(29, 12);
+ 
++        if (scancode == scancodeNorth || scancode == SCANCODE_KP_8 ||
++            scancode == scancodeWest || scancode == SCANCODE_KP_4 ||
++            scancode == scancodeSouth || scancode == SCANCODE_KP_2 ||
++            scancode == scancodeEast || scancode == SCANCODE_KP_6) {
++            byte previous = selection;
++
++            if (scancode == scancodeNorth || scancode == SCANCODE_KP_8 ||
++                scancode == scancodeWest || scancode == SCANCODE_KP_4)
++                selection = selection == 0 ? 5 : selection - 1;
++            else
++                selection = (selection + 1) % 6;
++
++            EGA_MODE_LATCHED_WRITE();
++            DrawSolidTile(TILE_DARK_GRAY, x + (menu_rows[previous] * 320));
++            DrawTextLine(x, menu_rows[selection], ">");
++            continue;
++        }
++
++        if (scancode == SCANCODE_SPACE || scancode == SCANCODE_ENTER)
++            scancode = menu_keys[selection];
++        if (scancode == scancodeBomb) return HELP_MENU_CONTINUE;
++
+         switch (scancode) {
+         case SCANCODE_G:
+             ShowGameRedefineMenu();

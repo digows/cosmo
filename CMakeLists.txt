@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.21)
 
 project(cosmo
-    VERSION 0.1.0
+    VERSION 0.3.0
     DESCRIPTION "Native port of Cosmo's Cosmic Adventure (Apogee, 1992)"
     LANGUAGES C CXX)
 
@@ -138,9 +138,7 @@ endif()
 # machine without pulling SDL in.
 add_library(cosmo_core STATIC
     src/platform/ega.c
-    src/platform/png.c
-    src/platform/group.c
-    src/platform/font.c)
+    src/platform/png.c)
 target_include_directories(cosmo_core PUBLIC include)
 target_link_libraries(cosmo_core PRIVATE cosmo_warnings)
 
@@ -148,7 +146,10 @@ target_link_libraries(cosmo_core PRIVATE cosmo_warnings)
 # data lives means asking SDL, and core is kept free of it.
 add_library(cosmo_video STATIC
     src/platform/video.c
-    src/platform/paths.c)
+    src/platform/paths.c
+    src/platform/font.c
+    src/platform/group.c
+    src/platform/mods.c)
 target_link_libraries(cosmo_video
     PUBLIC cosmo_core SDL3::SDL3
     PRIVATE cosmo_warnings)
@@ -175,6 +176,11 @@ if(COSMO_BUILD_GAME)
         src/platform/opl.cpp
         src/platform/input.c
         src/platform/platform_main.c)
+    if(WIN32)
+        target_sources(cosmo_platform PRIVATE src/platform/mp3_decoder.cpp)
+        target_link_libraries(cosmo_platform PRIVATE mfplat mfreadwrite mfuuid ole32)
+        target_compile_definitions(cosmo_platform PRIVATE COSMO_MP3_MUSIC=1)
+    endif()
     target_link_libraries(cosmo_platform
         PUBLIC cosmo_video
         PRIVATE ymfm cosmo_warnings)
@@ -308,4 +314,8 @@ if(COSMO_BUILD_TESTS)
     add_executable(test_ega tests/test_ega.c)
     target_link_libraries(test_ega PRIVATE cosmo_core cosmo_warnings)
     add_test(NAME ega COMMAND test_ega)
+
+    add_executable(test_mods tests/test_mods.c)
+    target_link_libraries(test_mods PRIVATE cosmo_video cosmo_warnings)
+    add_test(NAME mods COMMAND test_mods)
 endif()

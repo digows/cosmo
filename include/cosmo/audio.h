@@ -28,4 +28,13 @@ void audio_shutdown(void);
  */
 void audio_record_to(const char *path);
 
+/* Play a decoded MP3 as the active music track. False means no decoder or
+ * the file could not be decoded; callers should use original IMF playback. */
+bool audio_music_play_mp3(const char *path);
+void audio_music_stop_mp3(void);
+
+/* Play a one-shot WAV or MP3 effect. False means use the original effect. */
+bool audio_sound_play_asset(const char *path);
+void audio_sound_stop_mp3(void);
+
 #endif /* COSMO_AUDIO_H */

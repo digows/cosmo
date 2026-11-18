@@ -46,6 +46,9 @@ const char *paths_write_dir(void);
  */
 const char *paths_program_dir(void);
 
+/* Installation root beside the launcher (the episode programs live below it). */
+const char *paths_install_dir(void);
+
 /*
  * Copy an episode's two group files into the data directory, given the path of
  * either one of them. Used when someone points the launcher at a copy of an

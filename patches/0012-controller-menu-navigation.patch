@@ -1,0 +1,224 @@
+diff --git a/game1.c b/game1.c
+index 900aef5..7b55ade 100644
+--- a/game1.c
++++ b/game1.c
+@@ -9382,6 +9382,43 @@ static void SaveGameState(char slot_char)
+     fclose(fp);
+ }
+ 
++/*
++Choose a save slot with the keyboard or controller. Space/Enter confirms the
++highlighted slot; Escape or the controller's bomb button cancels.
++*/
++static byte PromptGameSlot(word x, word y)
++{
++    byte slot = 1;
++    byte scancode;
++    byte display_index;
++    char slot_display[6] = "  1  ";
++
++    for (;;) {
++        slot_display[0] = slot > 1 ? '<' : ' ';
++        slot_display[2] = (char)('0' + slot);
++        slot_display[4] = slot < 9 ? '>' : ' ';
++        EGA_MODE_LATCHED_WRITE();
++        for (display_index = 0; display_index < 5; ++display_index)
++            DrawSolidTile(TILE_DARK_GRAY, 18 + display_index + ((y + 1) * 320));
++        DrawTextLine(18, y + 1, slot_display);
++        scancode = WaitSpinner(x, y);
++
++        if (scancode == scancodeNorth || scancode == SCANCODE_KP_8 ||
++            scancode == scancodeEast || scancode == SCANCODE_KP_6) {
++            if (slot < 9) ++slot;
++        } else if (scancode == scancodeSouth || scancode == SCANCODE_KP_2 ||
++                   scancode == scancodeWest || scancode == SCANCODE_KP_4) {
++            if (slot > 1) --slot;
++        } else if (scancode == SCANCODE_SPACE || scancode == SCANCODE_ENTER) {
++            return SCANCODE_1 + slot - 1;
++        } else if (scancode == SCANCODE_ESC || scancode == scancodeBomb) {
++            return SCANCODE_ESC;
++        } else {
++            return scancode;
++        }
++    }
++}
++
+ /*
+ Present a UI for restoring a saved game, and return the result of the prompt.
+ */
+@@ -9391,9 +9418,9 @@ static byte PromptRestoreGame(void)
+     word x = UnfoldTextFrame(11, 7, 28, "Restore a game.", "Press ESC to quit.");
+ 
+     DrawTextLine(x, 14, " What game number (1-9)?");
+-    scancode = WaitSpinner(x + 24, 14);
++    scancode = PromptGameSlot(x + 24, 14);
+ 
+-    if (scancode == SCANCODE_ESC || scancode == SCANCODE_SPACE || scancode == SCANCODE_ENTER) {
++    if (scancode == SCANCODE_ESC) {
+         return RESTORE_GAME_ABORT;
+     }
+ 
+@@ -9427,9 +9454,9 @@ static void PromptSaveGame(void)
+     DrawTextLine(x, 11, " What game number (1-9)?");
+     DrawTextLine(x, 13, " NOTE: Game is saved at");
+     DrawTextLine(x, 14, " BEGINNING of level.");
+-    scancode = WaitSpinner(x + 24, 11);
++    scancode = PromptGameSlot(x + 24, 11);
+ 
+-    if (scancode == SCANCODE_ESC || scancode == SCANCODE_SPACE || scancode == SCANCODE_ENTER) {
++    if (scancode == SCANCODE_ESC) {
+         return;
+     }
+ 
+@@ -9500,6 +9527,24 @@ Display the main title screen, credits (if the user waits long enough), and
+ main menu options. Returns a result byte indicating which demo mode the game
+ loop should run under.
+ */
++static byte MainMenuOptionKey(byte option)
++{
++#ifdef FOREIGN_ORDERS
++    static const byte options[] = {
++        SCANCODE_B, SCANCODE_R, SCANCODE_S, SCANCODE_I, SCANCODE_H,
++        SCANCODE_G, SCANCODE_O, SCANCODE_F, SCANCODE_A, SCANCODE_D,
++        SCANCODE_C, SCANCODE_T, SCANCODE_Q
++    };
++#else
++    static const byte options[] = {
++        SCANCODE_B, SCANCODE_R, SCANCODE_S, SCANCODE_I, SCANCODE_H,
++        SCANCODE_G, SCANCODE_O, SCANCODE_A, SCANCODE_D, SCANCODE_C,
++        SCANCODE_T, SCANCODE_Q
++    };
++#endif
++    return option < sizeof options / sizeof options[0] ? options[option] : SCANCODE_B;
++}
++
+ static byte TitleLoop(void)
+ {
+ #ifdef FOREIGN_ORDERS
+@@ -9510,6 +9555,7 @@ static byte TitleLoop(void)
+ 
+     word idlecount;
+     byte scancode;
++    byte menu_option = 0;
+     register word junk;  /* only here to tie up the SI register */
+ 
+     isNewGame = false;
+@@ -9541,11 +9587,28 @@ title:
+     }
+ 
+     for (;;) {
+-        DrawMainMenu();
++        DrawMainMenu(menu_option);
+ 
+ getkey:
+         scancode = WaitSpinner(28, 20 + YSHIFT);
+ 
++        if (scancode == scancodeNorth || scancode == scancodeSouth) {
++#ifdef FOREIGN_ORDERS
++            const byte option_count = 13;
++#else
++            const byte option_count = 12;
++#endif
++            byte previous_option = menu_option;
++            if (scancode == scancodeNorth)
++                menu_option = menu_option == 0 ? option_count - 1 : menu_option - 1;
++            else
++                menu_option = (menu_option + 1) % option_count;
++            MoveMainMenuCursor(previous_option, menu_option);
++            goto getkey;
++        }
++        if (scancode == SCANCODE_ENTER || scancode == SCANCODE_SPACE)
++            scancode = MainMenuOptionKey(menu_option);
++
+         switch (scancode) {
+         case SCANCODE_B:
+         case SCANCODE_ENTER:
+diff --git a/game2.c b/game2.c
+index 9af24da..f6dd202 100644
+--- a/game2.c
++++ b/game2.c
+@@ -2753,7 +2753,8 @@ bbool PromptQuitConfirm(void)
+     word x = UnfoldTextFrame(11, 4, 18, "Are you sure you", "want to quit? ");
+     byte scancode = WaitSpinner(x + 14, 13);
+ 
+-    if (scancode == SCANCODE_Y) return true;
++    if (scancode == SCANCODE_Y || scancode == SCANCODE_SPACE ||
++        scancode == SCANCODE_ENTER) return true;
+ 
+     return false;
+ }
+@@ -3612,7 +3613,7 @@ void DrawStaticGameScreen(void)
+ /*
+ Draw the main menu frame and text options, but don't wait or process any input.
+ */
+-void DrawMainMenu(void)
++void DrawMainMenu(byte selected_option)
+ {
+ #ifdef FOREIGN_ORDERS
+ #   define YSHIFT 1
+@@ -3620,6 +3621,14 @@ void DrawMainMenu(void)
+ #   define YSHIFT 0
+ #endif  /* FOREIGN_ORDERS */
+ 
++    static const byte menu_rows[] = {
++        5, 6, 7, 8, 9, 10, 12,
++#ifdef FOREIGN_ORDERS
++        14, 15, 16, 17, 18, 20
++#else
++        14, 15, 16, 17, 19
++#endif
++    };
+     word x = UnfoldTextFrame(2, 20 + YSHIFT, 20, "MAIN MENU", "");
+     DrawTextLine(x, 5,           " B)egin New Game");
+     DrawTextLine(x, 6,           " R)estore A Game");
+@@ -3637,9 +3646,33 @@ void DrawMainMenu(void)
+     DrawTextLine(x, 17 + YSHIFT, " T)itle Screen");
+     DrawTextLine(x, 19 + YSHIFT, " Q)uit Game");
+ 
++    if (selected_option < sizeof menu_rows / sizeof menu_rows[0])
++        DrawTextLine(x, menu_rows[selected_option], ">");
++
+ #undef YSHIFT
+ }
+ 
++/* Move the marker without unfolding and redrawing the whole menu. */
++void MoveMainMenuCursor(byte previous_option, byte selected_option)
++{
++#ifdef FOREIGN_ORDERS
++    static const byte menu_rows[] = {
++        5, 6, 7, 8, 9, 10, 12, 14, 15, 16, 17, 18, 20
++    };
++#else
++    static const byte menu_rows[] = {
++        5, 6, 7, 8, 9, 10, 12, 14, 15, 16, 17, 19
++    };
++#endif
++    word x = 11;
++
++    if (previous_option >= sizeof menu_rows / sizeof menu_rows[0] ||
++        selected_option >= sizeof menu_rows / sizeof menu_rows[0]) return;
++    EGA_MODE_LATCHED_WRITE();
++    DRAW_SOLID_TILE_XY(TILE_DARK_GRAY, x, menu_rows[previous_option]);
++    DrawTextLine(x, menu_rows[selected_option], ">");
++}
++
+ /*
+ Present a text frame containing the "you need to collect bombs" hint.
+ */
+diff --git a/glue.h b/glue.h
+index da63aed..fcd0be8 100644
+--- a/glue.h
++++ b/glue.h
+@@ -240,7 +240,8 @@ void ShowHintGlobeMessage(word hint_num);
+ void ShowCheatMessage(void);
+ void AddScoreForSprite(word sprite_type);
+ void DrawStaticGameScreen(void);
+-void DrawMainMenu(void);
++void DrawMainMenu(byte selected_option);
++void MoveMainMenuCursor(byte previous_option, byte selected_option);
+ void ShowBombHint(void);
+ void ShowPounceHint(void);
+ void ShowLevelIntro(word level_num);
+
+
+

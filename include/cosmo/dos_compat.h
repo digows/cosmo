@@ -58,6 +58,10 @@ void PlatformDelayMicroseconds(unsigned microseconds);
 /* Called when the game flips display pages; drives presentation. */
 void platform_page_flipped(void);
 
+/* Replacement for an existing game asset, or NULL to use its STN/VOL copy. */
+FILE *platform_open_mod_asset(int episode, const char *asset_name,
+                              uint32_t *length);
+
 #define random(num) (rand() % (num))
 
 enum COLORS {

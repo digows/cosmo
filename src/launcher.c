@@ -31,6 +31,7 @@
 #include "cosmo/font.h"
 #include "cosmo/group.h"
 #include "cosmo/paths.h"
+#include "cosmo/mods.h"
 #include "cosmo/video.h"
 
 #ifdef COSMO_HAVE_EPISODE4
@@ -144,9 +145,71 @@ static void draw_menu(int selected)
         row++;
     }
 
+    snprintf(line, sizeof line, "%c %d) Mods",
+             selected == EPISODE_COUNT ? '\x1C' : ' ', EPISODE_COUNT + 1);
+    font_draw(MENU_LEFT + 4, row, line);
+
     font_draw_centered(MENU_TOP + MENU_HEIGHT - 2,
                        "... not installed - pick to locate");
-    font_draw_centered(MENU_TOP + MENU_HEIGHT - 1, "Enter to play, Esc to quit");
+    font_draw_centered(MENU_TOP + MENU_HEIGHT - 1, "Enter select, Esc quit");
+}
+
+static void draw_mods_menu(size_t selected, size_t first)
+{
+    char line[96];
+    size_t count = mods_count();
+    font_fill(1, 7, 38, 17);
+    font_draw_centered(8, "Mods");
+    if (!count) {
+        font_draw_centered(12, "No valid mods found");
+        font_draw_centered(14, "Install folders under Mods");
+    } else {
+        size_t end = first + 8 < count ? first + 8 : count;
+        for (size_t i = first; i < end; ++i) {
+            const cosmo_mod *mod = mods_get(i);
+            snprintf(line,sizeof line,"%c %.20s %.8s %s",
+                     i == selected ? '\x1C' : ' ',mod->name,mod->version,
+                     mod->enabled ? "ON" : "OFF");
+            font_draw(3,10+(int)(i-first),line);
+        }
+        const cosmo_mod *mod = mods_get(selected);
+        if (mod) {
+            snprintf(line,sizeof line,"Author: %.30s",mod->author[0] ? mod->author : "(not set)");
+            font_draw(3,19,line);
+            snprintf(line,sizeof line,"%.34s",mod->description[0] ? mod->description : "No description provided");
+            font_draw(3,20,line);
+        }
+    }
+    font_draw_centered(22,"Enter/Space: toggle  Esc: return");
+}
+
+static bool run_mods_menu(void)
+{
+    size_t selected = 0, first = 0;
+    bool redraw = true;
+    while (true) {
+        SDL_Event event;
+        if (redraw) {
+            draw_mods_menu(selected,first);
+            redraw = false;
+        }
+        while (SDL_PollEvent(&event)) {
+            if (event.type == SDL_EVENT_QUIT) return true;
+            if (event.type == SDL_EVENT_KEY_DOWN && event.key.key == SDLK_ESCAPE) return false;
+            if (event.type != SDL_EVENT_KEY_DOWN || !mods_count()) continue;
+            if (event.key.key == SDLK_UP) selected = (selected + mods_count() - 1) % mods_count();
+            else if (event.key.key == SDLK_DOWN) selected = (selected + 1) % mods_count();
+            else if (event.key.key == SDLK_RETURN || event.key.key == SDLK_KP_ENTER || event.key.key == SDLK_SPACE) {
+                const cosmo_mod *mod = mods_get(selected);
+                if (mod) (void)mods_set_enabled(selected,!mod->enabled);
+            } else continue;
+            if (selected < first) first = selected;
+            if (selected >= first + 8) first = selected - 7;
+            redraw = true;
+        }
+        video_present();
+        video_delay(16);
+    }
 }
 
 /* ------------------------------------------------------------------------ */
@@ -168,7 +231,7 @@ static int first_present(void)
  */
 static int step_selection(int selected, int direction)
 {
-    return (selected + direction + EPISODE_COUNT) % EPISODE_COUNT;
+    return (selected + direction + EPISODE_COUNT + 1) % (EPISODE_COUNT + 1);
 }
 
 /* ------------------------------------------------------------------------ */
@@ -303,6 +366,14 @@ static int run_menu(void)
             case SDLK_RETURN:
             case SDLK_KP_ENTER:
             case SDLK_SPACE: {
+                if (selected == EPISODE_COUNT) {
+                    if (run_mods_menu()) return 0;
+                    (void)draw_background(episodes[first_present()].number);
+                    install_palette();
+                    ega_select_active_page(0);
+                    redraw = true;
+                    break;
+                }
                 int chosen = choose_episode(selected);
                 if (chosen) return chosen;
                 redraw = true;
@@ -434,6 +505,8 @@ int main(int argc, char *argv[])
         report_missing_data();
         return 1;
     }
+    if (!mods_init(paths_install_dir(), paths_write_dir()))
+        SDL_Log("Cosmo mods: initialization failed; continuing without mods");
 
     /*
      * An episode can be named outright, both to skip the menu and to keep the

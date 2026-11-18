@@ -4,7 +4,7 @@ A source port of **Cosmo's Cosmic Adventure: Forbidden Planet** (Apogee
 Software, 1992) that runs natively on modern machines. No DOSBox, no emulator,
 no virtual machine — the original game's own code, compiled for your computer.
 
-[![CI](https://github.com/digows/cosmo/actions/workflows/ci.yml/badge.svg)](https://github.com/digows/cosmo/actions/workflows/ci.yml)
+[![CI](https://github.com/GITitdoneboi/enhanced-cosmo/actions/workflows/ci.yml/badge.svg)](https://github.com/GITitdoneboi/enhanced-cosmo/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 ![Platforms: macOS, Linux, Windows](https://img.shields.io/badge/platforms-macOS%20%7C%20Linux%20%7C%20Windows-lightgrey)
 ![Language: C](https://img.shields.io/badge/language-C11-orange)
@@ -19,7 +19,7 @@ files — not captured from an emulator.
 
 ## Download and play
 
-**[Get the latest release](https://github.com/digows/cosmo/releases/latest)** —
+**[Get the latest release](https://github.com/GITitdoneboi/enhanced-cosmo/releases/latest)** —
 macOS, Windows and Linux. Each download includes the shareware Episode 1 and
 plays as soon as it is unpacked; nothing to install. If you own Episodes 2 and
 3, the launcher will ask you to point it at your copy.
@@ -186,6 +186,13 @@ On macOS, Command reports as Control. That matters if you rebind jump back to
 ctrl: macOS binds Control with every arrow key to Mission Control, so ctrl and a
 direction never reaches the application at all. Command is not claimed, and
 fills that gap.
+
+## Mods
+
+The launcher includes a Mods screen for discovering mods and enabling or
+disabling them. See [docs/modding.md](docs/modding.md) for the manifest,
+installation paths, supported raw graphics replacements, and priority rules.
+Release downloads include the optional Soft Audio mod, disabled by default.
 
 ## How it works
 

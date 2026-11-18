@@ -32,12 +32,14 @@
  * samples of an effect and flatten it.
  */
 #define BUFFER_FRAMES 128
+#define SFX_CACHE_LIMIT 128
 
 /*
  * The speaker was loud and square. A quarter of full scale keeps the harmonics
  * honest without being painful through headphones.
  */
 #define AMPLITUDE 6000
+#define MP3_MUSIC_GAIN 0.50f
 
 static SDL_AudioStream *stream;
 static double phase;          /* 0..1 across one square wave cycle */
@@ -45,6 +47,88 @@ static double phase;          /* 0..1 across one square wave cycle */
 static FILE *wav_file;
 static uint32_t wav_frames;
 static const char *wav_path;
+static int16_t *mp3_samples;
+static uint64_t mp3_frames;
+static uint64_t mp3_cursor;
+static int16_t *mp3_sound_samples;
+static uint64_t mp3_sound_frames;
+static uint64_t mp3_sound_cursor;
+static struct {
+    char path[1024];
+    int16_t *samples;
+    uint64_t frames;
+} mp3_sound_cache[SFX_CACHE_LIMIT];
+static size_t mp3_sound_cache_count;
+
+#ifdef _WIN32
+extern bool cosmo_mp3_decode(const char *path, int16_t **samples, uint64_t *frames);
+#endif
+
+static uint16_t wav_u16(const unsigned char *p)
+{
+    return (uint16_t)(p[0] | ((uint16_t)p[1] << 8));
+}
+
+static uint32_t wav_u32(const unsigned char *p)
+{
+    return (uint32_t)p[0] | ((uint32_t)p[1] << 8) |
+           ((uint32_t)p[2] << 16) | ((uint32_t)p[3] << 24);
+}
+
+/* Read mono 16-bit PCM WAV and resample it to the engine's mix rate. */
+static bool decode_sfx_wav(const char *path, int16_t **samples, uint64_t *frames)
+{
+    FILE *fp = fopen(path, "rb");
+    unsigned char header[12], chunk[8], fmt[16];
+    uint16_t format = 0, channels = 0, bits = 0;
+    uint32_t rate = 0, data_size = 0;
+    long data_offset = 0;
+    int16_t *source = NULL, *output = NULL;
+    uint64_t source_frames, output_frames;
+    bool have_fmt = false, have_data = false, ok = false;
+
+    if (!fp) return false;
+    if (fread(header, 1, sizeof header, fp) != sizeof header ||
+        memcmp(header, "RIFF", 4) || memcmp(header + 8, "WAVE", 4)) goto done;
+    while (fread(chunk, 1, sizeof chunk, fp) == sizeof chunk) {
+        uint32_t size = wav_u32(chunk + 4);
+        long payload = ftell(fp);
+        if (!memcmp(chunk, "fmt ", 4) && size >= sizeof fmt) {
+            if (fread(fmt, 1, sizeof fmt, fp) != sizeof fmt) goto done;
+            format = wav_u16(fmt); channels = wav_u16(fmt + 2);
+            rate = wav_u32(fmt + 4); bits = wav_u16(fmt + 14);
+            have_fmt = true;
+        } else if (!memcmp(chunk, "data", 4)) {
+            data_offset = payload; data_size = size; have_data = true;
+        }
+        if (fseek(fp, payload + size + (size & 1u), SEEK_SET) != 0) goto done;
+        if (have_fmt && have_data) break;
+    }
+    if (!have_fmt || !have_data || format != 1 || channels != 1 || bits != 16 ||
+        !rate || data_size < 2 || (data_size & 1u)) goto done;
+    source_frames = data_size / 2;
+    if (source_frames > UINT32_MAX / 2) goto done;
+    source = (int16_t *)malloc((size_t)data_size);
+    if (!source || fseek(fp, data_offset, SEEK_SET) != 0 ||
+        fread(source, 1, data_size, fp) != data_size) goto done;
+    output_frames = (source_frames * (uint64_t)SAMPLE_RATE + rate - 1) / rate;
+    if (!output_frames || output_frames > SIZE_MAX / sizeof *output) goto done;
+    output = (int16_t *)malloc((size_t)output_frames * sizeof *output);
+    if (!output) goto done;
+    for (uint64_t i = 0; i < output_frames; ++i) {
+        double at = (double)i * rate / SAMPLE_RATE;
+        uint64_t a = (uint64_t)at;
+        uint64_t b = a + 1 < source_frames ? a + 1 : a;
+        double fraction = at - (double)a;
+        double value = source[a] + (source[b] - source[a]) * fraction;
+        if (value > 32767.0) value = 32767.0;
+        if (value < -32768.0) value = -32768.0;
+        output[i] = (int16_t)value;
+    }
+    *samples = output; *frames = output_frames; output = NULL; ok = true;
+done:
+    free(source); free(output); fclose(fp); return ok;
+}
 
 /* ------------------------------------------------------------------------ */
 /* WAV capture                                                              */
@@ -160,7 +244,14 @@ static void render(int16_t *out, int frames)
 {
     int16_t speaker[BUFFER_FRAMES];
 
-    opl_generate(out, frames);
+    if (mp3_samples && mp3_frames) {
+        for (int i = 0; i < frames; ++i) {
+            out[i] = (int16_t)((float)mp3_samples[mp3_cursor++] * MP3_MUSIC_GAIN);
+            if (mp3_cursor >= mp3_frames) mp3_cursor = 0;
+        }
+    } else {
+        opl_generate(out, frames);
+    }
     render_speaker(speaker, frames);
 
     /*
@@ -172,11 +263,99 @@ static void render(int16_t *out, int frames)
     for (int i = 0; i < frames; i++) {
         int32_t mixed = (int32_t)out[i] + speaker[i];
 
+        if (mp3_sound_samples && mp3_sound_cursor < mp3_sound_frames)
+            mixed += (int32_t)((float)mp3_sound_samples[mp3_sound_cursor++] * MP3_MUSIC_GAIN);
+
         if (mixed > 32767) mixed = 32767;
         if (mixed < -32768) mixed = -32768;
 
         out[i] = (int16_t)mixed;
     }
+}
+
+bool audio_music_play_mp3(const char *path)
+{
+#ifdef _WIN32
+    int16_t *decoded = NULL;
+    uint64_t frames = 0;
+    int16_t *old;
+    if (!path || !cosmo_mp3_decode(path,&decoded,&frames) || !decoded || !frames) {
+        free(decoded);
+        return false;
+    }
+    if (stream) SDL_LockAudioStream(stream);
+    old = mp3_samples;
+    mp3_samples = decoded;
+    mp3_frames = frames;
+    mp3_cursor = 0;
+    if (stream) SDL_UnlockAudioStream(stream);
+    free(old);
+    return true;
+#else
+    (void)path;
+    return false;
+#endif
+}
+
+void audio_music_stop_mp3(void)
+{
+    int16_t *old;
+    if (stream) SDL_LockAudioStream(stream);
+    old = mp3_samples;
+    mp3_samples = NULL;
+    mp3_frames = mp3_cursor = 0;
+    if (stream) SDL_UnlockAudioStream(stream);
+    free(old);
+}
+
+bool audio_sound_play_asset(const char *path)
+{
+#ifdef _WIN32
+    if (!path) return false;
+    for (size_t i = 0; i < mp3_sound_cache_count; ++i) {
+        if (!SDL_strcmp(mp3_sound_cache[i].path,path)) {
+            if (stream) SDL_LockAudioStream(stream);
+            mp3_sound_samples = mp3_sound_cache[i].samples;
+            mp3_sound_frames = mp3_sound_cache[i].frames;
+            mp3_sound_cursor = 0;
+            if (stream) SDL_UnlockAudioStream(stream);
+            return true;
+        }
+    }
+    if (mp3_sound_cache_count >= SFX_CACHE_LIMIT) return false;
+    int16_t *decoded = NULL;
+    uint64_t frames = 0;
+    const char *extension = strrchr(path, '.');
+    bool is_wav = extension && SDL_strcasecmp(extension, ".wav") == 0;
+    bool decoded_ok = is_wav ? decode_sfx_wav(path, &decoded, &frames)
+                             : cosmo_mp3_decode(path, &decoded, &frames);
+    if (!decoded_ok || !decoded || !frames) {
+        free(decoded);
+        return false;
+    }
+    SDL_strlcpy(mp3_sound_cache[mp3_sound_cache_count].path,path,
+                sizeof mp3_sound_cache[mp3_sound_cache_count].path);
+    mp3_sound_cache[mp3_sound_cache_count].samples = decoded;
+    mp3_sound_cache[mp3_sound_cache_count].frames = frames;
+    if (stream) SDL_LockAudioStream(stream);
+    mp3_sound_samples = decoded;
+    mp3_sound_frames = frames;
+    mp3_sound_cursor = 0;
+    ++mp3_sound_cache_count;
+    if (stream) SDL_UnlockAudioStream(stream);
+    return true;
+#else
+    (void)path;
+    return false;
+#endif
+}
+
+void audio_sound_stop_mp3(void)
+{
+    if (stream) SDL_LockAudioStream(stream);
+    mp3_sound_samples = NULL;
+    mp3_sound_frames = mp3_sound_cursor = 0;
+    if (stream) SDL_UnlockAudioStream(stream);
 }
 
 static void SDLCALL audio_callback(void *userdata, SDL_AudioStream *audio_stream,
@@ -248,9 +427,15 @@ bool audio_init(void)
 
 void audio_shutdown(void)
 {
+    audio_music_stop_mp3();
+    audio_sound_stop_mp3();
     if (stream) {
         SDL_DestroyAudioStream(stream);
         stream = NULL;
     }
     wav_close();
+    for (size_t i = 0; i < mp3_sound_cache_count; ++i)
+        free(mp3_sound_cache[i].samples);
+    memset(mp3_sound_cache,0,sizeof mp3_sound_cache);
+    mp3_sound_cache_count = 0;
 }
