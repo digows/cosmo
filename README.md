@@ -19,8 +19,8 @@ files — not captured from an emulator.
 
 ## Download and play
 
-**[Get the latest release](https://github.com/GITitdoneboi/enhanced-cosmo/releases/latest)** —
-macOS, Windows and Linux. Each download includes the shareware Episode 1 and
+**[Get the latest Windows release](https://github.com/GITitdoneboi/enhanced-cosmo/releases/latest)** —
+the Windows download includes the shareware Episode 1 and
 plays as soon as it is unpacked; nothing to install. If you own Episodes 2 and
 3, the launcher will ask you to point it at your copy.
 
