@@ -198,6 +198,12 @@ if(COSMO_BUILD_GAME)
         target_include_directories(cosmore_game${episode}
             PRIVATE "${COSMORE_GEN_DIR}" include)
         target_compile_definitions(cosmore_game${episode} PRIVATE EPISODE=${episode})
+        if(UNIX)
+            # Strict C11 on newer glibc hides POSIX declarations such as
+            # fileno() unless a POSIX feature level is selected explicitly.
+            target_compile_definitions(cosmore_game${episode}
+                PRIVATE _POSIX_C_SOURCE=200809L)
+        endif()
         # Reconstructed 1992 code; its warnings are not ours to fix, and the
         # noise would bury real problems in our own layer.
         target_compile_options(cosmore_game${episode} PRIVATE
