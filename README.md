@@ -65,7 +65,7 @@ If you want the story of what broke along the way, that is in
 | Sound and music volume controls (0–100%, 25% steps) | ✅ |
 | Optional Soft Audio and CRT Shader mods | ✅ |
 | Windows x64 build (MinGW-w64) | ✅ green in CI |
-| Frame-by-frame comparison against DOSBox | ⬜ the largest remaining gap |
+| Possible widescreen MOD | ⬜ Coming soon?  |
 
 The game runs end to end: `cosmo` starts the original `InnerMain()` on its own
 thread, the main thread plays the part of the PC hardware, and it goes through
