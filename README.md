@@ -3,9 +3,10 @@
 A fun Windows project to bring **Cosmo's Cosmic Adventure: Forbidden Planet**
 (Apogee Software, 1992) to a new generation. It keeps the original game, with
 controller support, rumble feedback, and menus you can navigate with a pad.
-The optional Soft Audio mod brings a remixed chiptune soundtrack based on the
-original and softer PC speaker sounds. CRT Shader adds a soft retro glow. Runs
-natively on 64-bit Windows, no DOSBox needed.
+Features a remixed chiptune soundtrack based on the original, capturing all the
+magic of the original. The Soft Audio mod softens the PC speaker sounds, while
+CRT Shader adds a soft retro glow. Runs natively on 64-bit Windows, no DOSBox
+needed.
 
 [![CI](https://github.com/GITitdoneboi/enhanced-cosmo/actions/workflows/ci.yml/badge.svg)](https://github.com/GITitdoneboi/enhanced-cosmo/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
