@@ -1,12 +1,12 @@
-# Cosmo Enhanced — Cosmo's Cosmic Adventure for Windows
+# Cosmo Enhanced — Windows edition of Cosmo's Cosmic Adventure
 
-A source port of **Cosmo's Cosmic Adventure: Forbidden Planet** (Apogee
-Software, 1992) that runs natively on modern machines. No DOSBox, no emulator,
-no virtual machine — the original game's own code, compiled for your computer.
+A Windows-only fork of **Cosmo's Cosmic Adventure: Forbidden Planet** (Apogee
+Software, 1992). It runs natively on 64-bit Windows without DOSBox or a virtual
+machine, using the original game's code compiled for Windows.
 
 [![CI](https://github.com/GITitdoneboi/enhanced-cosmo/actions/workflows/ci.yml/badge.svg)](https://github.com/GITitdoneboi/enhanced-cosmo/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-![Platforms: macOS, Linux, Windows](https://img.shields.io/badge/platforms-macOS%20%7C%20Linux%20%7C%20Windows-lightgrey)
+![Supported platform: Windows x64](https://img.shields.io/badge/supported-Windows%20x64-lightgrey)
 ![Language: C](https://img.shields.io/badge/language-C11-orange)
 
 |  |  |
@@ -14,8 +14,8 @@ no virtual machine — the original game's own code, compiled for your computer.
 | ![Cosmo's Cosmic Adventure title screen, Forbidden Planet](docs/screenshots/title1.png) | ![The game's credits screen](docs/screenshots/credit.png) |
 | ![Cosmo running through a jungle level](docs/screenshots/gameplay-jungle.png) | ![Episode selection launcher drawn in the game's own font](docs/screenshots/launcher.png) |
 
-Every screenshot is produced by this port, on macOS, from the original 1992 data
-files — not captured from an emulator.
+Screenshots are produced by this port from the original 1992 data files — not
+captured from an emulator.
 
 ## Download and play
 
@@ -23,13 +23,6 @@ files — not captured from an emulator.
 the Windows download includes the shareware Episode 1 and
 plays as soon as it is unpacked; nothing to install. If you own Episodes 2 and
 3, the launcher will ask you to point it at your copy.
-
-macOS refuses to open this the first time, because it is not signed by a paid
-Apple developer account. To allow it, open **System Settings → Privacy &
-Security**, scroll to Security, and click **Open Anyway** next to the message
-about Cosmo. On macOS 15 and later that panel is the only route — right-clicking
-and choosing Open no longer works. From a terminal,
-`xattr -dr com.apple.quarantine /path/to/Cosmo.app` does the same in one step.
 
 ## What this is
 
@@ -65,7 +58,7 @@ If you want the story of what broke along the way, that is in
 | AdLib (OPL2) music, via [ymfm](https://github.com/aaronsgiles/ymfm) | ✅ |
 | Sound and music volume controls (0–100%, 25% steps) | ✅ |
 | Optional Soft Audio and CRT Shader mods | ✅ |
-| macOS, Linux and Windows builds | ✅ green in CI |
+| Windows x64 build (MinGW-w64) | ✅ green in CI |
 | Frame-by-frame comparison against DOSBox | ⬜ the largest remaining gap |
 
 The game runs end to end: `cosmo` starts the original `InnerMain()` on its own
@@ -75,52 +68,25 @@ second the original was paced for.
 
 ## Building
 
-Requires CMake 3.21+, a C11 and C++17 compiler, and SDL3. If SDL3 is not
-installed, CMake downloads and builds it. The only C++ in the project is the
-wrapper around ymfm, which synthesises the AdLib's YM3812.
+This fork is supported on 64-bit Windows. Build from an MSYS2 MINGW64 shell
+with CMake 3.21+, Git, Ninja, and MinGW-w64. CMake fetches and builds SDL3; the
+only C++ in the project is the ymfm wrapper for the AdLib's YM3812.
 
 ```bash
-git clone --recurse-submodules https://github.com/digows/cosmo.git
-cd cosmo
-cmake --preset default
-cmake --build --preset default
-ctest --preset default
+git clone --recurse-submodules https://github.com/GITitdoneboi/enhanced-cosmo.git
+cd enhanced-cosmo
+cmake -S . -B build -G Ninja -DCOSMO_WERROR=ON -DCOSMO_FETCH_SDL=ON -DCOSMO_BUNDLE=ON
+cmake --build build -j3
+ctest --test-dir build --output-on-failure
 ```
 
-**macOS** — `brew install cmake sdl3`. This is where the port is developed and
-played.
-
-**Linux** — SDL3 from your distribution, or let CMake fetch it. The build
-dependencies are listed in [the CI workflow](.github/workflows/ci.yml).
-
-**Windows** — MinGW, either natively through MSYS2 or cross-compiled with
-[the toolchain file](cmake/toolchain-mingw64.cmake). MSVC is not yet exercised.
-
-A universal macOS binary, which builds SDL from source for both slices since the
-Homebrew package is single-architecture:
+The release build includes an icon, runs without a console window, and links
+the MinGW runtime into the executable so extra runtime DLLs are not required.
+The Windows cross-compile can also be checked in Docker:
 
 ```bash
-cmake --preset macos-universal && cmake --build --preset macos-universal
-```
-
-`-DCOSMO_BUNDLE=ON` builds what the releases ship rather than a terminal
-program: `Cosmo.app` with an icon on macOS, and on Windows an icon, no console
-window, and the MinGW runtime linked in rather than left to three DLLs that
-have to travel alongside.
-
-### Checking other platforms without spending CI
-
-Two container recipes reproduce the Linux and Windows jobs on any machine with
-Docker, which is faster and cheaper than finding out from a red pipeline:
-
-```bash
-docker build -f tools/checks/linux.Dockerfile .
 docker build -f tools/checks/windows-mingw.Dockerfile .
 ```
-
-The first uses the same distribution and package list as the CI job. The second
-cross-compiles with MinGW-w64, the same compiler family the Windows job uses.
-Both have caught real defects before they reached a runner.
 
 ## Game data
 
@@ -129,9 +95,9 @@ release downloads include Episode 1, which Apogee distributed freely; a build
 from source needs it putting in place.
 
 `COSMO1.STN` and `COSMO1.VOL` are looked for beside the program, inside the
-application bundle on macOS, and in the directory the game was started from, in
-that order. Whichever is found first is used, and if it can be written to the
-saves go there too — so an unpacked folder carries its own. See
+directory the game was started from. Whichever is found first is used, and if
+it can be written to the saves go there too — so an unpacked folder carries its
+own. See
 [gamedata/README.md](gamedata/README.md) for where to get the data, with
 checksums.
 
@@ -142,7 +108,7 @@ Delete it to get the defaults, or rebind in game.
 ## Running
 
 ```bash
-./build/default/cosmo
+./build/cosmo.exe
 ```
 
 Leave it alone for a minute and it plays its attract-mode demo.
@@ -153,7 +119,7 @@ game's own font on the game's own title art, drawn through the same emulated
 EGA. Name an episode to skip the menu:
 
 ```bash
-./build/default/cosmo 2
+./build/cosmo.exe 2
 ```
 
 The three episodes are separate programs — `cosmo1`, `cosmo2`, `cosmo3` — which
@@ -165,8 +131,8 @@ code. Apogee shipped three executables for the same reason.
 fullscreen images without starting the game:
 
 ```bash
-./build/default/imgview                                  # browse them
-./build/default/imgview gamedata TITLE1.MNI shot.png 2   # headless screenshot
+./build/imgview.exe                                  # browse them
+./build/imgview.exe gamedata TITLE1.MNI shot.png 2   # headless screenshot
 ```
 
 ## Controls
@@ -188,11 +154,6 @@ Left/Right in 25% steps from 0% to 100%. Key bindings and high scores are
 written to `COSMOn.CFG` and survive between runs after a clean exit. Quit
 through the game (**Q**, then **Y**) rather than closing the window, as killing
 the program can interrupt the save.
-
-On macOS, Command reports as Control. That matters if you rebind jump back to
-ctrl: macOS binds Control with every arrow key to Mission Control, so ctrl and a
-direction never reaches the application at all. Command is not claimed, and
-fills that gap.
 
 ## Mods
 

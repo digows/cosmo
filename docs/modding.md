@@ -75,8 +75,8 @@ The manifest needs the usual required fields, such as `id`, `name`, and
 The game decodes the replacement when that track starts and loops it until the
 game switches tracks. The in-game Music toggle also stops and resumes it. If
 the MP3 is missing or cannot be decoded, the original synthesized IMF track
-plays instead. Windows Media Foundation handles MP3 decoding; other platforms
-continue to use original IMF music.
+plays instead. Windows Media Foundation handles MP3 decoding; if decoding is
+unavailable, the original synthesized IMF music plays instead.
 
 ## Sound effect replacements
 

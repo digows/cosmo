@@ -1,8 +1,7 @@
 name: CI
 
-# Documentation-only changes do not run the matrix. Nothing here compiles a
-# README, and runner minutes are not free -- macOS is billed at ten times the
-# Linux rate. Use the manual trigger to force a run.
+# Documentation-only changes do not run the Windows build. Use the manual
+# trigger to force a run.
 on:
   push:
     branches: [main]
@@ -17,9 +16,7 @@ on:
     paths-ignore: *docs
   workflow_dispatch:
 
-# SDL3 is built from source on every platform rather than taken from a system
-# package. It makes the three jobs behave the same way, and it is what makes
-# the artifacts self-contained: nothing to install before running them.
+# SDL3 is built from source so the Windows build is self-contained.
 env:
   # COSMO_BUNDLE is on here as well as in the release workflow, so what CI
   # exercises is the same shape as what ships: an application with an icon
@@ -29,75 +26,6 @@ env:
     -DCMAKE_BUILD_TYPE=Release
 
 jobs:
-  # Single architecture on purpose. GitHub bills macOS minutes at ten times the
-  # Linux rate, and building both slices doubles the longest job in the
-  # workflow. The universal binary is a release concern rather than a
-  # per-commit one: `cmake --preset macos-universal` produces it locally, and
-  # the release job below builds it when a tag is pushed.
-  macos:
-    name: macOS (arm64)
-    runs-on: macos-latest
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          submodules: recursive
-
-      - name: Configure
-        run: cmake -S . -B build $CMAKE_FLAGS -DCMAKE_OSX_DEPLOYMENT_TARGET=11.0
-
-      - name: Build
-        run: cmake --build build -j3
-
-      - name: Test
-        run: ctest --test-dir build --output-on-failure
-
-      - uses: actions/upload-artifact@v7
-        with:
-          name: cosmo-macos-arm64
-          path: build/Cosmo.app
-
-  linux:
-    name: Linux
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          submodules: recursive
-
-      # SDL3's build dependencies. Checked against a clean ubuntu:24.04
-      # container -- the runner image already carries some of these, but
-      # naming them all is what keeps this from breaking silently when the
-      # image changes.
-      - name: Install dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            libasound2-dev libpulse-dev \
-            libx11-dev libxext-dev libxrandr-dev libxcursor-dev libxfixes-dev \
-            libxi-dev libxss-dev libxtst-dev libxkbcommon-dev \
-            libwayland-dev wayland-protocols libdecor-0-dev \
-            libdrm-dev libgbm-dev libgl1-mesa-dev libegl1-mesa-dev \
-            libdbus-1-dev libudev-dev libibus-1.0-dev
-
-      - name: Configure
-        run: cmake -S . -B build $CMAKE_FLAGS
-
-      - name: Build
-        run: cmake --build build -j3
-
-      - name: Test
-        run: ctest --test-dir build --output-on-failure
-
-      - uses: actions/upload-artifact@v7
-        with:
-          name: cosmo-linux-x86_64
-          path: |
-            build/cosmo
-            build/cosmo1
-            build/cosmo2
-            build/cosmo3
-            build/imgview
-
   windows:
     name: Windows (MinGW)
     runs-on: windows-latest
