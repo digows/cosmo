@@ -1,10 +1,18 @@
-Cosmo's Cosmic Adventure now supports optional mods alongside the native port.
-The launcher can discover and enable mods, and this release includes the
-optional Soft Audio mod with alternate music and filtered sound effects.
+## What's new in v0.4.0
+
+- **Widescreen** adds a 16:9 playfield and a full-width HUD. Enable it in
+  **Mods**. CRT and scanlines work in widescreen and in the original view.
+- The launcher uses Cosmo's original dialog frames and marks missing episodes
+  as **Not found**. Select a missing episode to locate its files.
+- The scrolling **Mods** menu includes Character Colour with a live preview,
+  Gamepad Rumble, and separate choices for Filter, Soundtrack and SFX.
+- In-game **Game Settings** has working Keyboard Mapping, a Gamepad Controls
+  guide, music and sound volume controls, and the same Filter setting as Mods.
+- Music fades when the pause menu opens and returns when you resume. Save and
+  restore now check whether their file operations succeeded.
 
 The Windows download includes the shareware Episode 1 and plays as soon as it
-is unpacked. The bundled Soft Audio mod is off by default; enable it from the
-launcher’s **Mods** screen.
+is unpacked.
 
 If you own Episodes 2 and 3, choose them in the launcher and it will ask you to
 find your copy.

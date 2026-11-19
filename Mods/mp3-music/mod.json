@@ -1,0 +1,8 @@
+{
+  "id": "mp3-music",
+  "name": "MP3 Audio Replacements",
+  "version": "1.0.0",
+  "author": "Cosmo mod example",
+  "description": "Plays alternate Episode 1 music from MP3 files.",
+  "enabled": true
+}

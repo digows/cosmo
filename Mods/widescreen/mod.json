@@ -1,0 +1,8 @@
+{
+  "id": "widescreen",
+  "name": "Widescreen",
+  "version": "1.0.0",
+  "description": "16:9 playfield and full-width HUD",
+  "enabled": false,
+  "widescreen": true
+}

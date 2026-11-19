@@ -1,0 +1,74 @@
+diff --git a/game1.c b/game1.c
+--- a/game1.c
++++ b/game1.c
+@@ -9335,11 +9335,7 @@
+     *(filename + SAVE_SLOT_INDEX) = slot_char;
+ 
+     fp = fopen(JoinPath(writePath, filename), "rb");
+-    if (fp == NULL) {
+-        fclose(fp);  /* Nice. */
+-
+-        return false;
+-    }
++    if (fp == NULL) return false;
+ 
+     playerHealth = getw(fp);
+     fread(&gameScore, 4, 1, fp);
+@@ -9368,15 +9364,17 @@
+ Save the current game state to a save file. The slot number is a single
+ character, '1' through '9', or the letter 'T' for the temporary save file.
+ */
+-static void SaveGameState(char slot_char)
++static bbool SaveGameState(char slot_char)
+ {
+     static char filename[] = FILENAME_BASE ".SV ";
+     FILE *fp;
+     word checksum;
++    bbool failed;
+ 
+     *(filename + SAVE_SLOT_INDEX) = slot_char;
+ 
+     fp = fopen(JoinPath(writePath, filename), "wb");
++    if (fp == NULL) return false;
+ 
+     putw(playerHealth, fp);
+     fwrite(&gameScore, 4, 1, fp);
+@@ -9391,7 +9389,8 @@
+     checksum = playerHealth + (word)gameStars + levelNum + playerBombs + playerHealthCells;
+     putw(checksum, fp);
+ 
+-    fclose(fp);
++    failed = ferror(fp) != 0;
++    return fclose(fp) == 0 && !failed;
+ }
+ 
+ /*
+@@ -9471,6 +9470,7 @@
+     byte scancode;
+     word tmphealth, tmpbombs, tmplevel, tmpstars, tmpbars;
+     dword tmpscore;
++    bbool saved;
+     word x = UnfoldTextFrame(8, 10, 28, "Save a game.", "Press ESC to quit.");
+ 
+     DrawTextLine(x, 11, " What game number (1-9)?");
+@@ -9492,8 +9492,8 @@
+         tmpbars = playerHealthCells;
+         tmpscore = gameScore;
+ 
+-        LoadGameState('T');
+-        SaveGameState('1' + (scancode - SCANCODE_1));
++        saved = LoadGameState('T') &&
++            SaveGameState('1' + (scancode - SCANCODE_1));
+ 
+         playerHealth = tmphealth;
+         playerBombs = tmpbombs;
+@@ -9502,7 +9502,8 @@
+         gameScore = tmpscore;
+         playerHealthCells = tmpbars;
+ 
+-        x = UnfoldTextFrame(7, 4, 20, "Game Saved.", "Press ANY key.");
++        x = UnfoldTextFrame(7, 4, 20,
++            saved ? "Game Saved." : "Couldn't save game.", "Press ANY key.");
+         WaitSpinner(x + 17, 9);
+     } else {
+         x = UnfoldTextFrame(11, 4, 28, "Invalid game number!", "Press ANY key.");

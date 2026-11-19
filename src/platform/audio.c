@@ -40,6 +40,7 @@
  */
 #define AMPLITUDE 6000
 #define MP3_MUSIC_GAIN 0.50f
+#define MUSIC_FADE_FRAMES (SAMPLE_RATE * 300 / 1000)
 
 static SDL_AudioStream *stream;
 static double phase;          /* 0..1 across one square wave cycle */
@@ -61,6 +62,8 @@ static struct {
 static size_t mp3_sound_cache_count;
 static SDL_AtomicInt sound_volume_percent = { 100 };
 static SDL_AtomicInt music_volume_percent = { 100 };
+static SDL_AtomicInt music_paused;
+static int music_fade_frames = MUSIC_FADE_FRAMES; /* Audio callback only. */
 
 #ifdef _WIN32
 extern bool cosmo_mp3_decode(const char *path, int16_t **samples, uint64_t *frames);
@@ -247,16 +250,18 @@ static void render(int16_t *out, int frames)
     int16_t speaker[BUFFER_FRAMES];
     int sound_volume = SDL_GetAtomicInt(&sound_volume_percent);
     int music_volume = SDL_GetAtomicInt(&music_volume_percent);
+    bool paused = SDL_GetAtomicInt(&music_paused) != 0;
+    bool playing_mp3 = mp3_samples && mp3_frames;
+    float music_gain = music_volume / 100.0f;
 
-    if (mp3_samples && mp3_frames) {
+    if (playing_mp3) {
+        music_gain *= MP3_MUSIC_GAIN;
         for (int i = 0; i < frames; ++i) {
-            out[i] = (int16_t)((float)mp3_samples[mp3_cursor++] * MP3_MUSIC_GAIN * music_volume / 100.0f);
+            out[i] = mp3_samples[mp3_cursor++];
             if (mp3_cursor >= mp3_frames) mp3_cursor = 0;
         }
     } else {
         opl_generate(out, frames);
-        for (int i = 0; i < frames; ++i)
-            out[i] = (int16_t)((int32_t)out[i] * music_volume / 100);
     }
     render_speaker(speaker, frames);
 
@@ -267,7 +272,11 @@ static void render(int16_t *out, int frames)
      * chosen so it is not reached in normal play.
      */
     for (int i = 0; i < frames; i++) {
-        int32_t mixed = (int32_t)out[i] + (int32_t)speaker[i] * sound_volume / 100;
+        if (paused && music_fade_frames > 0) --music_fade_frames;
+        if (!paused && music_fade_frames < MUSIC_FADE_FRAMES) ++music_fade_frames;
+        float fade_gain = (float)music_fade_frames / MUSIC_FADE_FRAMES;
+        int32_t mixed = (int32_t)(out[i] * music_gain * fade_gain)
+                      + (int32_t)speaker[i] * sound_volume / 100;
 
         if (mp3_sound_samples && mp3_sound_cursor < mp3_sound_frames)
             mixed += (int32_t)((float)mp3_sound_samples[mp3_sound_cursor++] * MP3_MUSIC_GAIN * sound_volume / 100.0f);
@@ -277,6 +286,11 @@ static void render(int16_t *out, int frames)
 
         out[i] = (int16_t)mixed;
     }
+}
+
+void audio_set_music_paused(bool paused)
+{
+    SDL_SetAtomicInt(&music_paused, paused);
 }
 
 void audio_set_volumes(int sound_percent, int music_percent)

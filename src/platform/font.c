@@ -23,8 +23,36 @@
 #define FONT_LOWER_A         0x0ac8
 #define FONT_BACKGROUND_GRAY 0x0f28
 
+/* TILES.MNI stores the text frame tiles consecutively, with four plane
+ * bytes per row. The offset in the game's graphics.h is per plane. */
+#define FRAME_OFFSET (0x3e38 * EGA_PLANES)
+enum frame_tile {
+    FRAME_NW, FRAME_NE, FRAME_SW, FRAME_SE,
+    FRAME_N, FRAME_S, FRAME_W, FRAME_E, FRAME_FILL, FRAME_COUNT
+};
+
 static uint8_t font_data[FONT_BYTES];
 static bool font_ready;
+static uint8_t frame_tiles[FRAME_COUNT][FONT_TILE_BYTES];
+static bool frame_ready;
+
+static void load_frame_tiles(const char *datadir, int episode)
+{
+    uint8_t tiles[FRAME_OFFSET + FRAME_COUNT * 8 * EGA_PLANES];
+    frame_ready = group_read(datadir, episode, "TILES.MNI", tiles, sizeof tiles)
+                  == sizeof tiles;
+    if (!frame_ready) return;
+
+    const uint8_t *src = tiles + FRAME_OFFSET;
+    for (unsigned tile = 0; tile < FRAME_COUNT; ++tile) {
+        for (unsigned row = 0; row < 8; ++row) {
+            uint8_t *dst = frame_tiles[tile] + row * (1 + EGA_PLANES);
+            dst[0] = 0;  /* Solid tile with no transparent pixels. */
+            memcpy(dst + 1, src, EGA_PLANES);
+            src += EGA_PLANES;
+        }
+    }
+}
 
 bool font_load(const char *datadir, int episode)
 {
@@ -42,6 +70,7 @@ bool font_load(const char *datadir, int episode)
     }
 
     font_ready = true;
+    load_frame_tiles(datadir, episode);
     return true;
 }
 
@@ -85,7 +114,7 @@ static const uint8_t *tile_for(char c)
     return font_data + offset;
 }
 
-void font_draw(int x, int y, const char *text)
+void font_draw_colored(int x, int y, const char *text, uint8_t color)
 {
     if (!font_ready) return;
 
@@ -95,8 +124,27 @@ void font_draw(int x, int y, const char *text)
     for (int i = 0; text[i] != '\0'; i++) {
         const uint8_t *tile = tile_for(text[i]);
 
-        if (tile) draw_tile(tile, x + i, y);
+        if (!tile) continue;
+        uint8_t tinted[FONT_TILE_BYTES];
+        if (color != 15) {
+            memcpy(tinted, tile, sizeof tinted);
+            for (unsigned offset = 0; offset < sizeof tinted; offset += 1 + EGA_PLANES) {
+                uint8_t *row = tinted + offset;
+                uint8_t white = row[1] & row[2] & row[3] & row[4];
+                for (unsigned plane = 0; plane < EGA_PLANES; ++plane) {
+                    if (!(color & (1u << plane)))
+                        row[plane + 1] &= (uint8_t)~white;
+                }
+            }
+            tile = tinted;
+        }
+        draw_tile(tile, x + i, y);
     }
+}
+
+void font_draw(int x, int y, const char *text)
+{
+    font_draw_colored(x, y, text, 15);
 }
 
 void font_draw_centered(int y, const char *text)
@@ -107,15 +155,24 @@ void font_draw_centered(int y, const char *text)
     font_draw(x < 0 ? 0 : x, y, text);
 }
 
-void font_fill(int x, int y, int width, int height)
+void font_draw_frame(int x, int y, int width, int height)
 {
+    static const enum frame_tile layout[3][3] = {
+        {FRAME_NW, FRAME_N,    FRAME_NE},
+        {FRAME_W,  FRAME_FILL, FRAME_E},
+        {FRAME_SW, FRAME_S,    FRAME_SE},
+    };
     if (!font_ready) return;
 
     ega_out_word(EGA_PORT_GC_INDEX, (0x00 << 8) | GC_MODE);
 
     for (int row = 0; row < height; row++) {
+        int edge_y = row == 0 ? 0 : row == height - 1 ? 2 : 1;
         for (int col = 0; col < width; col++) {
-            draw_tile(font_data + FONT_BACKGROUND_GRAY, x + col, y + row);
+            int edge_x = col == 0 ? 0 : col == width - 1 ? 2 : 1;
+            const uint8_t *tile = frame_ready ? frame_tiles[layout[edge_y][edge_x]]
+                                              : font_data + FONT_BACKGROUND_GRAY;
+            draw_tile(tile, x + col, y + row);
         }
     }
 }

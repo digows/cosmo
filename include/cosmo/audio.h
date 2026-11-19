@@ -32,6 +32,8 @@ void audio_record_to(const char *path);
  * the file could not be decoded; callers should use original IMF playback. */
 bool audio_music_play_mp3(const char *path);
 void audio_music_stop_mp3(void);
+/* Fade music to silence while the game is paused. */
+void audio_set_music_paused(bool paused);
 
 /* Play a one-shot WAV or MP3 effect. False means use the original effect. */
 bool audio_sound_play_asset(const char *path);

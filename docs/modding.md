@@ -23,8 +23,9 @@ missing required values, unsupported manifest versions, inaccessible files,
 and duplicate IDs are logged and skipped. A folder's name may differ from its
 ID.
 
-Open **Mods** from the launcher. Use Up/Down to select a mod and Enter or Space
-to enable or disable it. Escape returns to the episode list. The launcher and
+Open **Mods** from the launcher. Use Up/Down to browse, Left/Right to change
+**Filter**, **Soundtrack** or **SFX**, and Enter or Space to toggle individual
+mods. Escape returns to the episode list. The launcher and
 episode programs share the same preference file. It is stored under
 `Settings/mods.json` in the writable data/save directory; when the install
 folder is read-only, that directory is the user's Cosmo application-data
@@ -55,6 +56,23 @@ alphabetical order by folder name; the first enabled mod with a matching file
 wins. If no replacement is found, the original STN file is tried before VOL,
 as before. Overrides are read from disk when requested, so editing a mod file
 does not require a special pack step.
+
+## Player skins
+
+Add a `playerPalette` array of 16 integers from 0 to 15 to a mod's manifest.
+Each entry replaces the sprite colour at the same index. For example, this map
+gives Cosmo a blue body and cyan accents:
+
+```json
+"playerPalette": [0, 1, 1, 3, 3, 5, 6, 7, 8, 9, 9, 11, 11, 13, 14, 15]
+```
+
+The remap applies to opaque pixels in `PLAYERS.MNI` after any raw asset
+replacement is loaded. Keep one skin enabled at a time. If several are
+enabled, the first skin in alphabetical folder order wins. The Character Colour
+picker under **Mods** overrides installed skin colours until you select
+**Reset colours**.
+A palette effect such as Aurora can still tint the final picture.
 
 ## MP3 music replacements
 
@@ -112,7 +130,25 @@ Available names are `big_prize`, `player_jump`, `player_land`, `player_cling`,
 A WAV or MP3 effect takes the place of its original PC speaker sound and mixes
 with the music. WAV files must be mono 16-bit PCM; other sample rates are
 resampled automatically. Missing or unreadable clips fall back to the original
-effect.
+effect. On Windows, the optional Arcade Synth mod replaces eight effects. If
+SFX is set to **Softened**, Arcade Synth takes priority for those eight clips
+and Soft Sound Effects supplies its other replacements.
+
+## Built-in visual and gameplay options
+
+Set any of these optional manifest fields to `true` to request the effect when
+the mod is enabled.
+
+| Field | Effect |
+|---|---|
+| `auroraPalette` | Adds cyan and violet tones while preserving neutral colours. |
+| `lowGravity` | Caps fall speed at one tile per gameplay step. |
+| `shieldMode` | Blocks normal health damage. Falling into a pit can still kill the player. |
+| `turboMode` | Runs gameplay steps every 10 ticks instead of 13. |
+| `widescreen` | Opens the episode in 16:9 with a wider playfield and HUD. The Filter setting also applies in widescreen. |
+
+The three gameplay options apply to player-controlled games. Title-screen
+demos use the original physics and timing.
 
 ## CRT shader example
 
@@ -134,7 +170,7 @@ and glow:
 ```
 
 Create `Mods/crt-shader/mod.json` with that content, launch the built game,
-open **Mods**, and enable **CRT Shader**. It applies a small Gaussian phosphor
+open **Mods**, and set **Filter** to **CRT**. It applies a small Gaussian phosphor
 blur and glow to gameplay and launcher screenshots.
 
 Scanlines are a separate effect. Put `"crtScanlines": true` in another mod's

@@ -23,10 +23,13 @@ bool font_load(const char *datadir, int episode);
 /* Draw `text` with its first character at tile position x, y. */
 void font_draw(int x, int y, const char *text);
 
+/* Replace the font's white lettering with the given EGA palette index. */
+void font_draw_colored(int x, int y, const char *text, uint8_t color);
+
 /* Draw `text` centred across the screen. */
 void font_draw_centered(int y, const char *text);
 
-/* Fill a rectangle of tiles with the font's grey background tile. */
-void font_fill(int x, int y, int width, int height);
+/* Draw an in-game dialog frame, including its background. */
+void font_draw_frame(int x, int y, int width, int height);
 
 #endif /* COSMO_FONT_H */

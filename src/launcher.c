@@ -47,6 +47,7 @@
 #   define EPISODE_COUNT 3
 #endif
 #define FULLSCREEN_IMAGE_SIZE 32000
+#define MODS_MENU_NUMBER (EPISODE_COUNT + 1)
 
 /*
  * Where the menu sits, in font tiles. Kept low so it does not
@@ -57,6 +58,8 @@
 #define MENU_HEIGHT  10
 #define MENU_LEFT     3
 #define MENU_WIDTH   34
+enum { TEXT_GRAY = 7, TEXT_GREEN = 10, TEXT_RED = 12 };
+enum { MODS_LIST_TOP = 7, MODS_VISIBLE_ROWS = 11 };
 
 /* The episode programs translate SDL gamepads to the game's key events, but
  * the launcher has its own menus and needs a small equivalent of that path. */
@@ -74,7 +77,8 @@ static Uint16 launcher_boost_rumble(Uint16 strength)
 static void launcher_rumble(Uint16 low_frequency, Uint16 high_frequency,
                             Uint32 duration_ms)
 {
-    if (!launcher_gamepad || !SDL_GamepadConnected(launcher_gamepad)) return;
+    if (!mods_gamepad_rumble_enabled() || !launcher_gamepad ||
+        !SDL_GamepadConnected(launcher_gamepad)) return;
     SDL_RumbleGamepad(launcher_gamepad,
                       launcher_boost_rumble(low_frequency),
                       launcher_boost_rumble(high_frequency), duration_ms);
@@ -136,8 +140,7 @@ static void launcher_poll_gamepad(void)
         held[1] = y > deadzone || SDL_GetGamepadButton(launcher_gamepad, SDL_GAMEPAD_BUTTON_DPAD_DOWN);
         held[2] = x < -deadzone || SDL_GetGamepadButton(launcher_gamepad, SDL_GAMEPAD_BUTTON_DPAD_LEFT);
         held[3] = x > deadzone || SDL_GetGamepadButton(launcher_gamepad, SDL_GAMEPAD_BUTTON_DPAD_RIGHT);
-        held[4] = SDL_GetGamepadButton(launcher_gamepad, SDL_GAMEPAD_BUTTON_SOUTH) ||
-                  SDL_GetGamepadButton(launcher_gamepad, SDL_GAMEPAD_BUTTON_START);
+        held[4] = SDL_GetGamepadButton(launcher_gamepad, SDL_GAMEPAD_BUTTON_SOUTH);
         held[5] = SDL_GetGamepadButton(launcher_gamepad, SDL_GAMEPAD_BUTTON_EAST) ||
                   SDL_GetGamepadButton(launcher_gamepad, SDL_GAMEPAD_BUTTON_BACK) ||
                   SDL_GetGamepadButton(launcher_gamepad, SDL_GAMEPAD_BUTTON_LEFT_SHOULDER);
@@ -220,12 +223,31 @@ static void install_palette(void)
     }
 }
 
+static void unfold_launch_frame(void)
+{
+    int center_y = MENU_TOP + MENU_HEIGHT / 2 - 1;
+    for (int width = 4; width < MENU_WIDTH; width += 4) {
+        font_draw_frame((FONT_COLUMNS - width) / 2, center_y, width, 2);
+        video_present();
+        video_delay(12);
+    }
+    for (int height = 2; height < MENU_HEIGHT; height += 2) {
+        font_draw_frame(MENU_LEFT, MENU_TOP + (MENU_HEIGHT - height) / 2,
+                        MENU_WIDTH, height);
+        video_present();
+        video_delay(12);
+    }
+}
+
 static void draw_menu(int selected)
 {
     char line[64];
     int row = MENU_TOP + 3;
+    const int cursor_x = MENU_LEFT + 2;
+    const int title_x = MENU_LEFT + 4;
+    const int status_x = MENU_LEFT + 24;
 
-    font_fill(MENU_LEFT, MENU_TOP, MENU_WIDTH, MENU_HEIGHT);
+    font_draw_frame(MENU_LEFT, MENU_TOP, MENU_WIDTH, MENU_HEIGHT);
 
     font_draw_centered(MENU_TOP + 1, "Select an episode");
 
@@ -235,91 +257,365 @@ static void draw_menu(int selected)
      * missing is more use than an episode that is simply absent.
      */
     for (int i = 0; i < EPISODE_COUNT; i++) {
-        /*
-         * 0x1C is the right arrow in this font. The game's own keyNames[]
-         * table uses it for the right cursor key, along with 0x18, 0x19 and
-         * 0x1B for the other three -- not the CP437 assignments, but this is
-         * the game's font and those are the glyphs in it.
-         */
-        snprintf(line, sizeof line, "%c %d) %s%s",
-                 (i == selected) ? '\x1C' : ' ',
-                 episodes[i].number, episodes[i].title,
-                 episodes[i].present ? "" : " ...");
-        font_draw(MENU_LEFT + 4, row, line);
+        const struct episode *episode = &episodes[i];
+        snprintf(line, sizeof line, "%d) %s", episode->number, episode->title);
+        if (i == selected) font_draw(cursor_x, row, ">");
+        if (episode->present) {
+            font_draw(title_x, row, line);
+        } else {
+            font_draw_colored(title_x, row, line, TEXT_GRAY);
+            font_draw_colored(status_x, row, "Not found", TEXT_GRAY);
+        }
         row++;
     }
 
-    snprintf(line, sizeof line, "%c %d) Mods",
-             selected == EPISODE_COUNT ? '\x1C' : ' ', EPISODE_COUNT + 1);
-    font_draw(MENU_LEFT + 4, row, line);
-
-    font_draw_centered(MENU_TOP + MENU_HEIGHT - 2,
-                       "... not installed - pick to locate");
-    font_draw_centered(MENU_TOP + MENU_HEIGHT - 1, "Enter select, Esc quit");
+    row = MENU_TOP + MENU_HEIGHT - 3;
+    snprintf(line, sizeof line, "%d) Mods", MODS_MENU_NUMBER);
+    if (selected == EPISODE_COUNT) font_draw(cursor_x, row, ">");
+    font_draw(title_x, row, line);
+    font_draw_centered(MENU_TOP + MENU_HEIGHT - 2, "Enter select, Esc quit");
 }
 
-static void draw_mods_menu(size_t selected, size_t first)
+struct mods_selector {
+    const char *label;
+    const char *description;
+    const char *primary_id;
+    const char *secondary_id;
+    const char *values[2];
+};
+
+static const struct mods_selector mods_selectors[] = {
+    {"Filter", "Choose CRT blur, scanlines, both, or a clean image. "
+               "Applies in standard and widescreen modes.",
+     COSMO_CRT_MOD_ID, COSMO_SCANLINES_MOD_ID, {NULL, NULL}},
+    {"Soundtrack", "Choose the original music or the remixed soundtrack for Episode 1.",
+     "mp3-music", NULL, {"Original", "New Remixed"}},
+    {"SFX", "Choose the original sound effects or a softened mix.",
+     "soft-sound-effects", NULL, {"Original", "Softened"}},
+};
+
+struct mods_row {
+    const struct mods_selector *selector;
+    size_t primary, secondary;
+    bool rumble;
+};
+
+static size_t collect_mods_rows(struct mods_row *rows)
 {
-    char line[96];
     size_t count = mods_count();
-    font_fill(1, 7, 38, 17);
-    font_draw_centered(8, "Mods");
-    if (!count) {
-        font_draw_centered(12, "No valid mods found");
-        font_draw_centered(14, "Install folders under Mods");
-    } else {
-        size_t end = first + 8 < count ? first + 8 : count;
-        for (size_t i = first; i < end; ++i) {
-            const cosmo_mod *mod = mods_get(i);
-            snprintf(line,sizeof line,"%c %.20s %.8s %s",
-                     i == selected ? '\x1C' : ' ',mod->name,mod->version,
-                     mod->enabled ? "ON" : "OFF");
-            font_draw(3,10+(int)(i-first),line);
+    size_t used = 0;
+    bool grouped[COSMO_MOD_LIMIT] = {false};
+    rows[used++] = (struct mods_row){0};
+
+    for (size_t i = 0; i < SDL_arraysize(mods_selectors); ++i) {
+        const struct mods_selector *selector = &mods_selectors[i];
+        struct mods_row row = {selector, SIZE_MAX, SIZE_MAX, false};
+        for (size_t j = 0; j < count; ++j) {
+            const char *id = mods_get(j)->id;
+            if (!SDL_strcasecmp(id, selector->primary_id)) {
+                row.primary = j;
+                grouped[j] = true;
+            } else if (selector->secondary_id && !SDL_strcasecmp(id, selector->secondary_id)) {
+                row.secondary = j;
+                grouped[j] = true;
+            }
         }
-        const cosmo_mod *mod = mods_get(selected);
-        if (mod) {
-            snprintf(line,sizeof line,"Author: %.30s",mod->author[0] ? mod->author : "(not set)");
-            font_draw(3,19,line);
-            snprintf(line,sizeof line,"%.34s",mod->description[0] ? mod->description : "No description provided");
-            font_draw(3,20,line);
+        if (row.primary != SIZE_MAX || row.secondary != SIZE_MAX) rows[used++] = row;
+    }
+    rows[used++] = (struct mods_row){.rumble = true};
+    for (size_t i = 0; i < count; ++i) {
+        if (!grouped[i]) rows[used++] = (struct mods_row){.primary = i};
+    }
+    return used;
+}
+
+static bool step_mods_choice(const struct mods_row *row, int step)
+{
+    if (row->selector->secondary_id) return mods_step_display_filter(step);
+    return mods_set_enabled(row->primary, !mods_get(row->primary)->enabled);
+}
+
+static void draw_mod_description(const char *description)
+{
+    char line[35];
+    for (int row = 19; row <= 22; ++row) {
+        description += strspn(description, " \t\r\n");
+        if (!*description) break;
+        size_t length = SDL_min(strcspn(description, "\r\n"), sizeof line - 1);
+        size_t end = length;
+        if (description[end] && !strchr(" \t\r\n", description[end])) {
+            while (end > 0 && !strchr(" \t", description[end])) --end;
+            if (end == 0) end = length;
+        }
+        snprintf(line, sizeof line, "%.*s", (int)end, description);
+        font_draw(3, row, line);
+        description += end;
+    }
+}
+
+static void draw_mods_menu(const struct mods_row *rows, size_t count,
+                           size_t selected, size_t first, bool save_failed)
+{
+    size_t end = SDL_min(count, first + MODS_VISIBLE_ROWS);
+    font_draw_frame(1, 4, 38, 21);
+    font_draw_centered(5, "Mods");
+
+    for (size_t i = first; i < end; ++i) {
+        int y = MODS_LIST_TOP + (int)(i - first);
+        const struct mods_row *row = &rows[i];
+        if (i == selected) font_draw(2, y, ">");
+        if (row->selector) {
+            char label[24];
+            const char *value = row->selector->secondary_id ? mods_display_filter_name()
+                : row->selector->values[mods_get(row->primary)->enabled];
+            snprintf(label, sizeof label, "< %s >", value);
+            font_draw(4, y, row->selector->label);
+            font_draw(37 - (int)strlen(label), y, label);
+        } else if (i == 0) {
+            font_draw(4, y, "Character Colour");
+        } else {
+            char name[29];
+            const cosmo_mod *mod = row->rumble ? NULL : mods_get(row->primary);
+            bool enabled = mod ? mod->enabled : mods_gamepad_rumble_enabled();
+            snprintf(name, sizeof name, "%.28s", mod ? mod->name : "Gamepad Rumble");
+            font_draw(4, y, name);
+            font_draw_colored(34, y, enabled ? "ON" : "OFF", enabled ? TEXT_GREEN : TEXT_RED);
         }
     }
-    font_draw_centered(22,"Enter/Space: toggle  Esc: return");
+    if (first > 0) font_draw(36, MODS_LIST_TOP - 1, "\x18");
+    if (end < count) font_draw(36, MODS_LIST_TOP + MODS_VISIBLE_ROWS, "\x19");
+
+    const struct mods_row *row = &rows[selected];
+    const char *help;
+    if (row->selector) {
+        draw_mod_description(row->selector->description);
+        help = "Left/Right: change  Esc: return";
+    } else if (selected == 0) {
+        draw_mod_description("Change Cosmo's body and accents");
+        help = "Enter/Space: open  Esc: return";
+    } else {
+        draw_mod_description(row->rumble ? "Controller vibration in menus and gameplay."
+                                        : mods_get(row->primary)->description);
+        help = "Enter/Space: toggle  Esc: return";
+    }
+    font_draw_centered(23, save_failed ? "Could not save mod settings" : help);
 }
 
-static bool run_mods_menu(void)
+static bool run_colour_menu(int episode);
+
+static bool run_mods_menu(int episode)
 {
+    struct mods_row rows[COSMO_MOD_LIMIT + 2];
+    size_t count = collect_mods_rows(rows);
     size_t selected = 0, first = 0;
-    bool redraw = true;
+    bool redraw = true, save_failed = false;
     while (true) {
         SDL_Event event;
         if (redraw) {
-            draw_mods_menu(selected,first);
+            draw_mods_menu(rows, count, selected, first, save_failed);
             redraw = false;
         }
         launcher_poll_gamepad();
-        while (SDL_PollEvent(&event)) {
+        while (video_poll_event(&event)) {
             if (event.type == SDL_EVENT_QUIT) return true;
             if (event.type == SDL_EVENT_KEY_DOWN && event.key.key == SDLK_ESCAPE) {
                 launcher_menu_haptic(false);
                 return false;
             }
-            if (event.type != SDL_EVENT_KEY_DOWN || !mods_count()) continue;
+            if (event.type != SDL_EVENT_KEY_DOWN) continue;
             if (event.key.key == SDLK_UP) {
-                selected = (selected + mods_count() - 1) % mods_count();
+                selected = (selected + count - 1) % count;
+                save_failed = false;
                 launcher_menu_haptic(false);
             } else if (event.key.key == SDLK_DOWN) {
-                selected = (selected + 1) % mods_count();
+                selected = (selected + 1) % count;
+                save_failed = false;
                 launcher_menu_haptic(false);
-            }
-            else if (event.key.key == SDLK_RETURN || event.key.key == SDLK_KP_ENTER || event.key.key == SDLK_SPACE) {
-                const cosmo_mod *mod = mods_get(selected);
-                if (mod) (void)mods_set_enabled(selected,!mod->enabled);
-                launcher_menu_haptic(true);
+            } else if (event.key.key == SDLK_LEFT || event.key.key == SDLK_RIGHT) {
+                if (!rows[selected].selector || event.key.repeat) continue;
+                save_failed = !step_mods_choice(&rows[selected], event.key.key == SDLK_LEFT ? -1 : 1);
+                launcher_menu_haptic(!save_failed);
+            } else if (event.key.key == SDLK_RETURN || event.key.key == SDLK_KP_ENTER || event.key.key == SDLK_SPACE) {
+                if (event.key.repeat) continue;
+                if (selected == 0) {
+                    launcher_menu_haptic(true);
+                    if (run_colour_menu(episode)) return true;
+                    (void)draw_background(episode);
+                } else if (rows[selected].selector) {
+                    save_failed = !step_mods_choice(&rows[selected], 1);
+                    launcher_menu_haptic(!save_failed);
+                } else if (rows[selected].rumble) {
+                    bool enabled = !mods_gamepad_rumble_enabled();
+                    save_failed = !mods_set_gamepad_rumble(enabled);
+                    if (!save_failed && !enabled && launcher_gamepad)
+                        SDL_RumbleGamepad(launcher_gamepad, 0, 0, 0);
+                    launcher_menu_haptic(!save_failed);
+                } else {
+                    size_t index = rows[selected].primary;
+                    save_failed = !mods_set_enabled(index, !mods_get(index)->enabled);
+                    launcher_menu_haptic(!save_failed);
+                }
             } else continue;
             if (selected < first) first = selected;
-            if (selected >= first + 8) first = selected - 7;
+            if (selected >= first + MODS_VISIBLE_ROWS)
+                first = selected - MODS_VISIBLE_ROWS + 1;
             redraw = true;
+        }
+        video_present();
+        video_delay(16);
+    }
+}
+
+/* The preview reads the east-facing stand frame from the installed episode. */
+struct player_preview {
+    unsigned width, height;
+    uint8_t tiles[12 * 12 * 40];
+};
+
+static unsigned read_le16(const uint8_t *p)
+{
+    return p[0] | ((unsigned)p[1] << 8);
+}
+
+static struct player_preview load_player_preview(int episode)
+{
+    struct player_preview frame = {0};
+    const char *data = paths_data_dir();
+    uint8_t info[512];
+    size_t info_size = mods_read_override(data, episode, "PLYRINFO.MNI", info, sizeof info);
+    if (!info_size) info_size = group_read(data, episode, "PLYRINFO.MNI", info, sizeof info);
+    if (info_size < 2) return frame;
+
+    const unsigned stand_east = 23 + 4;
+    size_t record = (read_le16(info) + stand_east * 4) * 2;
+    if (record + 6 > info_size) return frame;
+
+    unsigned height = read_le16(info + record);
+    unsigned width = read_le16(info + record + 2);
+    if (!width || !height || width > 12 || height > 12) return frame;
+
+    size_t offset = read_le16(info + record + 4);
+    size_t bytes = (size_t)width * height * 40;
+    size_t total = group_entry_size(data, episode, "PLAYERS.MNI");
+    if (offset + bytes > total) return frame;
+
+    uint8_t *tiles = malloc(total);
+    if (!tiles) return frame;
+    size_t got = mods_read_override(data, episode, "PLAYERS.MNI", tiles, total);
+    if (!got) got = group_read(data, episode, "PLAYERS.MNI", tiles, total);
+    if (got == total) {
+        memcpy(frame.tiles, tiles + offset, bytes);
+        frame.width = width;
+        frame.height = height;
+    }
+    free(tiles);
+    return frame;
+}
+
+static void draw_player_preview(const struct player_preview *source, const int colours[2])
+{
+    if (!source->width) {
+        font_draw(24, 12, "No preview");
+        return;
+    }
+
+    enum { LEFT = 23, TOP = 6, WIDTH = 14, HEIGHT = 15 };
+    /* The launcher draws on page zero. Fill an aligned rectangle in dark grey. */
+    for (unsigned plane = 0; plane < 4; ++plane) {
+        for (unsigned y = TOP * 8; y < (TOP + HEIGHT) * 8; ++y)
+            memset(ega.vram[plane] + y * FONT_COLUMNS + LEFT, plane == 3 ? 255 : 0, WIDTH);
+    }
+
+    struct player_preview frame = *source;
+    mods_preview_player_colours(frame.tiles, frame.width * frame.height * 40, colours);
+    unsigned width = frame.width * 8, height = frame.height * 8;
+    unsigned scale = SDL_min(3u, SDL_min(WIDTH * 8 / width, HEIGHT * 8 / height));
+    unsigned left = LEFT * 8 + (WIDTH * 8 - width * scale) / 2;
+    unsigned top = TOP * 8 + (HEIGHT * 8 - height * scale) / 2;
+
+    for (unsigned y = 0; y < height; ++y) {
+        for (unsigned x = 0; x < width; ++x) {
+            const uint8_t *row = frame.tiles + ((y / 8) * frame.width + x / 8) * 40 + (y % 8) * 5;
+            unsigned bit = 0x80u >> (x % 8);
+            if (row[0] & bit) continue;
+            for (unsigned dy = 0; dy < scale; ++dy) {
+                for (unsigned dx = 0; dx < scale; ++dx) {
+                    unsigned screen_x = left + x * scale + dx;
+                    size_t byte = (top + y * scale + dy) * FONT_COLUMNS + screen_x / 8;
+                    uint8_t mask = (uint8_t)(0x80u >> (screen_x % 8));
+                    for (unsigned plane = 0; plane < 4; ++plane) {
+                        uint8_t *dst = &ega.vram[plane][byte];
+                        if (row[1 + plane] & bit) *dst |= mask;
+                        else *dst &= (uint8_t)~mask;
+                    }
+                }
+            }
+        }
+    }
+}
+
+static bool run_colour_menu(int episode)
+{
+    struct player_preview preview = load_player_preview(episode);
+    int colours[2], selected = 0;
+    bool redraw = true, save_failed = false;
+    mods_get_player_colours(colours);
+
+    for (;;) {
+        if (redraw) {
+            char line[40];
+            font_draw_frame(1, 3, 38, 22);
+            font_draw_centered(4, "Character Colour");
+            snprintf(line, sizeof line, "%c Body    <%s>", selected == 0 ? '>' : ' ',
+                     mods_player_colour_name(colours[0]));
+            font_draw(3, 9, line);
+            snprintf(line, sizeof line, "%c Accents <%s>", selected == 1 ? '>' : ' ',
+                     mods_player_colour_name(colours[1]));
+            font_draw(3, 12, line);
+            font_draw(3, 16, selected == 2 ? "> Reset colours" : "  Reset colours");
+            draw_player_preview(&preview, selected == 2 ? NULL : colours);
+            font_draw_centered(22, "Arrows or D-pad to change");
+            font_draw_centered(23, save_failed ? "Could not save colours" : "Enter/A save   Esc/B back");
+            redraw = false;
+        }
+
+        SDL_Event event;
+        launcher_poll_gamepad();
+        while (video_poll_event(&event)) {
+            if (event.type == SDL_EVENT_QUIT) return true;
+            if (event.type != SDL_EVENT_KEY_DOWN) continue;
+            switch (event.key.key) {
+            case SDLK_ESCAPE:
+                launcher_menu_haptic(false);
+                return false;
+            case SDLK_UP:
+            case SDLK_DOWN:
+                selected = (selected + (event.key.key == SDLK_UP ? 2 : 1)) % 3;
+                break;
+            case SDLK_LEFT:
+            case SDLK_RIGHT:
+                if (selected == 2) continue;
+                int step = event.key.key == SDLK_LEFT ? -1 : 1;
+                colours[selected] = (colours[selected] + step + COSMO_PLAYER_COLOUR_COUNT)
+                                    % COSMO_PLAYER_COLOUR_COUNT;
+                break;
+            case SDLK_RETURN:
+            case SDLK_KP_ENTER:
+            case SDLK_SPACE:
+                if (event.key.repeat) continue;
+                if (mods_save_player_colours(selected == 2 ? NULL : colours)) {
+                    launcher_menu_haptic(true);
+                    return false;
+                }
+                save_failed = true;
+                redraw = true;
+                continue;
+            default:
+                continue;
+            }
+            save_failed = false;
+            redraw = true;
+            launcher_menu_haptic(false);
         }
         video_present();
         video_delay(16);
@@ -402,7 +698,7 @@ static bool offer_import(int episode)
     /* The callback arrives on the main thread, so events have to keep moving. */
     while (import_state == 0) {
         SDL_Event event;
-        while (SDL_PollEvent(&event)) {
+        while (video_poll_event(&event)) {
             if (event.type == SDL_EVENT_QUIT) return false;
         }
         SDL_Delay(16);
@@ -456,12 +752,22 @@ static int run_menu(void)
         }
 
         launcher_poll_gamepad();
-        while (SDL_PollEvent(&event)) {
+        while (video_poll_event(&event)) {
             if (event.type == SDL_EVENT_QUIT) return 0;
 
             if (event.type != SDL_EVENT_KEY_DOWN) continue;
 
-            switch (event.key.key) {
+            SDL_Keycode key = event.key.key;
+            if (key >= SDLK_1 && key <= SDLK_6) {
+                if (event.key.repeat) continue;
+                int shortcut = (int)(key - SDLK_1) + 1;
+                if (shortcut <= EPISODE_COUNT) selected = shortcut - 1;
+                else if (shortcut == MODS_MENU_NUMBER) selected = EPISODE_COUNT;
+                else continue;
+                key = SDLK_RETURN;
+            }
+
+            switch (key) {
             case SDLK_ESCAPE:
             case SDLK_Q:
                 launcher_menu_haptic(false);
@@ -484,10 +790,12 @@ static int run_menu(void)
             case SDLK_RETURN:
             case SDLK_KP_ENTER:
             case SDLK_SPACE: {
+                if (event.key.repeat) break;
                 launcher_menu_haptic(true);
                 if (selected == EPISODE_COUNT) {
-                    if (run_mods_menu()) return 0;
-                    (void)draw_background(episodes[first_present()].number);
+                    int preview_episode = episodes[first_present()].number;
+                    if (run_mods_menu(preview_episode)) return 0;
+                    (void)draw_background(preview_episode);
                     install_palette();
                     ega_select_active_page(0);
                     redraw = true;
@@ -496,17 +804,6 @@ static int run_menu(void)
                 int chosen = choose_episode(selected);
                 if (chosen) return chosen;
                 redraw = true;
-                break;
-            }
-
-            case SDLK_1: case SDLK_2: case SDLK_3: case SDLK_4: {
-                launcher_menu_haptic(true);
-                int wanted = (int)(event.key.key - SDLK_1);
-                if (wanted < EPISODE_COUNT) {
-                    int chosen = choose_episode(wanted);
-                    if (chosen) return chosen;
-                    redraw = true;
-                }
                 break;
             }
 
@@ -571,7 +868,8 @@ static int run_episode(int number)
      */
     static const char *const WHERE[] = {"episodes/", ""};
     char program[1024];
-    char *child_argv[2];
+    char fullscreen_arg[] = "--fullscreen";
+    char *child_argv[] = {program, NULL, NULL};
     SDL_PathInfo info;
     size_t i;
     bool found = false;
@@ -599,6 +897,7 @@ static int run_episode(int number)
 #endif
 
     /* Give up the window before the process image is replaced. */
+    if (video_is_fullscreen()) child_argv[1] = fullscreen_arg;
     video_shutdown();
 
     /*
@@ -608,9 +907,6 @@ static int run_episode(int number)
      * avoids JoinPath(), whose 80-byte static buffer joins with a DOS
      * separator and never terminates its result.
      */
-    child_argv[0] = program;
-    child_argv[1] = NULL;
-
     replace_process(program, child_argv);
 
     /* Only reached if the replacement failed. */
@@ -662,7 +958,7 @@ int main(int argc, char *argv[])
         ega_init();
         ega_set_video_mode(0x0D);
 
-        if (!video_init("Cosmo's Cosmic Adventure", 3)) return 1;
+        if (!video_init("Cosmo's Cosmic Adventure", 3, false)) return 1;
 
         if (!font_load(paths_data_dir(), background) || !draw_background(background)) {
             fprintf(stderr, "cosmo: episode data is present but unreadable\n");
@@ -672,6 +968,7 @@ int main(int argc, char *argv[])
 
         install_palette();
         ega_select_active_page(0);
+        unfold_launch_frame();
 
         number = run_menu();
 

@@ -21,11 +21,18 @@ void video_render_rgb(uint8_t *out);
  */
 bool video_write_png(const char *path, int scale);
 
-/* Window management. `scale` is the horizontal factor; height is corrected
- * to 4:3 because mode 0Dh pixels are taller than they are wide. */
-bool video_init(const char *title, int scale);
+/* Window management. `scale` is the horizontal factor. The output canvas
+ * is 4:3 or 16:9, with the original pixel proportions in either mode. */
+bool video_init(const char *title, int scale, bool widescreen);
+bool video_is_widescreen(void);
 void video_present(void);
 void video_shutdown(void);
+bool video_is_fullscreen(void);
+void video_set_fullscreen(bool fullscreen);
+
+/* Handle display shortcuts before passing events to the caller. */
+union SDL_Event;
+bool video_poll_event(union SDL_Event *event);
 
 /*
  * Minimal input for the standalone tools. This is not the game's keyboard

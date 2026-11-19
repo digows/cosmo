@@ -24,6 +24,7 @@ option(COSMO_FETCH_SDL "Always build SDL3 from source instead of using a system 
 option(COSMO_BUILD_TESTS "Build the test suite" ON)
 option(COSMO_BUILD_GAME "Build the game itself from the Cosmore sources" ON)
 option(COSMO_BUNDLE "Build as an application rather than a terminal program" OFF)
+option(COSMO_WIDESCREEN "Enable the widescreen mod by default for preview builds" OFF)
 
 # --------------------------------------------------------------------------
 # Warnings
@@ -153,6 +154,9 @@ add_library(cosmo_video STATIC
 target_link_libraries(cosmo_video
     PUBLIC cosmo_core SDL3::SDL3
     PRIVATE cosmo_warnings)
+if(COSMO_WIDESCREEN)
+    target_compile_definitions(cosmo_video PRIVATE COSMO_DEFAULT_WIDESCREEN)
+endif()
 
 # --------------------------------------------------------------------------
 # Cosmore game sources
@@ -164,6 +168,7 @@ target_link_libraries(cosmo_video
 
 if(COSMO_BUILD_GAME)
     include(cmake/PrepareCosmoreSources.cmake)
+    configure_file(Mods/widescreen/mod.json Mods/widescreen/mod.json COPYONLY)
 
     # Everything that does not depend on which episode is being built. The
     # platform layer reaches the game through a handful of externs rather than
@@ -197,7 +202,9 @@ if(COSMO_BUILD_GAME)
         add_library(cosmore_game${episode} OBJECT ${COSMORE_GEN_SOURCES})
         target_include_directories(cosmore_game${episode}
             PRIVATE "${COSMORE_GEN_DIR}" include)
-        target_compile_definitions(cosmore_game${episode} PRIVATE EPISODE=${episode})
+        # Compile the extended renderer into every episode for the runtime mod.
+        target_compile_definitions(cosmore_game${episode}
+            PRIVATE EPISODE=${episode} COSMO_WIDESCREEN)
         if(UNIX)
             # Strict C11 on newer glibc hides POSIX declarations such as
             # fileno() unless a POSIX feature level is selected explicitly.

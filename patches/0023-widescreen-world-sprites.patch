@@ -1,0 +1,166 @@
+diff --git a/game1.c b/game1.c
+--- a/game1.c
++++ b/game1.c
+@@ -1228,6 +1228,29 @@
+     );
+ }
+ 
++/* Rendering can look ahead without extending the actor activation area. */
++static word WorldDrawRight(void)
++{
++    word right = scrollX + SCROLLW;
++#ifdef COSMO_WIDESCREEN
++    if (demoState == DEMO_STATE_NONE) {
++        right += WideTerrainColumns();
++        if (right > mapWidth) right = mapWidth;
++    }
++#endif
++    return right;
++}
++
++#ifdef COSMO_WIDESCREEN
++static bool SpriteInWideStrip(word sprite, word frame, word x, word y)
++{
++    if (x < scrollX + SCROLLW || x >= WorldDrawRight()) return false;
++    word offset = actorInfoData[sprite] + frame * 4;
++    word height = actorInfoData[offset];
++    return y >= scrollY && (int)y - height + 1 < scrollY + SCROLLH;
++}
++#endif
++
+ /*
+ Draw an actor sprite frame at {x,y}_origin with the requested mode.
+ */
+@@ -1271,7 +1294,7 @@
+     y = (y_origin - height) + 1;
+     for (;;) {
+         if (
+-            x >= scrollX && scrollX + SCROLLW > x &&
++            x >= scrollX && WorldDrawRight() > x &&
+             y >= scrollY && scrollY + SCROLLH > y &&
+             !TILE_IN_FRONT(MAP_CELL_DATA(x, y))
+         ) {
+@@ -1298,7 +1321,7 @@
+     y = y_origin;
+     for (;;) {
+         if (
+-            x >= scrollX && scrollX + SCROLLW > x &&
++            x >= scrollX && WorldDrawRight() > x &&
+             y >= scrollY && scrollY + SCROLLH > y &&
+             !TILE_IN_FRONT(MAP_CELL_DATA(x, y))
+         ) {
+@@ -1322,7 +1345,7 @@
+     y = (y_origin - height) + 1;
+     for (;;) {
+         if (
+-            x >= scrollX && scrollX + SCROLLW > x &&
++            x >= scrollX && WorldDrawRight() > x &&
+             y >= scrollY && scrollY + SCROLLH > y
+         ) {
+             drawfn(src, (x - scrollX) + 1, (y - scrollY) + 1);
+@@ -1408,7 +1431,7 @@
+ 
+     for (;;) {
+         if (
+-            x >= scrollX && scrollX + SCROLLW > x &&
++            x >= scrollX && WorldDrawRight() > x &&
+             y >= scrollY && scrollY + SCROLLH > y &&
+             !TILE_IN_FRONT(MAP_CELL_DATA(x, y))
+         ) {
+@@ -1448,7 +1471,7 @@
+ infront:
+     for (;;) {
+         if (
+-            x >= scrollX && scrollX + SCROLLW > x &&
++            x >= scrollX && WorldDrawRight() > x &&
+             y >= scrollY && scrollY + SCROLLH > y
+         ) {
+             drawfn(src, (x - scrollX) + 1, (y - scrollY) + 1);
+@@ -1755,7 +1778,7 @@
+         yorigin = lights[i].y;
+ 
+         if (
+-            xorigin >= scrollX && scrollX + SCROLLW > xorigin &&
++            xorigin >= scrollX && WorldDrawRight() > xorigin &&
+             yorigin >= scrollY && scrollY + SCROLLH - 1 >= yorigin
+         ) {
+             if (side == LIGHT_SIDE_WEST) {
+@@ -1771,7 +1794,7 @@
+             if (TILE_BLOCK_SOUTH(GetMapTile(xorigin, y))) break;
+ 
+             if (
+-                xorigin >= scrollX && scrollX + SCROLLW > xorigin &&
++                xorigin >= scrollX && WorldDrawRight() > xorigin &&
+                 y >= scrollY && scrollY + SCROLLH - 1 >= y
+             ) {
+                 LightenScreenTile((xorigin - scrollX) + 1, (y - scrollY) + 1);
+@@ -6435,6 +6458,6 @@
+ static void DrawRandomEffects(void)
+ {
+-    word x = scrollX + random(SCROLLW);
++    word x = scrollX + random(WorldDrawRight() - scrollX);
+     word y = scrollY + random(SCROLLH);
+     word maptile = GetMapTile(x, y);
+ 
+@@ -6552,7 +6575,11 @@
+         }
+ 
+         if (sh->age >= 9) {
+-            if (sh->age > 16 && !IsSpriteVisible(sh->sprite, sh->frame, sh->x, sh->y)) {
++            if (sh->age > 16 && !IsSpriteVisible(sh->sprite, sh->frame, sh->x, sh->y)
++#ifdef COSMO_WIDESCREEN
++                && !SpriteInWideStrip(sh->sprite, sh->frame, sh->x, sh->y)
++#endif
++            ) {
+                 sh->age = 0;
+                 continue;
+             }
+@@ -6823,7 +6850,11 @@
+         if (!dec->alive) continue;
+ 
+         /* Possible BUG: dec->numframes should be decorationFrame[i] instead. */
+-        if (IsSpriteVisible(dec->sprite, dec->numframes, dec->x, dec->y)) {
++        if (IsSpriteVisible(dec->sprite, dec->numframes, dec->x, dec->y)
++#ifdef COSMO_WIDESCREEN
++            || SpriteInWideStrip(dec->sprite, decorationFrame[i], dec->x, dec->y)
++#endif
++        ) {
+             if (dec->sprite != SPR_SPARKLE_SLIPPERY) {
+                 DrawSprite(dec->sprite, decorationFrame[i], dec->x, dec->y, DRAW_MODE_NORMAL);
+             } else {
+@@ -7885,6 +7916,10 @@
+             act->forceactive = true;
+         }
+     } else if (!act->forceactive) {
++#ifdef COSMO_WIDESCREEN
++        if (SpriteInWideStrip(act->sprite, act->frame, act->x, act->y))
++            DrawSprite(act->sprite, act->frame, act->x, act->y, DRAW_MODE_NORMAL);
++#endif
+         return;
+     } else {
+         nextDrawMode = DRAW_MODE_HIDDEN;
+@@ -7921,7 +7956,11 @@
+         }
+     }
+ 
+-    if (IsSpriteVisible(act->sprite, act->frame, act->x, act->y)) {
++    if (IsSpriteVisible(act->sprite, act->frame, act->x, act->y)
++#ifdef COSMO_WIDESCREEN
++        || SpriteInWideStrip(act->sprite, act->frame, act->x, act->y)
++#endif
++    ) {
+         nextDrawMode = DRAW_MODE_NORMAL;
+     }
+ 
+@@ -7935,7 +7974,10 @@
+         return;
+     }
+ 
+-    if (InteractPlayer(index, act->sprite, act->frame, act->x, act->y)) return;
++#ifdef COSMO_WIDESCREEN
++    if (!SpriteInWideStrip(act->sprite, act->frame, act->x, act->y))
++#endif
++        if (InteractPlayer(index, act->sprite, act->frame, act->x, act->y)) return;
+ 
+     if (nextDrawMode != DRAW_MODE_HIDDEN) {
+         DrawSprite(act->sprite, act->frame, act->x, act->y, nextDrawMode);

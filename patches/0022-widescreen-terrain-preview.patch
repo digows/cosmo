@@ -1,0 +1,70 @@
+diff --git a/glue.h b/glue.h
+--- a/glue.h
++++ b/glue.h
+@@ -221,6 +221,12 @@
+ int PlatformShieldMode(void);
+ int PlatformTurboMode(void);
+ void PlatformRecolorPlayer(byte *tiles, unsigned size);
++#ifdef COSMO_WIDESCREEN
++word WideTerrainColumns(void);
++void BeginWideTerrain(void);
++void ClearWideTerrain(void);
++void DrawWideTerrainTile(word solid, const byte *masked, word x, word y);
++#endif
+ void DrawScancodeCharacter(word x, word y, byte scancode);
+ void WrapBackdropVertical(byte *src, byte *dest, byte *scratch);
+ void WrapBackdropHorizontal(byte *src, byte *dest);
+diff --git a/game1.c b/game1.c
+--- a/game1.c
++++ b/game1.c
+@@ -856,6 +856,10 @@
+     word *mapcell;
+     word bdoff;
+     word bdsrc = EGA_OFFSET_BDROP_EVEN - EGA_OFFSET_SOLID_TILES;
++#ifdef COSMO_WIDESCREEN
++    const word wide_columns = demoState == DEMO_STATE_NONE ? WideTerrainColumns() : 0;
++    if (wide_columns) BeginWideTerrain();
++#endif
+ 
+     if (hasHScrollBackdrop) {
+         if (scrollX % 2 != 0) {
+@@ -909,6 +913,19 @@
+ 
+             x++;
+         } while (x < SCROLLW);
++
++#ifdef COSMO_WIDESCREEN
++        for (word col = 0; col < wide_columns && scrollX + SCROLLW + col < mapWidth; ++col) {
++            word tile = mapData.w[ymap + scrollX + SCROLLW + col];
++            word backdrop_cell = (bdoff % 80 + SCROLLW + col) % BACKDROP_WIDTH;
++            word backdrop = bdsrc + backdropTable[bdoff - bdoff % 80 + backdrop_cell];
++            unsigned masked_offset = (unsigned)tile - TILE_MASKED_0;
++            const byte *masked = masked_offset <= 40000u - 40
++                                 ? maskedTileData + masked_offset : NULL;
++            word solid = tile < TILE_STRIPED_PLATFORM || tile >= TILE_MASKED_0 ? backdrop : tile;
++            DrawWideTerrainTile(solid, masked, col, yscreen - 1);
++        }
++#endif
+ 
+         dstoff += 320;
+         yscreen++;
+@@ -10613,6 +10628,9 @@
+     static word mapVariables, musicNum;
+     FILE *fp;
+     word bdnum;
++#ifdef COSMO_WIDESCREEN
++    ClearWideTerrain();
++#endif
+ 
+     if (level_num == 0 && isNewGame) {
+         DrawFullscreenImage(IMAGE_ONE_MOMENT);
+@@ -10746,6 +10764,9 @@
+ 
+         isInGame = true;
+         GameLoop(demoState);
++#ifdef COSMO_WIDESCREEN
++        ClearWideTerrain();
++#endif
+         isInGame = false;
+ 
+         StopMusic();

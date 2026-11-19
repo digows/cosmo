@@ -1,0 +1,8 @@
+{
+  "id": "soft-sound-effects",
+  "name": "Soft Sound Effects",
+  "version": "1.0.0",
+  "author": "Cosmo mod example",
+  "description": "Gently filtered original effects with a faint static texture.",
+  "enabled": true
+}

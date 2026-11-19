@@ -29,6 +29,12 @@ Linux      Run ./cosmo. If your desktop will not start it from a file manager,
 
 Episode 1 is included, so it plays straight away.
 
+Open Mods in the launcher and choose Character Colour to change Cosmo's body
+and accents.
+Use Up/Down to pick a row and Left/Right to cycle colours. The preview updates
+as you browse. Enter or A saves, and Esc or B goes back without saving.
+Reset colours returns to the original look, or the colours of an installed
+skin if one is enabled.
 
 Controls
 --------
@@ -37,30 +43,32 @@ Arrow keys    move
 Space         jump
 Alt           bomb
 F1            help, in game
+F11           toggle fullscreen (Alt+Enter also works)
 Q then Y      quit, saving your settings and high scores
 
 Xbox-style controllers are supported. Use the D-pad or left stick to move,
 A to jump, confirm, or answer yes; B to drop a bomb or answer no; Start
-confirms menu prompts; Back/View (Select) opens the F1 help menu; LB acts as
+opens the in-game F1 menu; LB acts as
 Escape. The game uses your current key bindings for movement,
 jumping, and bombs.
 
 On the title menu, Up/Down or the D-pad/left stick moves the selection marker;
-A or Start chooses the highlighted option.
+A chooses the highlighted option.
 
-At save/restore prompts, Up/Down selects a slot from 1 to 9, A or Start
-confirms it, and B cancels.
+At save/restore prompts, Up/Down selects a slot from 1 to 9, A confirms it,
+and B cancels.
 
-All six can be rebound from the game's own menu: press G at the main menu for
-Game Redefine, then K for Keyboard redefine.
+Open Game Settings from the main or pause menu. Select Keyboard Mapping
+with Enter or A, choose an action, and press its new key. Gamepad Controls
+shows the controller layout. Use Left/Right to adjust Music Volume, Sound
+Volume, or Filter. The Filter choice is shared with the launcher's Mods menu.
 
 The original used ctrl to jump. Space is this port's one deliberate change,
 because ctrl with an arrow key is a window manager shortcut on most systems
 today. On macOS, Command jumps as well.
 
-Quit through the game rather than closing the window. The configuration file
-is written on the way out, exactly as it was on DOS, where killing the program
-lost it the same way.
+Keyboard changes save as each key is assigned. Quit through the game to save
+your high scores.
 
 
 The window

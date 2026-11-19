@@ -1,7 +1,0 @@
-{
-  "id": "soft-audio",
-  "name": "Soft Audio",
-  "version": "1.0.0",
-  "description": "Optional alternate music and gently filtered sound effects for Episode 1.",
-  "enabled": false
-}

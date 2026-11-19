@@ -1,0 +1,289 @@
+diff --git a/glue.h b/glue.h
+--- a/glue.h
++++ b/glue.h
+@@ -216,6 +216,8 @@
+ void PlatformHapticSound(unsigned sound_number);
+ void PlatformHapticMenuInput(byte scancode);
+ void PlatformSetAudioVolumes(int sound_percent, int music_percent);
++const char *PlatformDisplayFilterName(void);
++int PlatformStepDisplayFilter(int direction);
+ void PlatformSetMusicPaused(int paused);
+ int PlatformLowGravity(void);
+ int PlatformShieldMode(void);
+diff --git a/game2.c b/game2.c
+--- a/game2.c
++++ b/game2.c
+@@ -1928,70 +1928,57 @@
+     return false;
+ }
+ 
+-/*
+-Present the keyboard configuration menu. Any of the six command keys can be set
+-to different scancodes. There is no sanity checking performed here -- the user
+-is free to bind multiple commands to the same key, and it's possible to bind
+-in-game keys like F1 and M to commands, with predictably wacky results. The only
+-disallowed key is Esc, which exits this menu unconditionally.
+-
+-NOTE: Entering this menu disables the joystick, requiring a recalibration to get
+-it back.
++enum { SETTINGS_TOP = 3, SETTINGS_HEIGHT = 15, SETTINGS_WIDTH = 36 };
++#define SETTINGS_LEFT (20 - SETTINGS_WIDTH / 2)
++
++/*
++Let the player browse the six keyboard bindings and choose a key to change.
+ */
+ static void ShowKeyboardConfiguration(void)
+ {
+-    word x;
+-
+-    isJoystickReady = false;
+-
+-    /* The size, position, and empty space within this frame is calibrated to
+-    the positioning in KeyboardConfigPrompt(). */
+-    x = UnfoldTextFrame(3, 15, 27, "Keyboard Config.", "Press ESC to quit.");
++    static char *const labels[] = {"Up", "Down", "Left", "Right", "Jump", "Bomb"};
++    byte *const keys[] = {
++        &scancodeNorth, &scancodeSouth, &scancodeWest,
++        &scancodeEast, &scancodeJump, &scancodeBomb
++    };
++    byte selection = 0;
++    word x = DrawTextFrame(SETTINGS_LEFT, SETTINGS_TOP, SETTINGS_HEIGHT, SETTINGS_WIDTH,
++                           "Keyboard Mapping", "Esc or LB to go back", true);
+ 
+     for (;;) {
+         byte scancode;
+-
+-        DrawTextLine(x,      6,  " #1) Up key is:");
+-        DrawTextLine(x + 19, 6,  keyNames[scancodeNorth]);
+-        DrawTextLine(x,      7,  " #2) Down key is:");
+-        DrawTextLine(x + 19, 7,  keyNames[scancodeSouth]);
+-        DrawTextLine(x,      8,  " #3) Left key is:");
+-        DrawTextLine(x + 19, 8,  keyNames[scancodeWest]);
+-        DrawTextLine(x,      9,  " #4) Right key is:");
+-        DrawTextLine(x + 19, 9,  keyNames[scancodeEast]);
+-        DrawTextLine(x,      10, " #5) Jump key is:");
+-        DrawTextLine(x + 19, 10, keyNames[scancodeJump]);
+-        DrawTextLine(x,      11, " #6) Bomb key is:");
+-        DrawTextLine(x + 19, 11, keyNames[scancodeBomb]);
+-        DrawTextLine(x,      15, "Select key # to change or");
+-        scancode = WaitSpinner(x + 21, 16);
+-
+-        switch (scancode) {
+-        case SCANCODE_ESC:
+-            return;
+-        case SCANCODE_1:
+-            if (!PromptKeyBind(&scancodeNorth, x, "Modifying UP.")) break;
+-            return;
+-        case SCANCODE_2:
+-            if (!PromptKeyBind(&scancodeSouth, x, "Modifying DOWN.")) break;
+-            return;
+-        case SCANCODE_3:
+-            if (!PromptKeyBind(&scancodeWest, x, "Modifying LEFT.")) break;
+-            return;
+-        case SCANCODE_4:
+-            if (!PromptKeyBind(&scancodeEast, x, "Modifying RIGHT.")) break;
+-            return;
+-        case SCANCODE_5:
+-            if (!PromptKeyBind(&scancodeJump, x, "Modifying JUMP.")) break;
+-            return;
+-        case SCANCODE_6:
+-            if (!PromptKeyBind(&scancodeBomb, x, "Modifying BOMB.")) break;
+-            return;
++        byte i;
++
++        for (i = 0; i < 6; ++i) {
++            char label[20];
++            snprintf(label, sizeof label, "%c %u  %s",
++                     i == selection ? '>' : ' ', (unsigned)i + 1, labels[i]);
++            DrawTextLine(x + 2, 6 + i, label);
++            DrawTextLine(x + 19, 6 + i, keyNames[*keys[i]]);
+         }
+-
+-        /* Quickly redraw the same frame as before, without animation, to clear
+-        the config prompt text. */
+-        DrawTextFrame(7, 3, 15, 27, "Keyboard Config.", "Press ESC to quit.", true);
++        DrawTextLine(x + 2, 15, "Enter, A or 1-6 to change");
++        scancode = WaitSpinner(x + 30, 14);
++        if (scancode == SCANCODE_ESC) return;
++
++        if (scancode >= SCANCODE_1 && scancode <= SCANCODE_6) {
++            selection = scancode - SCANCODE_1;
++            scancode = SCANCODE_ENTER;
++        }
++
++        if (scancode == SCANCODE_ENTER || scancode == SCANCODE_SPACE) {
++            char prompt[24];
++            snprintf(prompt, sizeof prompt, "Changing %s", labels[selection]);
++            if (!PromptKeyBind(keys[selection], x, prompt))
++                SaveConfigurationData(FILENAME_BASE ".CFG");
++        } else if (scancode == SCANCODE_KP_8 || scancode == scancodeNorth) {
++            selection = (selection + 5) % 6;
++        } else if (scancode == SCANCODE_KP_2 || scancode == scancodeSouth) {
++            selection = (selection + 1) % 6;
++        } else {
++            continue;
++        }
++        DrawTextFrame(SETTINGS_LEFT, SETTINGS_TOP, SETTINGS_HEIGHT, SETTINGS_WIDTH,
++                      "Keyboard Mapping", "Esc or LB to go back", true);
+     }
+ }
+ 
+@@ -2929,69 +2916,95 @@
+     WaitSpinner(x + 27, 8);
+ }
+ 
+-/*
+-Display the Game Redefine menu and call the appropriate function based on the
+-key pressed.
+-*/
++enum game_setting {
++    SETTING_KEYBOARD, SETTING_GAMEPAD, SETTING_MUSIC,
++    SETTING_SOUND, SETTING_FILTER, SETTING_COUNT
++};
++
++static void ShowGamepadControls(void)
++{
++    word x = DrawTextFrame(SETTINGS_LEFT, SETTINGS_TOP, SETTINGS_HEIGHT, SETTINGS_WIDTH,
++                           "Gamepad Controls", "Esc or LB to go back", true);
++
++    DrawTextLine(x + 1, 7,  "D-pad, Left stick  Move");
++    DrawTextLine(x + 1, 8,  "A                  Jump or select");
++    DrawTextLine(x + 1, 9,  "B                  Drop bomb");
++    DrawTextLine(x + 1, 10, "Start              Pause menu");
++    DrawTextLine(x + 1, 11, "LB                 Back");
++    while (WaitSpinner(x + 30, 14) != SCANCODE_ESC) {}
++}
++
++static void DrawGameSettings(word x, byte selection, bbool save_failed)
++{
++    static const byte rows[SETTING_COUNT] = {7, 8, 10, 11, 12};
++    char value[20];
++
++    char *help = selection <= SETTING_GAMEPAD ? "Enter or A opens, Esc or LB back"
++                                                     : "Left and Right   Esc or LB back";
++    DrawTextFrame(SETTINGS_LEFT, SETTINGS_TOP, SETTINGS_HEIGHT, SETTINGS_WIDTH,
++                  "Game Settings", save_failed ? "Could not save filter" : help, true);
++    DrawTextLine(x + 2, rows[SETTING_KEYBOARD], "Keyboard Mapping");
++    DrawTextLine(x + 2, rows[SETTING_GAMEPAD], "Gamepad Controls");
++    DrawTextLine(x + 2, rows[SETTING_MUSIC], "Music Volume");
++    DrawTextLine(x + 2, rows[SETTING_SOUND], "Sound Volume");
++    DrawTextLine(x + 2, rows[SETTING_FILTER], "Filter");
++
++    snprintf(value, sizeof value, "< %3u%% >", (unsigned)musicVolume);
++    DrawTextLine(x + 25, rows[SETTING_MUSIC], value);
++    snprintf(value, sizeof value, "< %3u%% >", (unsigned)soundVolume);
++    DrawTextLine(x + 25, rows[SETTING_SOUND], value);
++    snprintf(value, sizeof value, "< %s >", PlatformDisplayFilterName());
++    DrawTextLine(x + 33 - strlen(value), rows[SETTING_FILTER], value);
++    DrawTextLine(x, rows[selection], ">");
++}
++
+ void ShowGameRedefineMenu(void)
+ {
+-    word x = UnfoldTextFrame(4, 11, 22, "Game Settings", "Press ESC to quit.");
+-    static const byte menu_keys[] = {
+-        SCANCODE_K, SCANCODE_J, SCANCODE_S, SCANCODE_T, SCANCODE_M
+-    };
+-    static const byte menu_rows[] = {7, 8, 9, 10, 11};
+-    byte selection = 0;
+-
+-    DrawTextLine(x, 7,  " K)eyboard redefine");
+-    DrawTextLine(x, 8,  " J)oystick redefine");
+-    DrawTextLine(x, 9,  " S)ound volume");
+-    DrawTextLine(x, 10, " T)est sound");
+-    DrawTextLine(x, 11, " M)usic volume");
+-    DrawTextLine(x, menu_rows[selection], ">");
++    word x = UnfoldTextFrame(SETTINGS_TOP, SETTINGS_HEIGHT, SETTINGS_WIDTH,
++                             "Game Settings", "");
++    byte selection = SETTING_KEYBOARD;
++    bbool save_failed = false;
++    DrawGameSettings(x, selection, save_failed);
+ 
+     for (;;) {
+-        byte scancode = WaitSpinner(29, 13);
+-
+-        if (scancode == scancodeNorth || scancode == SCANCODE_KP_8 ||
+-            scancode == scancodeWest || scancode == SCANCODE_KP_4 ||
+-            scancode == scancodeSouth || scancode == SCANCODE_KP_2 ||
+-            scancode == scancodeEast || scancode == SCANCODE_KP_6) {
+-            byte previous = selection;
+-
+-            if (scancode == scancodeNorth || scancode == SCANCODE_KP_8 ||
+-                scancode == scancodeWest || scancode == SCANCODE_KP_4)
+-                selection = selection == 0 ? 4 : selection - 1;
+-            else
+-                selection = (selection + 1) % 5;
+-
+-            EGA_MODE_LATCHED_WRITE();
+-            DrawSolidTile(TILE_DARK_GRAY, x + (menu_rows[previous] * 320));
+-            DrawTextLine(x, menu_rows[selection], ">");
++        byte scancode = WaitSpinner(x + 30, 14);
++        bbool confirm = scancode == SCANCODE_ENTER || scancode == SCANCODE_SPACE;
++        int step = 0;
++
++        if (scancode == SCANCODE_ESC) return;
++
++        if (confirm) {
++            if (selection <= SETTING_GAMEPAD) {
++                if (selection == SETTING_KEYBOARD) ShowKeyboardConfiguration();
++                else ShowGamepadControls();
++                DrawGameSettings(x, selection, false);
++                continue;
++            }
++            step = 1;
++        } else if (scancode == SCANCODE_KP_8 || scancode == scancodeNorth) {
++            selection = (selection + SETTING_COUNT - 1) % SETTING_COUNT;
++        } else if (scancode == SCANCODE_KP_2 || scancode == scancodeSouth) {
++            selection = (selection + 1) % SETTING_COUNT;
++        } else if (scancode == SCANCODE_KP_4 || scancode == scancodeWest) {
++            step = -1;
++        } else if (scancode == SCANCODE_KP_6 || scancode == scancodeEast) {
++            step = 1;
++        } else {
+             continue;
+         }
+ 
+-        if (scancode == SCANCODE_SPACE)
+-            scancode = menu_keys[selection];
+-
+-        switch (scancode) {
+-        case SCANCODE_ESC:
+-            return;
+-        case SCANCODE_S:
+-            ToggleSound();
+-            return;
+-        case SCANCODE_J:
+-            ShowJoystickConfiguration(JOYSTICK_A);
+-            return;
+-        case SCANCODE_K:
+-            ShowKeyboardConfiguration();
+-            return;
+-        case SCANCODE_T:
+-            ShowSoundTest();
+-            return;
+-        case SCANCODE_M:
+-            ToggleMusic();
+-            return;
++        save_failed = false;
++        if (step && selection == SETTING_FILTER) {
++            save_failed = !PlatformStepDisplayFilter(step);
++        } else if (step && (selection == SETTING_MUSIC || selection == SETTING_SOUND)) {
++            byte *volume = selection == SETTING_MUSIC ? &musicVolume : &soundVolume;
++            int adjusted = confirm && *volume == 100 ? 0 : *volume + 25 * step;
++            *volume = adjusted < 0 ? 0 : adjusted > 100 ? 100 : adjusted;
++            isMusicEnabled = musicVolume != 0;
++            isSoundEnabled = soundVolume != 0;
++            PlatformSetAudioVolumes(soundVolume, musicVolume);
+         }
++        DrawGameSettings(x, selection, save_failed);
+     }
+ }
+ 
+@@ -3078,6 +3091,7 @@
+     int i;
+ 
+     fp = fopen(filename, "wb");
++    if (!fp) return;
+ 
+     fputc(scancodeNorth, fp);
+     fputc(scancodeSouth, fp);

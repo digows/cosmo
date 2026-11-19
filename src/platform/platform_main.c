@@ -100,9 +100,6 @@ static SDL_AtomicInt game_running;
 static SDL_AtomicInt frame_pending;
 static SDL_AtomicInt haptic_pending;
 
-static int argc_saved;
-static char **argv_saved;
-
 static void request_haptic(int cue)
 {
     if (cue != HAPTIC_NONE) {
@@ -223,6 +220,54 @@ void PlatformStopMP3Sound(void)
 void PlatformSetAudioVolumes(int sound_percent, int music_percent)
 {
     audio_set_volumes(sound_percent, music_percent);
+}
+
+const char *PlatformDisplayFilterName(void)
+{
+    return mods_display_filter_name();
+}
+
+struct display_filter_change {
+    int direction;
+    bool saved;
+};
+
+static void SDLCALL step_display_filter(void *userdata)
+{
+    struct display_filter_change *change = userdata;
+    change->saved = mods_step_display_filter(change->direction);
+}
+
+int PlatformStepDisplayFilter(int direction)
+{
+    /* Keep filter writes on the thread that renders and reads the mod state. */
+    struct display_filter_change change = {direction, false};
+    return SDL_RunOnMainThread(step_display_filter, &change, true) && change.saved;
+}
+
+void PlatformSetMusicPaused(int paused)
+{
+    audio_set_music_paused(paused != 0);
+}
+
+int PlatformLowGravity(void)
+{
+    return mods_feature_enabled(MOD_LOW_GRAVITY);
+}
+
+int PlatformShieldMode(void)
+{
+    return mods_feature_enabled(MOD_SHIELD_MODE);
+}
+
+int PlatformTurboMode(void)
+{
+    return mods_feature_enabled(MOD_TURBO_MODE);
+}
+
+void PlatformRecolorPlayer(uint8_t *tiles, unsigned size)
+{
+    mods_recolor_player(tiles, size);
 }
 
 /* ------------------------------------------------------------------------ */
@@ -354,11 +399,12 @@ static void queue_scancode(uint8_t code)
  * Reconciling against SDL's own view once a frame catches all of it.
  */
 static bool key_held[SDL_SCANCODE_COUNT];
-static bool gamepad_action_held[10];
-static uint8_t gamepad_action_code[10];
+static bool gamepad_action_held[9];
+static uint8_t gamepad_action_code[9];
 static SDL_Gamepad *gamepad;
 static bool gamepad_scan_done;
 static bool window_focused = true;
+static bool trace_input;
 static bool another_gamepad_action_holds(int action, uint8_t code);
 
 static void release_key(SDL_Scancode sc)
@@ -410,7 +456,7 @@ static bool keyboard_holds_xt(uint8_t code)
 
 static bool another_gamepad_action_holds(int action, uint8_t code)
 {
-    for (int i = 0; i < 10; ++i)
+    for (int i = 0; i < (int)SDL_arraysize(gamepad_action_held); ++i)
         if (i != action && gamepad_action_held[i] && gamepad_action_code[i] == code)
             return true;
     return false;
@@ -428,13 +474,16 @@ static void gamepad_action(int action, uint8_t code, bool down)
     if (down && code && !gamepad_action_held[action]) {
         gamepad_action_code[action] = code;
         gamepad_action_held[action] = true;
+        if (trace_input)
+            fprintf(stderr, "[input] gamepad action %d -> XT 0x%02x\n",
+                    action, (unsigned)code);
         queue_scancode(code);
     }
 }
 
 static void release_gamepad_actions(void)
 {
-    for (int i = 0; i < 10; ++i)
+    for (int i = 0; i < (int)SDL_arraysize(gamepad_action_held); ++i)
         gamepad_action(i, gamepad_action_code[i], false);
 }
 
@@ -491,14 +540,13 @@ static void update_gamepad(bool focused)
     gamepad_action(3, scancodeSouth, south);
     gamepad_action(4, scancodeJump, gamepad_button(SDL_GAMEPAD_BUTTON_SOUTH));
     gamepad_action(5, scancodeBomb, gamepad_button(SDL_GAMEPAD_BUTTON_EAST));
-    /* A also confirms title and menu prompts; Start works as Enter. */
+    /* A also confirms title and menu prompts. */
     gamepad_action(6, scancodeJump == 0x39 ? 0 : 0x39,
                    gamepad_button(SDL_GAMEPAD_BUTTON_SOUTH));
-    gamepad_action(7, 0x1C, gamepad_button(SDL_GAMEPAD_BUTTON_START));
-    /* Back/View/Select opens the same help menu as F1. */
-    gamepad_action(8, 0x3B, gamepad_button(SDL_GAMEPAD_BUTTON_BACK));
+    /* Start opens the same in-game menu as F1. */
+    gamepad_action(7, 0x3B, gamepad_button(SDL_GAMEPAD_BUTTON_START));
     /* Left shoulder acts as Escape in menus. */
-    gamepad_action(9, 0x01, gamepad_button(SDL_GAMEPAD_BUTTON_LEFT_SHOULDER));
+    gamepad_action(8, 0x01, gamepad_button(SDL_GAMEPAD_BUTTON_LEFT_SHOULDER));
 }
 
 static Uint16 boost_rumble(Uint16 strength)
@@ -521,7 +569,7 @@ static void play_pending_haptic(void)
 {
     int cue = SDL_SetAtomicInt(&haptic_pending, HAPTIC_NONE);
 
-    if (!gamepad || cue == HAPTIC_NONE) return;
+    if (!mods_gamepad_rumble_enabled() || !gamepad || cue == HAPTIC_NONE) return;
 
     switch (cue) {
     case HAPTIC_TYPEWRITER:
@@ -645,9 +693,11 @@ static void screenshots_update(uint32_t elapsed_ms)
 
 static int SDLCALL game_thread(void *data)
 {
-    (void)data;
+    char *game_argv[] = {data, NULL};
 
-    InnerMain(argc_saved, argv_saved);
+    /* paths_init() sets the working directory for the original DOS code.
+     * An extra argument would be interpreted as a separate save directory. */
+    InnerMain(1, game_argv);
 
     /*
      * The game finishing on its own and the game dying leave the same thing
@@ -715,9 +765,6 @@ int main(int argc, char *argv[])
     uint64_t tick_attempts = 0, tick_delivered = 0;
     bool debug_enabled = SDL_getenv("COSMO_DEBUG") != NULL;
 
-    argc_saved = argc;
-    argv_saved = argv;
-
     /*
      * Settles where the group files are and moves there, so every bare
      * filename in the 1992 code resolves the way it did on DOS. The launcher
@@ -737,6 +784,8 @@ int main(int argc, char *argv[])
     }
 
     logging_init();
+    trace_input = SDL_getenv("COSMO_TRACE_INPUT") != NULL;
+    if (trace_input) fprintf(stderr, "[input] tracing enabled\n");
 
     if (!mods_init(paths_install_dir(), paths_write_dir()))
         SDL_Log("Cosmo mods: initialization failed; continuing without mods");
@@ -748,14 +797,17 @@ int main(int argc, char *argv[])
     input_script_load(SDL_getenv("COSMO_SCRIPT"));
     audio_record_to(SDL_getenv("COSMO_AUDIO_WAV"));
 
-    if (!video_init("Cosmo's Cosmic Adventure", 3)) return 1;
+    if (!video_init("Cosmo's Cosmic Adventure", 3,
+                    mods_feature_enabled(MOD_WIDESCREEN))) return 1;
+    if (argc > 1 && SDL_strcmp(argv[1], "--fullscreen") == 0)
+        video_set_fullscreen(true);
 
     /* Silence is survivable; a missing audio device must not stop the game. */
     audio_init();
 
     SDL_SetAtomicInt(&game_running, 1);
 
-    thread = SDL_CreateThread(game_thread, "cosmo-game", NULL);
+    thread = SDL_CreateThread(game_thread, "cosmo-game", argv[0]);
     if (!thread) {
         fprintf(stderr, "SDL_CreateThread: %s\n", SDL_GetError());
         return 1;
@@ -771,7 +823,7 @@ int main(int argc, char *argv[])
     while (SDL_GetAtomicInt(&game_running)) {
         SDL_Event event;
 
-        while (SDL_PollEvent(&event)) {
+        while (video_poll_event(&event)) {
             if (event.type == SDL_EVENT_QUIT) {
                 /*
                  * The game thread may be parked in one of its busy-wait loops
@@ -800,6 +852,10 @@ int main(int argc, char *argv[])
                     gamepad_close();
                     gamepad_scan_done = false;
                 }
+            } else if (event.type == SDL_EVENT_GAMEPAD_BUTTON_DOWN && trace_input) {
+                const char *button = SDL_GetGamepadStringForButton((SDL_GamepadButton)event.gbutton.button);
+                fprintf(stderr, "[input] SDL gamepad button %s (%u)\n",
+                        button ? button : "unknown", (unsigned)event.gbutton.button);
             } else if (event.type == SDL_EVENT_KEY_DOWN && !event.key.repeat) {
                 uint8_t code;
 
@@ -813,6 +869,9 @@ int main(int argc, char *argv[])
 
                 code = sdl_to_xt(event.key.scancode);
                 if (code) {
+                    if (trace_input && (code == 0x01 || code == 0x10 || code == 0x1C))
+                        fprintf(stderr, "[input] SDL keyboard %s -> XT 0x%02x\n",
+                                SDL_GetScancodeName(event.key.scancode), (unsigned)code);
                     queue_scancode(code);
                     key_held[event.key.scancode] = true;
                 }

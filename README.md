@@ -5,10 +5,9 @@ A fun Windows project to bring **Cosmo's Cosmic Adventure: Forbidden Planet**
 rumble feedback, and menus you can navigate with a pad. It also adds handy
 quality of life extras like volume controls and save slots you can use with a
 controller.
-Features a remixed chiptune soundtrack based on the original, capturing all the
-magic of the original. The Soft Audio mod softens the PC speaker sounds, while
-CRT Shader adds a soft retro glow. Runs natively on 64-bit Windows, no DOSBox
-needed.
+The game runs natively on 64-bit Windows. Choose the original view or a wider
+playfield, customize Cosmo's colours, and pick the soundtrack, sound effects,
+and display filter from the launcher.
 
 [![CI](https://github.com/GITitdoneboi/enhanced-cosmo/actions/workflows/ci.yml/badge.svg)](https://github.com/GITitdoneboi/enhanced-cosmo/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
@@ -46,6 +45,22 @@ timer, the keyboard controller, the PC speaker, and an AdLib.
 If you want the story of what broke along the way, that is in
 **[docs/porting-notes.md](docs/porting-notes.md)**.
 
+## New in v0.4.0
+
+- **Widescreen** shows more of the level in 16:9 with a full-width HUD.
+  The original view is the default. CRT blur and scanlines work in both modes.
+- **Episode launcher** uses the original animated dialog frame, marks missing
+  episodes, and lets you locate their files. **Mods** uses a scrolling list
+  with colour-coded toggles and longer descriptions.
+- **Character Colour** lets you choose Cosmo's body and accent colours with a
+  live preview.
+- **Game Settings** includes keyboard remapping, a gamepad layout guide,
+  separate music and sound volume controls, and a shared display filter.
+- **Controller support** includes gamepad navigation and optional rumble in
+  menus and gameplay. Music fades out on pause and back in on resume.
+- **Save and restore** checks whether the file operation succeeded before
+  treating the slot as saved or loaded.
+
 ## Status
 
 | Subsystem | State |
@@ -63,9 +78,9 @@ If you want the story of what broke along the way, that is in
 | PC speaker sound effects | ✅ verified against the game's own sound data |
 | AdLib (OPL2) music, via [ymfm](https://github.com/aaronsgiles/ymfm) | ✅ |
 | Sound and music volume controls (0–100%, 25% steps) | ✅ |
-| Optional Soft Audio and CRT Shader mods | ✅ |
+| Separate mods for MP3 music, filtered sound effects, CRT Shader and CRT Scanlines | ✅ |
 | Windows x64 build (MinGW-w64) | ✅ green in CI |
-| Possible widescreen MOD | ⬜ Coming soon?  |
+| Optional 16:9 widescreen and full-width HUD | Tested in Episode 1 |
 
 The game runs end to end: `cosmo` starts the original `InnerMain()` on its own
 thread, the main thread plays the part of the PC hardware, and it goes through
@@ -154,21 +169,29 @@ Gamepads work in the launcher, menus and episodes. On a rumble-capable
 controller, menu navigation and selection, typing, jumps, pickups, impacts and
 damage provide haptic feedback.
 
-From **Game Settings** in the main menu, use **K** for Keyboard redefine or
-**J** for Joystick redefine. Sound and music volume can each be adjusted with
-Left/Right in 25% steps from 0% to 100%. Key bindings and high scores are
-written to `COSMOn.CFG` and survive between runs after a clean exit. Quit
-through the game (**Q**, then **Y**) rather than closing the window, as killing
-the program can interrupt the save.
+Open **Game Settings** from the main or pause menu. Choose **Keyboard Mapping**
+with Enter or A and press a new key to save that binding. **Gamepad Controls**
+shows the built-in layout. Adjust **Music Volume** and **Sound Volume** with
+Left/Right in 25% steps, or use the same keys to change **Filter**. Quit
+through the game with **Q**, then **Y**, to save high scores.
 
 ## Mods
 
-The launcher includes a Mods screen for discovering mods and enabling or
-disabling them. This build includes **Soft Audio**, with alternate music and
-filtered sound effects (disabled by default), and **CRT Shader**, which adds a
-soft phosphor blur and glow. See [docs/modding.md](docs/modding.md) for the
-manifest, installation paths, supported raw graphics replacements, and
-priority rules.
+Open **Mods** in the launcher to choose filters, music and sound effects, or toggle individual mods.
+
+| Mod | Effect | Default |
+|---|---|---|
+| Soundtrack | Original or New Remixed for Episode 1 | New Remixed |
+| SFX | Original or Softened sound effects | Softened |
+| Filter | CRT, Scanlines, Both or None | Both |
+| Gamepad Rumble | Controller vibration in menus and gameplay | On |
+| Widescreen | 16:9 gameplay with a wider playfield and HUD | Off |
+
+Open **Mods > Character Colour** to pick Cosmo's body and accent colours with a
+live preview.
+
+See [docs/modding.md](docs/modding.md) for manifest fields, installation paths,
+supported raw graphics replacements, and priority rules.
 
 ## How it works
 
