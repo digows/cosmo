@@ -1,7 +1,7 @@
 diff --git a/glue.h b/glue.h
 --- a/glue.h
 +++ b/glue.h
-@@ -212,4 +212,8 @@
+@@ -212,4 +212,10 @@
  void StartGameMusic(word music_num);
  void StartMenuMusic(word music_num);
  void StopMusic(void);
@@ -9,6 +9,8 @@ diff --git a/glue.h b/glue.h
 +void PlatformStopMP3Music(void);
 +int PlatformPlayMP3Sound(unsigned sound_number);
 +void PlatformStopMP3Sound(void);
++void PlatformHapticSound(unsigned sound_number);
++void PlatformHapticMenuInput(byte scancode);
  void DrawScancodeCharacter(word x, word y, byte scancode);
 diff --git a/game1.c b/game1.c
 --- a/game1.c

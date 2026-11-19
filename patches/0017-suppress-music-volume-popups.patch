@@ -1,0 +1,23 @@
+diff --git a/game2.c b/game2.c
+--- a/game2.c
++++ b/game2.c
+@@ -2806,4 +2806,4 @@
+     if (isMusicEnabled) {
+-        x = UnfoldTextFrame(2, 4, 24, "Music Toggle", "The music is now ON!");
++        x = 0;
+ 
+         if (!PlatformPlayMP3Music(musicNames[activeMusicNumber]) &&
+@@ -2816,5 +2816,5 @@
+     } else {
+         /* Minor BUG: last char gets cut off by the wait spinner */
+-        x = UnfoldTextFrame(2, 4, 24, "Music Toggle", "The music is now OFF!");
++        x = 0;
+ 
+         PlatformStopMP3Music();
+@@ -2821,5 +2821,5 @@
+         StopAdLibPlayback();
+     }
+ 
+-    WaitSpinner(x + 21, 4);
++    (void)x;
+ }

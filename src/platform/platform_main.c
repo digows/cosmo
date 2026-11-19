@@ -53,11 +53,66 @@ extern uint8_t scancodeJump, scancodeBomb;
 #define TARGET_PRESENT_HZ 60.0
 #define SCANCODE_QUEUE_SIZE 64
 
+enum haptic_cue {
+    HAPTIC_NONE = 0,
+    HAPTIC_TYPEWRITER,
+    HAPTIC_MENU_NAV,
+    HAPTIC_MENU_BACK,
+    HAPTIC_MENU_SELECT,
+    HAPTIC_JUMP,
+    HAPTIC_LAND,
+    HAPTIC_TICK,
+    HAPTIC_PICKUP,
+    HAPTIC_BIG_PICKUP,
+    HAPTIC_IMPACT,
+    HAPTIC_BARREL_DESTROY,
+    HAPTIC_HEAVY_IMPACT,
+    HAPTIC_STOMP,
+    HAPTIC_EXPLOSION,
+    HAPTIC_HURT
+};
+
+/* Sound numbers from vendor/cosmore/src/sound.h. */
+enum game_sound_number {
+    SND_BIG_PRIZE = 1,
+    SND_PLAYER_JUMP = 2,
+    SND_PLAYER_LAND = 3,
+    SND_PLAYER_HIT_HEAD = 5,
+    SND_PLAYER_POUNCE = 6,
+    SND_PLAYER_DEATH = 7,
+    SND_DOOR_UNLOCK = 8,
+    SND_EXPLOSION = 10,
+    SND_BARREL_DESTROY_1 = 12,
+    SND_PRIZE = 13,
+    SND_PLAYER_HURT = 14,
+    SND_ROAMER_GIFT = 17,
+    SND_BIG_OBJECT_HIT = 27,
+    SND_DESTROY_SOLID = 25,
+    SND_PLACE_BOMB = 29,
+    SND_TEXT_TYPEWRITER = 44,
+    SND_SMASH = 50,
+    SND_OBJECT_HIT = 37,
+    SND_BOSS_DAMAGE = 55,
+    SND_BARREL_DESTROY_2 = 61
+};
+
 static SDL_AtomicInt game_running;
 static SDL_AtomicInt frame_pending;
+static SDL_AtomicInt haptic_pending;
 
 static int argc_saved;
 static char **argv_saved;
+
+static void request_haptic(int cue)
+{
+    if (cue != HAPTIC_NONE) {
+        int pending = SDL_GetAtomicInt(&haptic_pending);
+        while (pending < cue &&
+               !SDL_CompareAndSwapAtomicInt(&haptic_pending, pending, cue)) {
+            pending = SDL_GetAtomicInt(&haptic_pending);
+        }
+    }
+}
 
 FILE *platform_open_mod_asset(int episode, const char *asset_name,
                               uint32_t *length)
@@ -80,14 +135,94 @@ void PlatformStopMP3Music(void)
 int PlatformPlayMP3Sound(unsigned sound_number)
 {
     char path[1024];
+
     audio_sound_stop_mp3();
     return mods_sound_override(sound_number,path,sizeof path) &&
            audio_sound_play_asset(path);
 }
 
+void PlatformHapticSound(unsigned sound_number)
+{
+    int cue = HAPTIC_NONE;
+    switch (sound_number) {
+    case SND_TEXT_TYPEWRITER: {
+        /* Dialogue can request this for every character. Keep it tick-like. */
+        static Uint64 last_typewriter_haptic;
+        Uint64 now = SDL_GetTicks();
+        if (!last_typewriter_haptic || now - last_typewriter_haptic >= 95) {
+            cue = HAPTIC_TYPEWRITER;
+            last_typewriter_haptic = now;
+        }
+        break;
+    }
+    case SND_PLAYER_JUMP:
+        cue = HAPTIC_JUMP;
+        break;
+    case SND_PLAYER_LAND:
+        cue = HAPTIC_LAND;
+        break;
+    case SND_PLAYER_HIT_HEAD:
+    case SND_BIG_OBJECT_HIT:
+    case SND_OBJECT_HIT:
+    case SND_SMASH:
+        cue = HAPTIC_IMPACT;
+        break;
+    case SND_BARREL_DESTROY_1:
+    case SND_BARREL_DESTROY_2:
+        cue = HAPTIC_BARREL_DESTROY;
+        break;
+    case SND_DESTROY_SOLID:
+        cue = HAPTIC_HEAVY_IMPACT;
+        break;
+    case SND_DOOR_UNLOCK:
+    case SND_PLACE_BOMB:
+        cue = HAPTIC_TICK;
+        break;
+    case SND_PRIZE:
+    case SND_ROAMER_GIFT:
+        cue = HAPTIC_PICKUP;
+        break;
+    case SND_BIG_PRIZE:
+        cue = HAPTIC_BIG_PICKUP;
+        break;
+    case SND_PLAYER_POUNCE:
+    case SND_BOSS_DAMAGE:
+        cue = HAPTIC_STOMP;
+        break;
+    case SND_PLAYER_HURT:
+    case SND_PLAYER_DEATH:
+        cue = HAPTIC_HURT;
+        break;
+    case SND_EXPLOSION:
+        cue = HAPTIC_EXPLOSION;
+        break;
+    default:
+        break;
+    }
+
+    request_haptic(cue);
+}
+
+void PlatformHapticMenuInput(uint8_t scancode)
+{
+    if (scancode == 0x01) {
+        request_haptic(HAPTIC_MENU_BACK);
+    } else if (scancode == 0x48 || scancode == 0x4B ||
+               scancode == 0x4D || scancode == 0x50) {
+        request_haptic(HAPTIC_MENU_NAV);
+    } else {
+        request_haptic(HAPTIC_MENU_SELECT);
+    }
+}
+
 void PlatformStopMP3Sound(void)
 {
     audio_sound_stop_mp3();
+}
+
+void PlatformSetAudioVolumes(int sound_percent, int music_percent)
+{
+    audio_set_volumes(sound_percent, music_percent);
 }
 
 /* ------------------------------------------------------------------------ */
@@ -366,6 +501,79 @@ static void update_gamepad(bool focused)
     gamepad_action(9, 0x01, gamepad_button(SDL_GAMEPAD_BUTTON_LEFT_SHOULDER));
 }
 
+static Uint16 boost_rumble(Uint16 strength)
+{
+    Uint32 boosted = ((Uint32)strength * 135u + 99u) / 100u;
+    return (Uint16)(boosted > 65535u ? 65535u : boosted);
+}
+
+static void rumble_gamepad(Uint16 low_frequency, Uint16 high_frequency,
+                           Uint32 duration_ms)
+{
+    if (gamepad) {
+        SDL_RumbleGamepad(gamepad, boost_rumble(low_frequency),
+                          boost_rumble(high_frequency), duration_ms);
+    }
+}
+
+/* Called from the SDL main thread after reading requests from the game thread. */
+static void play_pending_haptic(void)
+{
+    int cue = SDL_SetAtomicInt(&haptic_pending, HAPTIC_NONE);
+
+    if (!gamepad || cue == HAPTIC_NONE) return;
+
+    switch (cue) {
+    case HAPTIC_TYPEWRITER:
+        rumble_gamepad(5200, 9000, 16);
+        break;
+    case HAPTIC_MENU_NAV:
+        rumble_gamepad(14000, 9500, 40);
+        break;
+    case HAPTIC_MENU_BACK:
+        rumble_gamepad(10500, 7200, 32);
+        break;
+    case HAPTIC_MENU_SELECT:
+        rumble_gamepad(30000, 22000, 70);
+        break;
+    case HAPTIC_JUMP:
+        rumble_gamepad(5000, 3200, 28);
+        break;
+    case HAPTIC_LAND:
+        rumble_gamepad(8000, 3200, 38);
+        break;
+    case HAPTIC_TICK:
+        rumble_gamepad(5200, 6200, 34);
+        break;
+    case HAPTIC_PICKUP:
+        rumble_gamepad(14500, 8800, 72);
+        break;
+    case HAPTIC_BIG_PICKUP:
+        rumble_gamepad(23000, 14500, 92);
+        break;
+    case HAPTIC_IMPACT:
+        rumble_gamepad(16500, 7000, 58);
+        break;
+    case HAPTIC_BARREL_DESTROY:
+        rumble_gamepad(32000, 18000, 180);
+        break;
+    case HAPTIC_HEAVY_IMPACT:
+        rumble_gamepad(45000, 27000, 180);
+        break;
+    case HAPTIC_STOMP:
+        rumble_gamepad(28500, 18500, 108);
+        break;
+    case HAPTIC_EXPLOSION:
+        rumble_gamepad(38000, 46000, 220);
+        break;
+    case HAPTIC_HURT:
+        rumble_gamepad(52000, 36000, 260);
+        break;
+    default:
+        break;
+    }
+}
+
 /* ------------------------------------------------------------------------ */
 /* Presentation                                                              */
 /* ------------------------------------------------------------------------ */
@@ -614,6 +822,7 @@ int main(int argc, char *argv[])
         }
 
         update_gamepad(window_focused);
+        play_pending_haptic();
 
         if (input_script_active()) {
             uint32_t elapsed = (uint32_t)(SDL_GetTicks() - start_ms);

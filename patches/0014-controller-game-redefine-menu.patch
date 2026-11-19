@@ -7,7 +7,7 @@ index 9af24da..f0c2bdc 100644
  void ShowGameRedefineMenu(void)
  {
 -    word x = UnfoldTextFrame(4, 11, 22, "Game Redefine", "Press ESC to quit.");
-+    word x = UnfoldTextFrame(4, 11, 22, "Game Redefine", "Press ESC to quit.");
++    word x = UnfoldTextFrame(4, 11, 22, "Game Settings", "Press ESC to quit.");
 +    static const byte menu_keys[] = {
 +        SCANCODE_K, SCANCODE_J, SCANCODE_S, SCANCODE_T, SCANCODE_M
 +    };

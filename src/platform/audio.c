@@ -59,6 +59,8 @@ static struct {
     uint64_t frames;
 } mp3_sound_cache[SFX_CACHE_LIMIT];
 static size_t mp3_sound_cache_count;
+static SDL_AtomicInt sound_volume_percent = { 100 };
+static SDL_AtomicInt music_volume_percent = { 100 };
 
 #ifdef _WIN32
 extern bool cosmo_mp3_decode(const char *path, int16_t **samples, uint64_t *frames);
@@ -243,14 +245,18 @@ static void render_speaker(int16_t *out, int frames)
 static void render(int16_t *out, int frames)
 {
     int16_t speaker[BUFFER_FRAMES];
+    int sound_volume = SDL_GetAtomicInt(&sound_volume_percent);
+    int music_volume = SDL_GetAtomicInt(&music_volume_percent);
 
     if (mp3_samples && mp3_frames) {
         for (int i = 0; i < frames; ++i) {
-            out[i] = (int16_t)((float)mp3_samples[mp3_cursor++] * MP3_MUSIC_GAIN);
+            out[i] = (int16_t)((float)mp3_samples[mp3_cursor++] * MP3_MUSIC_GAIN * music_volume / 100.0f);
             if (mp3_cursor >= mp3_frames) mp3_cursor = 0;
         }
     } else {
         opl_generate(out, frames);
+        for (int i = 0; i < frames; ++i)
+            out[i] = (int16_t)((int32_t)out[i] * music_volume / 100);
     }
     render_speaker(speaker, frames);
 
@@ -261,16 +267,26 @@ static void render(int16_t *out, int frames)
      * chosen so it is not reached in normal play.
      */
     for (int i = 0; i < frames; i++) {
-        int32_t mixed = (int32_t)out[i] + speaker[i];
+        int32_t mixed = (int32_t)out[i] + (int32_t)speaker[i] * sound_volume / 100;
 
         if (mp3_sound_samples && mp3_sound_cursor < mp3_sound_frames)
-            mixed += (int32_t)((float)mp3_sound_samples[mp3_sound_cursor++] * MP3_MUSIC_GAIN);
+            mixed += (int32_t)((float)mp3_sound_samples[mp3_sound_cursor++] * MP3_MUSIC_GAIN * sound_volume / 100.0f);
 
         if (mixed > 32767) mixed = 32767;
         if (mixed < -32768) mixed = -32768;
 
         out[i] = (int16_t)mixed;
     }
+}
+
+void audio_set_volumes(int sound_percent, int music_percent)
+{
+    if (sound_percent < 0) sound_percent = 0;
+    if (sound_percent > 100) sound_percent = 100;
+    if (music_percent < 0) music_percent = 0;
+    if (music_percent > 100) music_percent = 100;
+    SDL_SetAtomicInt(&sound_volume_percent, sound_percent);
+    SDL_SetAtomicInt(&music_volume_percent, music_percent);
 }
 
 bool audio_music_play_mp3(const char *path)

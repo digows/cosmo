@@ -152,6 +152,128 @@ if(_cosmore_patches)
     endforeach()
 endif()
 
+# Apply narrow settings-menu edits after the numbered source patches. These
+# edits use exact, unique source blocks instead of line-numbered diffs because
+# earlier patches add lines before the menu and make unified-diff offsets
+# fragile. Configuration fails loudly if upstream/generated source changes.
+function(_replace_once file_path old_text new_text description)
+    file(READ "${file_path}" _content)
+    string(FIND "${_content}" "${old_text}" _first)
+    if(_first EQUAL -1)
+        message(FATAL_ERROR "Settings transform could not find ${description} in ${file_path}")
+    endif()
+    string(LENGTH "${old_text}" _old_length)
+    math(EXPR _tail_start "${_first} + ${_old_length}")
+    string(SUBSTRING "${_content}" ${_tail_start} -1 _tail)
+    string(FIND "${_tail}" "${old_text}" _second)
+    if(NOT _second EQUAL -1)
+        message(FATAL_ERROR "Settings transform found multiple ${description} blocks in ${file_path}")
+    endif()
+    string(REPLACE "${old_text}" "${new_text}" _updated "${_content}")
+    file(WRITE "${file_path}" "${_updated}")
+endfunction()
+
+set(_game2_gen "${COSMORE_GEN_DIR}/game2.c")
+_replace_once("${_game2_gen}"
+    [=[    DrawTextLine(x, 11, " M)usic volume");
+    DrawTextLine(x, menu_rows[selection], ">");]=]
+    [=[    DrawTextLine(x, 11, " M)usic volume");
+    DrawTextLine(x + 15, 9,
+        soundVolume == 0 ? "    >" : soundVolume == 100 ? "<    " : "<   >");
+    DrawNumberFlushRight(x + 18, 9, soundVolume);
+    DrawTextLine(x + 15, 11,
+        musicVolume == 0 ? "    >" : musicVolume == 100 ? "<    " : "<   >");
+    DrawNumberFlushRight(x + 18, 11, musicVolume);
+    DrawTextLine(x, menu_rows[selection], ">");]=]
+    "settings volume display")
+
+_replace_once("${_game2_gen}"
+    [=[        if (scancode == scancodeNorth || scancode == SCANCODE_KP_8 ||
+            scancode == scancodeWest || scancode == SCANCODE_KP_4 ||
+            scancode == scancodeSouth || scancode == SCANCODE_KP_2 ||
+            scancode == scancodeEast || scancode == SCANCODE_KP_6) {]=]
+    [=[        if ((scancode == scancodeWest || scancode == SCANCODE_KP_4 ||
+             scancode == scancodeEast || scancode == SCANCODE_KP_6) &&
+            (selection == 2 || selection == 4)) {
+            byte *volume = selection == 2 ? &soundVolume : &musicVolume;
+            if (scancode == scancodeWest || scancode == SCANCODE_KP_4)
+                *volume = *volume < 25 ? 0 : *volume - 25;
+            else
+                *volume = *volume > 75 ? 100 : *volume + 25;
+            isSoundEnabled = soundVolume != 0;
+            isMusicEnabled = musicVolume != 0;
+            PlatformSetAudioVolumes(soundVolume, musicVolume);
+            SelectDrawPage(activePage);
+            EGA_MODE_LATCHED_WRITE();
+            DrawSolidTile(TILE_DARK_GRAY, x + (menu_rows[selection] * 320));
+            DrawTextLine(x, menu_rows[selection],
+                selection == 2 ? " S)ound volume" : " M)usic volume");
+            DrawTextLine(x, menu_rows[selection], ">");
+            EGA_MODE_LATCHED_WRITE();
+            DrawSolidTile(TILE_DARK_GRAY,
+                x + 16 + (menu_rows[selection] * 320));
+            DrawSolidTile(TILE_DARK_GRAY,
+                x + 17 + (menu_rows[selection] * 320));
+            DrawSolidTile(TILE_DARK_GRAY,
+                x + 18 + (menu_rows[selection] * 320));
+            DrawTextLine(x + 15, menu_rows[selection],
+                *volume == 0 ? "    >" :
+                *volume == 100 ? "<    " : "<   >");
+            DrawNumberFlushRight(x + 18, menu_rows[selection], *volume);
+            SelectDrawPage(!activePage);
+            EGA_MODE_LATCHED_WRITE();
+            DrawSolidTile(TILE_DARK_GRAY, x + (menu_rows[selection] * 320));
+            DrawTextLine(x, menu_rows[selection],
+                selection == 2 ? " S)ound volume" : " M)usic volume");
+            DrawTextLine(x, menu_rows[selection], ">");
+            EGA_MODE_LATCHED_WRITE();
+            DrawSolidTile(TILE_DARK_GRAY,
+                x + 16 + (menu_rows[selection] * 320));
+            DrawSolidTile(TILE_DARK_GRAY,
+                x + 17 + (menu_rows[selection] * 320));
+            DrawSolidTile(TILE_DARK_GRAY,
+                x + 18 + (menu_rows[selection] * 320));
+            DrawTextLine(x + 15, menu_rows[selection],
+                *volume == 0 ? "    >" :
+                *volume == 100 ? "<    " : "<   >");
+            DrawNumberFlushRight(x + 18, menu_rows[selection], *volume);
+            EGA_MODE_LATCHED_WRITE();
+            continue;
+        }
+
+        if (scancode == scancodeNorth || scancode == SCANCODE_KP_8 ||
+            scancode == scancodeWest || scancode == SCANCODE_KP_4 ||
+            scancode == scancodeSouth || scancode == SCANCODE_KP_2 ||
+            scancode == scancodeEast || scancode == SCANCODE_KP_6) {]=]
+    "settings horizontal adjustment")
+
+_replace_once("${_game2_gen}"
+    [=[            EGA_MODE_LATCHED_WRITE();
+            DrawSolidTile(TILE_DARK_GRAY, x + (menu_rows[previous] * 320));
+            DrawTextLine(x, menu_rows[selection], ">");
+            continue;]=]
+    [=[            SelectDrawPage(activePage);
+            EGA_MODE_LATCHED_WRITE();
+            DrawSolidTile(TILE_DARK_GRAY, x + (menu_rows[previous] * 320));
+            DrawTextLine(x, menu_rows[selection], ">");
+            SelectDrawPage(!activePage);
+            EGA_MODE_LATCHED_WRITE();
+            DrawSolidTile(TILE_DARK_GRAY, x + (menu_rows[previous] * 320));
+            DrawTextLine(x, menu_rows[selection], ">");
+            EGA_MODE_LATCHED_WRITE();
+            continue;]=]
+    "settings selection redraw")
+
+_replace_once("${COSMORE_GEN_DIR}/game1.c"
+    [=[    DrawTextLine(x, 8,  " G)ame redefine");]=]
+    [=[    DrawTextLine(x, 8,  " G)ame settings");]=]
+    "F1 Game Settings label")
+
+_replace_once("${_game2_gen}"
+    [=[    DrawTextLine(x, 10,          " G)ame Redefine");]=]
+    [=[    DrawTextLine(x, 10,          " G)ame Settings");]=]
+    "main menu Game Settings label")
+
 # main.c is deliberately excluded: it only performs the 8086 detection that
 # refuses to start on a pre-286 machine, then calls InnerMain(). The platform
 # layer provides its own entry point and calls InnerMain() directly.

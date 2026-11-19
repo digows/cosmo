@@ -258,6 +258,12 @@ bool video_init(const char *title, int scale)
     /* Chunky pixels, not a blurry upscale. */
     SDL_SetTextureScaleMode(texture, SDL_SCALEMODE_NEAREST);
 
+    /* A launcher-to-episode handoff creates a fresh SDL window in the same
+     * process. Restore and raise it explicitly so it does not stay minimized
+     * or behind other windows after that handoff. */
+    SDL_RestoreWindow(window);
+    SDL_RaiseWindow(window);
+
     return true;
 }
 

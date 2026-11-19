@@ -19,6 +19,13 @@
 
 #ifdef _WIN32
 #   include <process.h>
+#   ifndef WIN32_LEAN_AND_MEAN
+#       define WIN32_LEAN_AND_MEAN
+#   endif
+#   ifndef NOMINMAX
+#       define NOMINMAX
+#   endif
+#   include <windows.h>
 #   define EPISODE_PROGRAM_SUFFIX ".exe"
 #else
 #   include <unistd.h>
@@ -50,6 +57,103 @@
 #define MENU_HEIGHT  10
 #define MENU_LEFT     3
 #define MENU_WIDTH   34
+
+/* The episode programs translate SDL gamepads to the game's key events, but
+ * the launcher has its own menus and needs a small equivalent of that path. */
+static SDL_Gamepad *launcher_gamepad;
+static Uint64 launcher_next_gamepad_scan;
+static bool launcher_gamepad_previous[6];
+static Uint64 launcher_gamepad_repeat_at[4];
+
+static Uint16 launcher_boost_rumble(Uint16 strength)
+{
+    Uint32 boosted = ((Uint32)strength * 135u + 99u) / 100u;
+    return (Uint16)(boosted > 65535u ? 65535u : boosted);
+}
+
+static void launcher_rumble(Uint16 low_frequency, Uint16 high_frequency,
+                            Uint32 duration_ms)
+{
+    if (!launcher_gamepad || !SDL_GamepadConnected(launcher_gamepad)) return;
+    SDL_RumbleGamepad(launcher_gamepad,
+                      launcher_boost_rumble(low_frequency),
+                      launcher_boost_rumble(high_frequency), duration_ms);
+}
+
+static void launcher_menu_haptic(bool confirm)
+{
+    if (confirm) launcher_rumble(30000, 22000, 70);
+    else launcher_rumble(14000, 9500, 40);
+}
+
+static void push_menu_key(SDL_Keycode key)
+{
+    SDL_Event event;
+    SDL_zero(event);
+    event.type = SDL_EVENT_KEY_DOWN;
+    event.key.key = key;
+    event.key.scancode = SDL_GetScancodeFromKey(key, NULL);
+    event.key.down = true;
+    event.key.repeat = false;
+    SDL_PushEvent(&event);
+}
+
+static void launcher_poll_gamepad(void)
+{
+    static const SDL_Keycode directions[4] = {
+        SDLK_UP, SDLK_DOWN, SDLK_LEFT, SDLK_RIGHT
+    };
+    Uint64 now = SDL_GetTicks();
+
+    if (launcher_gamepad && !SDL_GamepadConnected(launcher_gamepad)) {
+        SDL_CloseGamepad(launcher_gamepad);
+        launcher_gamepad = NULL;
+        memset(launcher_gamepad_previous, 0, sizeof launcher_gamepad_previous);
+    }
+
+    if (!launcher_gamepad && now >= launcher_next_gamepad_scan) {
+        int count = 0;
+        SDL_JoystickID *ids = SDL_GetGamepads(&count);
+        launcher_next_gamepad_scan = now + 500;
+        if (ids) {
+            for (int i = 0; i < count; ++i) {
+                if (SDL_IsGamepad(ids[i])) {
+                    launcher_gamepad = SDL_OpenGamepad(ids[i]);
+                    if (launcher_gamepad) break;
+                }
+            }
+            SDL_free(ids);
+        }
+    }
+
+    if (launcher_gamepad) {
+        Sint16 x = SDL_GetGamepadAxis(launcher_gamepad, SDL_GAMEPAD_AXIS_LEFTX);
+        Sint16 y = SDL_GetGamepadAxis(launcher_gamepad, SDL_GAMEPAD_AXIS_LEFTY);
+        bool held[6];
+        const Sint16 deadzone = 10000;
+
+        held[0] = y < -deadzone || SDL_GetGamepadButton(launcher_gamepad, SDL_GAMEPAD_BUTTON_DPAD_UP);
+        held[1] = y > deadzone || SDL_GetGamepadButton(launcher_gamepad, SDL_GAMEPAD_BUTTON_DPAD_DOWN);
+        held[2] = x < -deadzone || SDL_GetGamepadButton(launcher_gamepad, SDL_GAMEPAD_BUTTON_DPAD_LEFT);
+        held[3] = x > deadzone || SDL_GetGamepadButton(launcher_gamepad, SDL_GAMEPAD_BUTTON_DPAD_RIGHT);
+        held[4] = SDL_GetGamepadButton(launcher_gamepad, SDL_GAMEPAD_BUTTON_SOUTH) ||
+                  SDL_GetGamepadButton(launcher_gamepad, SDL_GAMEPAD_BUTTON_START);
+        held[5] = SDL_GetGamepadButton(launcher_gamepad, SDL_GAMEPAD_BUTTON_EAST) ||
+                  SDL_GetGamepadButton(launcher_gamepad, SDL_GAMEPAD_BUTTON_BACK) ||
+                  SDL_GetGamepadButton(launcher_gamepad, SDL_GAMEPAD_BUTTON_LEFT_SHOULDER);
+
+        for (int i = 0; i < 4; ++i) {
+            if (held[i] && (!launcher_gamepad_previous[i] ||
+                            now >= launcher_gamepad_repeat_at[i])) {
+                push_menu_key(directions[i]);
+                launcher_gamepad_repeat_at[i] = now + 180;
+            }
+        }
+        if (held[4] && !launcher_gamepad_previous[4]) push_menu_key(SDLK_RETURN);
+        if (held[5] && !launcher_gamepad_previous[5]) push_menu_key(SDLK_ESCAPE);
+        memcpy(launcher_gamepad_previous, held, sizeof held);
+    }
+}
 
 struct episode {
     int number;
@@ -193,15 +297,25 @@ static bool run_mods_menu(void)
             draw_mods_menu(selected,first);
             redraw = false;
         }
+        launcher_poll_gamepad();
         while (SDL_PollEvent(&event)) {
             if (event.type == SDL_EVENT_QUIT) return true;
-            if (event.type == SDL_EVENT_KEY_DOWN && event.key.key == SDLK_ESCAPE) return false;
+            if (event.type == SDL_EVENT_KEY_DOWN && event.key.key == SDLK_ESCAPE) {
+                launcher_menu_haptic(false);
+                return false;
+            }
             if (event.type != SDL_EVENT_KEY_DOWN || !mods_count()) continue;
-            if (event.key.key == SDLK_UP) selected = (selected + mods_count() - 1) % mods_count();
-            else if (event.key.key == SDLK_DOWN) selected = (selected + 1) % mods_count();
+            if (event.key.key == SDLK_UP) {
+                selected = (selected + mods_count() - 1) % mods_count();
+                launcher_menu_haptic(false);
+            } else if (event.key.key == SDLK_DOWN) {
+                selected = (selected + 1) % mods_count();
+                launcher_menu_haptic(false);
+            }
             else if (event.key.key == SDLK_RETURN || event.key.key == SDLK_KP_ENTER || event.key.key == SDLK_SPACE) {
                 const cosmo_mod *mod = mods_get(selected);
                 if (mod) (void)mods_set_enabled(selected,!mod->enabled);
+                launcher_menu_haptic(true);
             } else continue;
             if (selected < first) first = selected;
             if (selected >= first + 8) first = selected - 7;
@@ -341,6 +455,7 @@ static int run_menu(void)
             }
         }
 
+        launcher_poll_gamepad();
         while (SDL_PollEvent(&event)) {
             if (event.type == SDL_EVENT_QUIT) return 0;
 
@@ -349,23 +464,27 @@ static int run_menu(void)
             switch (event.key.key) {
             case SDLK_ESCAPE:
             case SDLK_Q:
+                launcher_menu_haptic(false);
                 return 0;
 
             case SDLK_UP:
             case SDLK_LEFT:
                 selected = step_selection(selected, -1);
+                launcher_menu_haptic(false);
                 redraw = true;
                 break;
 
             case SDLK_DOWN:
             case SDLK_RIGHT:
                 selected = step_selection(selected, 1);
+                launcher_menu_haptic(false);
                 redraw = true;
                 break;
 
             case SDLK_RETURN:
             case SDLK_KP_ENTER:
             case SDLK_SPACE: {
+                launcher_menu_haptic(true);
                 if (selected == EPISODE_COUNT) {
                     if (run_mods_menu()) return 0;
                     (void)draw_background(episodes[first_present()].number);
@@ -381,6 +500,7 @@ static int run_menu(void)
             }
 
             case SDLK_1: case SDLK_2: case SDLK_3: case SDLK_4: {
+                launcher_menu_haptic(true);
                 int wanted = (int)(event.key.key - SDLK_1);
                 if (wanted < EPISODE_COUNT) {
                     int chosen = choose_episode(wanted);
@@ -470,6 +590,13 @@ static int run_episode(int number)
                         "launcher\n", number);
         return 1;
     }
+
+    /* Pass Windows' foreground permission to the episode before its new SDL
+     * window is created. Without this, Windows may flash the taskbar button
+     * instead of bringing the episode forward after the handoff. */
+#ifdef _WIN32
+    (void)AllowSetForegroundWindow(ASFW_ANY);
+#endif
 
     /* Give up the window before the process image is replaced. */
     video_shutdown();
