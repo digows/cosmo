@@ -1,8 +1,11 @@
 # Cosmo Enhanced — Windows edition of Cosmo's Cosmic Adventure
 
-A Windows-only fork of **Cosmo's Cosmic Adventure: Forbidden Planet** (Apogee
-Software, 1992). It runs natively on 64-bit Windows without DOSBox or a virtual
-machine, using the original game's code compiled for Windows.
+A fun Windows project to bring **Cosmo's Cosmic Adventure: Forbidden Planet**
+(Apogee Software, 1992) to a new generation. It keeps the original game, with
+controller support, rumble feedback, and menus you can navigate with a pad.
+Pick the soundtrack and look you like from the mod menu: Soft Audio adds new
+music inspired by the original, and CRT Shader adds a soft retro glow. Runs
+natively on 64-bit Windows, no DOSBox needed.
 
 [![CI](https://github.com/GITitdoneboi/enhanced-cosmo/actions/workflows/ci.yml/badge.svg)](https://github.com/GITitdoneboi/enhanced-cosmo/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
