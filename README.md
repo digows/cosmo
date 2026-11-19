@@ -1,4 +1,4 @@
-# Cosmo's Cosmic Adventure — native port for macOS, Linux and Windows
+# Cosmo Enhanced — Cosmo's Cosmic Adventure for Windows
 
 A source port of **Cosmo's Cosmic Adventure: Forbidden Planet** (Apogee
 Software, 1992) that runs natively on modern machines. No DOSBox, no emulator,
@@ -58,11 +58,14 @@ If you want the story of what broke along the way, that is in
 | Interrupt and timing layer — int 8 / int 9, PIT, PIC | ✅ 140 Hz, measured |
 | Map loading, scrolling, actors, the attract-mode demo | ✅ |
 | Keyboard, including jump while moving | ✅ verified by script |
+| Gamepad controls in the launcher, menus and episodes | ✅ |
+| Controller rumble for menus and gameplay events | ✅ on supported controllers |
 | Saving and restoring a game | ✅ |
 | PC speaker sound effects | ✅ verified against the game's own sound data |
 | AdLib (OPL2) music, via [ymfm](https://github.com/aaronsgiles/ymfm) | ✅ |
+| Sound and music volume controls (0–100%, 25% steps) | ✅ |
+| Optional Soft Audio and CRT Shader mods | ✅ |
 | macOS, Linux and Windows builds | ✅ green in CI |
-| Joystick | ⬜ not implemented |
 | Frame-by-frame comparison against DOSBox | ⬜ the largest remaining gap |
 
 The game runs end to end: `cosmo` starts the original `InnerMain()` on its own
@@ -175,12 +178,16 @@ the platformer convention for a long time since, and it is the binding no window
 manager fights over. That is the one deliberate change this port makes to the
 game's behaviour — see [patches/0007](patches/). Bomb is unchanged.
 
-All six can be rebound from the game's own menu: **G** for Game Redefine at the
-main menu, then **K** for Keyboard redefine. The choice is written to
-`COSMOn.CFG` alongside the sound settings and high scores, so it survives
-between runs — but only on a clean exit. Quit through the game (**Q**, then
-**Y**) rather than closing the window, exactly as on DOS, where killing the
-program lost the file the same way.
+Gamepads work in the launcher, menus and episodes. On a rumble-capable
+controller, menu navigation and selection, typing, jumps, pickups, impacts and
+damage provide haptic feedback.
+
+From **Game Settings** in the main menu, use **K** for Keyboard redefine or
+**J** for Joystick redefine. Sound and music volume can each be adjusted with
+Left/Right in 25% steps from 0% to 100%. Key bindings and high scores are
+written to `COSMOn.CFG` and survive between runs after a clean exit. Quit
+through the game (**Q**, then **Y**) rather than closing the window, as killing
+the program can interrupt the save.
 
 On macOS, Command reports as Control. That matters if you rebind jump back to
 ctrl: macOS binds Control with every arrow key to Mission Control, so ctrl and a
@@ -190,9 +197,11 @@ fills that gap.
 ## Mods
 
 The launcher includes a Mods screen for discovering mods and enabling or
-disabling them. See [docs/modding.md](docs/modding.md) for the manifest,
-installation paths, supported raw graphics replacements, and priority rules.
-Release downloads include the optional Soft Audio mod, disabled by default.
+disabling them. This build includes **Soft Audio**, with alternate music and
+filtered sound effects (disabled by default), and **CRT Shader**, which adds a
+soft phosphor blur and glow. See [docs/modding.md](docs/modding.md) for the
+manifest, installation paths, supported raw graphics replacements, and
+priority rules.
 
 ## How it works
 
