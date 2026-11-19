@@ -1,8 +1,8 @@
 # Cosmo Enhanced — Windows edition of Cosmo's Cosmic Adventure
 
 A fun Windows project to bring **Cosmo's Cosmic Adventure: Forbidden Planet**
-(Apogee Software, 1992) to a new generation. It keeps the original game, with
-controller support, rumble feedback, and menus you can navigate with a pad.
+(Apogee Software, 1992) to a new generation. It adds controller support,
+rumble feedback, and menus you can navigate with a pad.
 Features a remixed chiptune soundtrack based on the original, capturing all the
 magic of the original. The Soft Audio mod softens the PC speaker sounds, while
 CRT Shader adds a soft retro glow. Runs natively on 64-bit Windows, no DOSBox
