@@ -8,3 +8,11 @@ diff --git a/game2.c b/game2.c
 +
      return scancode & ~0x80;
  }
+diff --git a/game1.c b/game1.c
+--- a/game1.c
++++ b/game1.c
+@@ -631,3 +631,4 @@ void StartSound(word sound_num)
+     activeSoundPriority = soundPriority[sound_num];
+     isNewSound = true;
++    PlatformHapticSound(sound_num);
+     activeSoundIndex = sound_num - 1;
