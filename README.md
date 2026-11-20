@@ -1,4 +1,4 @@
-# Cosmo Enhanced - Windows edition of Cosmo's Cosmic Adventure
+# Cosmo Enhanced for Windows and Android
 
 A fun Windows project to bring **Cosmo's Cosmic Adventure: Forbidden Planet**
 (Apogee Software, 1992) to a new generation. It adds controller support,
@@ -28,6 +28,19 @@ captured from an emulator.
 the Windows download includes the shareware Episode 1 and
 plays as soon as it is unpacked; nothing to install. If you own Episodes 2 and
 3, the launcher will ask you to point it at your copy.
+
+The Android port bundles Episode 1 and supports keyboards and gamepads. The
+Android Back button acts as Escape. See [Android build instructions](android/README.md).
+
+## New in v0.4.4
+
+- **Smooth Gameplay** adds intermediate positions for the camera, Cosmo,
+  selected actors, and effects such as pounce debris and rising pickups.
+  Collectible stars keep their original anticlockwise animation timing.
+- **CRT filters** work with Smooth Gameplay. The F1 menu, pause screen, quit
+  confirmation, and gameplay hints show while waiting for input.
+- **Frame capture** uses **Shift+F12** to save a numbered burst of 120 presented
+  frames. **F12** still saves a single screenshot.
 
 ## What this is
 
@@ -187,6 +200,7 @@ controller rumble, character colours, or toggle individual mods.
 | Filter | CRT, Scanlines, Both or None | Both |
 | Gamepad Rumble | Controller vibration in menus and gameplay | On |
 | Widescreen | 16:9 gameplay with a wider playfield and HUD | Off |
+| Smooth Gameplay | Smoother scrolling, character motion, and selected effects | Off on Windows, on for new Android installs |
 
 Open **Customise > Character Colour** to pick Cosmo's body and accent colours
 with a live preview.

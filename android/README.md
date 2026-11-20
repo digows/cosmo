@@ -5,6 +5,8 @@ target. The APK bundles Episode 1 shareware data and the Android-compatible
 mods, including the MP3 music mod. Android's MediaCodec API decodes the MP3
 tracks into the same PCM format used by the audio mixer.
 The Android system Back button sends Escape to the game.
+Smooth Gameplay is enabled by default on fresh Android installs. Change it in
+the Mods menu. Existing installs keep their saved mod setting.
 
 ## Build a debug APK
 

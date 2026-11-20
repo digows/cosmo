@@ -1,11 +1,12 @@
-## What's new in v0.4.1
+## What's new in v0.4.4
 
-- **Android port**: build and play on Android 5.0 and newer, using a keyboard
-  or gamepad. The system Back button acts as Escape. Touch gameplay controls
-  are not included yet.
-- Launcher audio previews M2Easy and changes between original and remixed
-  soundtrack immediately when you change the setting.
-- Android launcher art uses the supplied adaptive and round icon resources.
+- **Smooth Gameplay** adds intermediate camera, player, and selected actor
+  positions. It also smooths the original anticlockwise star animation,
+  pounce debris, floating scores, and rising pickups.
+- **CRT filters** work with smoothing. The F1 help menu, pause screen, quit
+  confirmation, and gameplay hints display while waiting for input.
+- **Shift+F12** captures 120 presented frames for frame-by-frame inspection.
+  **F12** saves a single screenshot.
 
 ## Windows
 
@@ -32,12 +33,11 @@ find your copy.
 
 ## Android
 
-| Download | For |
-|---|---|
-| `Cosmo-Android-v0.4.1.apk` | Android 5.0+, ARM64 or x86-64 |
-
-This is a debug-signed APK for sideloading. The Android source and build steps
-are in `android/README.md`.
+The Android port supports Android 5.0 and newer on ARM64 and x86-64, with a
+keyboard or gamepad. The system Back button acts as Escape.
+See the [Android build instructions](https://github.com/GITitdoneboi/enhanced-cosmo/blob/main/android/README.md)
+for the sideloadable debug APK. Fresh installs built from current source enable
+Smooth Gameplay by default.
 
 Arrow keys move, **space** jumps, **alt** bombs, **F1** helps, **Q** then **Y**
 quits and saves. All of it is rebindable from the game's own menu. `PLAYING.txt`

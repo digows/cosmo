@@ -418,6 +418,9 @@ bool mods_init(const char *program_dir, const char *settings_root)
 #ifdef COSMO_DEFAULT_WIDESCREEN
         if (candidate.features & MOD_WIDESCREEN) candidate.enabled = true;
 #endif
+#ifdef __ANDROID__
+        if (candidate.features & MOD_SMOOTH_GAMEPLAY) candidate.enabled = true;
+#endif
         candidate.enabled = read_mod_setting(candidate.id,candidate.enabled);
         mods[mod_count++] = candidate;
     }
