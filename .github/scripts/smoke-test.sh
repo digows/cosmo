@@ -2,7 +2,7 @@
 #
 # Start the packaged game and check that it actually runs.
 #
-#   smoke-test.sh <macos|linux> <archive>
+#   smoke-test.sh <macos|linux|windows> <archive>
 #
 # v0.2.0 shipped a macOS bundle whose launcher drew its menu and then could not
 # start an episode: SDL_GetBasePath() returns Contents/Resources inside a
@@ -19,7 +19,20 @@ platform="${1:?platform}"
 archive="${2:?archive}"
 
 work="$(mktemp -d)"
-trap 'rm -rf "$work"' EXIT
+pid=
+cleanup() {
+    if [ -n "$pid" ]; then
+        if [ "$platform" = windows ]; then
+            # MSYS2's external kill supports forced termination of native processes.
+            /usr/bin/kill -f "$pid" 2>/dev/null || true
+        else
+            kill "$pid" 2>/dev/null || true
+        fi
+        wait "$pid" 2>/dev/null || true
+    fi
+    rm -rf "$work" || echo "warning: could not remove smoke test directory" >&2
+}
+trap cleanup EXIT
 
 case "$archive" in
 *.tar.gz) tar xzf "$archive" -C "$work" ;;
@@ -58,18 +71,15 @@ EOF
 # so COSMO_LOG is where its output has to come from.
 (
     cd "$(dirname "$program")"
-    SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy COSMO_DEBUG=1 \
-    COSMO_SCRIPT="$script" COSMO_LOG="$log" \
-        "$program" 1 > "$log.stdout" 2>&1
+    export SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy COSMO_DEBUG=1
+    export COSMO_SCRIPT="$script" COSMO_LOG="$log"
+    exec "$program" 1 > "$log.stdout" 2>&1
 ) &
 pid=$!
 
 # "delivered=" counts the timer interrupts the game's own loop has consumed, and
 # the game prints it to an unbuffered stream as it runs. Whether that number is
-# still climbing is the one sign of life that means the same thing on every
-# platform. Asking the OS for the process does not: on Windows the launcher
-# _execv's into the episode, which then runs as a native process that MSYS
-# pgrep cannot see, so a perfectly healthy game looks gone.
+# still climbing shows that the episode's timer is being serviced.
 last_delivered() {
     grep -o 'delivered=[0-9]*' "$log" 2>/dev/null | tail -1 | cut -d= -f2
 }
@@ -81,13 +91,6 @@ sleep 20
 before="$(last_delivered)"
 sleep 6
 after="$(last_delivered)"
-
-# Best-effort cleanup, both ways: taskkill reaches the native Windows process
-# the launcher started, pkill reaches the episode everywhere else.
-taskkill //F //IM cosmo1.exe > /dev/null 2>&1 || true
-pkill -9 -f "cosmo1" 2>/dev/null || true
-kill -9 "$pid" 2>/dev/null || true
-wait "$pid" 2>/dev/null || true
 
 cat "$log.stdout" >> "$log" 2>/dev/null || true
 
