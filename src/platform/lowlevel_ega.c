@@ -23,6 +23,92 @@
 
 static word draw_page_number;
 static dword draw_page_base;
+static bool preview_player_drawn;
+static bool preview_star_drawn;
+
+void BeginPreviewPlayerFrame(void)
+{
+    video_preview_begin_player(draw_page_number);
+    preview_player_drawn = false;
+    preview_star_drawn = false;
+}
+
+int BeginPreviewPlayer(int x, int y)
+{
+    preview_player_drawn = video_preview_player_begin(draw_page_number, x, y);
+    return preview_player_drawn;
+}
+
+void TrackPreviewPlayer(int x, int y)
+{
+    video_preview_player_track(draw_page_number, x, y);
+}
+
+void DrawPreviewPlayerTile(const byte *pixels, word x, word y, int white)
+{
+    video_preview_player_tile(draw_page_number, pixels, x, y, white != 0);
+}
+
+void OccludePreviewPlayerTile(word x, word y)
+{
+    for (unsigned row = 0; row < 8; ++row) {
+        video_preview_player_occlude(draw_page_number, x, y * 8u + row, 0xff);
+        video_preview_star_occlude(draw_page_number, x, y * 8u + row, 0xff);
+    }
+}
+
+int BeginPreviewStar(dword identity, int x, int y, int spin)
+{
+    bool captured = video_preview_star_begin(draw_page_number, identity, x, y,
+                                             spin != 0, false, false);
+    preview_star_drawn |= captured;
+    return captured;
+}
+
+void DrawPreviewStarTile(const byte *pixels, word x, word y)
+{
+    video_preview_star_tile(draw_page_number, pixels, x, y, false);
+}
+
+int BeginPreviewEffect(dword identity, int x, int y, word mode, int expand)
+{
+    bool captured = video_preview_star_begin(draw_page_number, identity, x, y,
+                                            false, mode == DRAW_MODE_IN_FRONT, expand != 0);
+    preview_star_drawn |= captured;
+    return captured;
+}
+
+void DrawPreviewEffectTile(const byte *pixels, word x, word y, word mode)
+{
+    byte flipped[40];
+    if (mode == DRAW_MODE_FLIPPED) {
+        for (unsigned row = 0; row < 8; ++row)
+            memcpy(flipped + row * 5, pixels + (7 - row) * 5, 5);
+        pixels = flipped;
+    }
+    video_preview_star_tile(draw_page_number, pixels, x, y, mode == DRAW_MODE_WHITE);
+}
+
+static bool is_backdrop_tile(unsigned address)
+{
+    return address >= EGA_OFFSET_BDROP_EVEN &&
+           address < EGA_OFFSET_BDROP_ODD_XY + BACKDROP_SIZE_EGA_MEM;
+}
+
+static void mark_preview_tile(unsigned x, unsigned y, const byte *pixels,
+                              bool flipped)
+{
+    for (unsigned row = 0; row < 8; ++row) {
+        uint8_t *mask = video_preview_mask_row(draw_page_number, y + row);
+        if (!mask || x >= EGA_WIDE_FIRST_COLUMN + EGA_WIDE_COLS) return;
+        uint8_t opaque = pixels ? (uint8_t)~pixels[(flipped ? 7 - row : row) * 5] : 0xff;
+        mask[x] |= opaque;
+        if (preview_player_drawn)
+            video_preview_player_occlude(draw_page_number, x, y + row, opaque);
+        if (preview_star_drawn)
+            video_preview_star_occlude(draw_page_number, x, y + row, opaque);
+    }
+}
 
 word WideTerrainColumns(void)
 {
@@ -50,6 +136,11 @@ void DrawWideTerrainTile(word solid, const byte *masked, word x, word y)
     for (unsigned row = 0; row < 8; ++row) {
         size_t dst = (y * 8u + row) * EGA_WIDE_COLS + x;
         unsigned src = (TILE_BANK_BASE + solid + row) & (EGA_PLANE_SIZE - 1);
+        uint8_t *mask = video_preview_mask_row(draw_page_number, (y + 1) * 8u + row);
+        if (mask) {
+            mask[EGA_WIDE_FIRST_COLUMN + x] = is_backdrop_tile(src)
+                ? (masked ? (uint8_t)~masked[row * 5] : 0) : 0xff;
+        }
         for (unsigned plane = 0; plane < EGA_PLANES; ++plane) {
             uint8_t bits = ega.vram[plane][src];
             if (masked) bits = (uint8_t)((bits & masked[row * 5]) | masked[row * 5 + 1 + plane]);
@@ -72,6 +163,7 @@ static bool draw_wide_sprite(const byte *src, word x, word y, word mode)
     size_t offset;
     if (!wide_tile_target(x, y, &offset))
         return x >= EGA_SCREEN_W / 8 && video_is_widescreen();
+    mark_preview_tile(x, y * 8u, src, mode == DRAW_MODE_FLIPPED);
     ega_wide_terrain *page = &ega_wide_pages[draw_page_number];
     for (unsigned row = 0; row < 8; ++row) {
         unsigned source_row = mode == DRAW_MODE_FLIPPED ? 7 - row : row;
@@ -96,6 +188,7 @@ static bool lighten_wide_tile(word x, word y, unsigned mask, bool grow, bool shr
     size_t offset;
     if (!wide_tile_target(x, y, &offset))
         return x >= EGA_SCREEN_W / 8 && video_is_widescreen();
+    mark_preview_tile(x, y * 8u, NULL, false);
     uint8_t *intensity = ega_wide_pages[draw_page_number].planes[3];
     for (unsigned row = 0; row < 8; ++row) {
         intensity[offset + row * EGA_WIDE_COLS] |= (uint8_t)mask;
@@ -151,6 +244,8 @@ void DrawSolidTile(word src_offset, word dst_offset)
     dword dst = draw_page_base + dst_offset;
 
     for (int row = 0; row < 8; row++) {
+        uint8_t *mask = video_preview_mask_row(draw_page_number, dst_offset / 40u + row);
+        if (mask) mask[dst_offset % 40u] = is_backdrop_tile(src) ? 0 : 0xff;
         ega_write(dst, ega_read(src));
         src++;
         dst += 40;
@@ -160,6 +255,7 @@ void DrawSolidTile(word src_offset, word dst_offset)
 void DrawSpriteTileTranslucent(byte *src, word x, word y)
 {
     if (draw_wide_sprite(src, x, y, DRAW_MODE_TRANSLUCENT)) return;
+    mark_preview_tile(x, y * 8u, src, false);
     dword dst = draw_page_base + x + (dword)y * 320;
 
     ega_out_byte(EGA_PORT_SEQ_INDEX, 0x02);
@@ -179,6 +275,7 @@ void DrawSpriteTileTranslucent(byte *src, word x, word y)
 void LightenScreenTileWest(word x, word y)
 {
     if (lighten_wide_tile(x, y, 0x01, true, false)) return;
+    mark_preview_tile(x, y * 8u, NULL, false);
     dword dst = draw_page_base + x + yOffsetTable[y];
     byte mask = 0x01;
 
@@ -198,6 +295,7 @@ void LightenScreenTileWest(word x, word y)
 void LightenScreenTile(word x, word y)
 {
     if (lighten_wide_tile(x, y, 0xff, false, false)) return;
+    mark_preview_tile(x, y * 8u, NULL, false);
     dword dst = draw_page_base + x + yOffsetTable[y];
 
     ega_out_word(EGA_PORT_GC_INDEX, (0xFF << 8) | 0x08);  /* EGA_BIT_MASK_DEFAULT */
@@ -212,6 +310,7 @@ void LightenScreenTile(word x, word y)
 void LightenScreenTileEast(word x, word y)
 {
     if (lighten_wide_tile(x, y, 0x80, false, true)) return;
+    mark_preview_tile(x, y * 8u, NULL, false);
     dword dst = draw_page_base + x + yOffsetTable[y];
     byte mask = 0x80;
 
@@ -236,6 +335,7 @@ void LightenScreenTileEast(word x, word y)
 void DrawSpriteTile(byte *src, word x, word y)
 {
     if (draw_wide_sprite(src, x, y, DRAW_MODE_NORMAL)) return;
+    mark_preview_tile(x, y * 8u, src, false);
     dword dst = draw_page_base + x + yOffsetTable[y];
 
     for (int plane = 0; plane < 4; plane++) {
@@ -259,6 +359,7 @@ void DrawSpriteTile(byte *src, word x, word y)
 
 void DrawMaskedTile(byte *src, word x, word y)
 {
+    mark_preview_tile(x, y * 8u, src - 16000, false);
     dword dst = draw_page_base + x + yOffsetTable[y];
 
     ega_out_word(EGA_PORT_GC_INDEX, (0x00 << 8) | 0x05);  /* EGA_MODE_DEFAULT */
@@ -289,6 +390,7 @@ void DrawMaskedTile(byte *src, word x, word y)
 void DrawSpriteTileFlipped(byte *src, word x, word y)
 {
     if (draw_wide_sprite(src, x, y, DRAW_MODE_FLIPPED)) return;
+    mark_preview_tile(x, y * 8u, src, true);
     dword dst = draw_page_base + x + yOffsetTable[y];
 
     for (int plane = 0; plane < 4; plane++) {
@@ -313,6 +415,7 @@ void DrawSpriteTileFlipped(byte *src, word x, word y)
 void DrawSpriteTileWhite(byte *src, word x, word y)
 {
     if (draw_wide_sprite(src, x, y, DRAW_MODE_WHITE)) return;
+    mark_preview_tile(x, y * 8u, src, false);
     dword dst = draw_page_base + x + yOffsetTable[y];
 
     ega_out_byte(EGA_PORT_SEQ_DATA, 0x0F);

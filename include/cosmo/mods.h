@@ -17,7 +17,9 @@ enum cosmo_mod_feature {
     MOD_LOW_GRAVITY = 1u << 1,
     MOD_SHIELD_MODE = 1u << 2,
     MOD_TURBO_MODE = 1u << 3,
-    MOD_WIDESCREEN = 1u << 4
+    MOD_WIDESCREEN = 1u << 4,
+    MOD_MOTION_INTERPOLATION = 1u << 5,
+    MOD_SMOOTH_GAMEPLAY = 1u << 6
 };
 
 typedef struct cosmo_mod {

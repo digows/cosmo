@@ -1,0 +1,32 @@
+diff --git a/game1.c b/game1.c
+index 6dd9df3..d065ae7 100644
+--- a/game1.c
++++ b/game1.c
+@@ -171,7 +171,8 @@ static Actor actors[MAX_ACTORS];
+ static dword previewStarIdentity[MAX_ACTORS];
+ static Shard shards[MAX_SHARDS];
+ static dword previewShardIdentity[MAX_SHARDS];
+-static Explosion explosions[MAX_EXPLOSIONS];
++static Explosion explosions[MAX_EXPLOSIONS];
++static dword previewExplosionIdentity[MAX_EXPLOSIONS];
+ static Spawner spawners[MAX_SPAWNERS];
+ static Decoration decorations[MAX_DECORATIONS];
+ /* Holds each decoration's currently displayed frame. Why this isn't in the Decoration struct, who knows. */
+@@ -6724,6 +6725,7 @@ void NewExplosion(word x_origin, word y_origin)
+ 
+         if (ex->age != 0) continue;
+ 
++        ++previewExplosionIdentity[i];
+         ex->age = 1;
+         ex->x = x_origin;
+         ex->y = y_origin + 2;
+@@ -6761,7 +6763,8 @@ static void DrawExplosions(void)
+             NewDecoration(SPR_SPARKLE_LONG, 8, ex->x + 2, ex->y - 2, DIR8_NONE, 1);
+         }
+ 
+-        DrawSprite(SPR_EXPLOSION, (ex->age - 1) % 4, ex->x, ex->y, DRAW_MODE_NORMAL);
++        DrawSmoothEffect((previewExplosionIdentity[i] << 16) | (0x4000u | i),
++                         SPR_EXPLOSION, (ex->age - 1) % 4, ex->x, ex->y, DRAW_MODE_NORMAL);
+ 
+         if (IsTouchingPlayer(SPR_EXPLOSION, (ex->age - 1) % 4, ex->x, ex->y)) {
+             HurtPlayer();

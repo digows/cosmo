@@ -1,0 +1,20 @@
+diff --git a/glue.h b/glue.h
+--- a/glue.h
++++ b/glue.h
+@@ -216,4 +216,5 @@ void PlatformHapticMenuInput(byte scancode);
+ void PlatformSetAudioVolumes(int sound_percent, int music_percent);
++void PlatformSetCameraPosition(word scroll_x, word scroll_y, int backdrop_x, int backdrop_y, word frame_ticks);
+ const char *PlatformDisplayFilterName(void);
+ int PlatformStepDisplayFilter(int direction);
+ void PlatformSetMusicPaused(int paused);
+diff --git a/game1.c b/game1.c
+--- a/game1.c
++++ b/game1.c
+@@ -10377,6 +10377,7 @@
+ 
+         SelectDrawPage(activePage);
+         activePage = !activePage;
++        PlatformSetCameraPosition(scrollX, scrollY, hasHScrollBackdrop, hasVScrollBackdrop, frame_ticks);
+         SelectActivePage(activePage);
+ 
+         if (pounceHintState == POUNCE_HINT_QUEUED) {

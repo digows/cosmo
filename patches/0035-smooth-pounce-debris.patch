@@ -1,0 +1,35 @@
+diff --git a/game1.c b/game1.c
+index 9b3c961..f8447f3 100644
+--- a/game1.c
++++ b/game1.c
+@@ -175,7 +175,8 @@ static Explosion explosions[MAX_EXPLOSIONS];
+ static dword previewExplosionIdentity[MAX_EXPLOSIONS];
+ static Spawner spawners[MAX_SPAWNERS];
+ static dword previewSpawnerIdentity[MAX_SPAWNERS];
+-static Decoration decorations[MAX_DECORATIONS];
++static Decoration decorations[MAX_DECORATIONS];
++static dword previewDecorationIdentity[MAX_DECORATIONS];
+ /* Holds each decoration's currently displayed frame. Why this isn't in the Decoration struct, who knows. */
+ static word decorationFrame[MAX_DECORATIONS];
+ static word backdropTable[BACKDROP_WIDTH * BACKDROP_HEIGHT * 4];
+@@ -6923,6 +6924,7 @@ void NewDecoration(
+ 
+         if (dec->alive) continue;
+ 
++        ++previewDecorationIdentity[i];
+         dec->alive = true;
+         dec->sprite = sprite_type;
+         dec->numframes = num_frames;
+@@ -6955,7 +6957,11 @@ static void MoveAndDrawDecorations(void)
+             || SpriteInWideView(dec->sprite, decorationFrame[i], dec->x, dec->y)
+ #endif
+         ) {
+-            if (dec->sprite != SPR_SPARKLE_SLIPPERY) {
++            if (dec->sprite == SPR_POUNCE_DEBRIS) {
++                DrawSmoothEffect((previewDecorationIdentity[i] << 16) | (0x1000u | i),
++                                 dec->sprite, decorationFrame[i], dec->x, dec->y,
++                                 DRAW_MODE_NORMAL);
++            } else if (dec->sprite != SPR_SPARKLE_SLIPPERY) {
+                 DrawSprite(dec->sprite, decorationFrame[i], dec->x, dec->y, DRAW_MODE_NORMAL);
+             } else {
+                 DrawSprite(dec->sprite, decorationFrame[i], dec->x, dec->y, DRAW_MODE_IN_FRONT);

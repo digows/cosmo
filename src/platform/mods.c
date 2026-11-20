@@ -42,6 +42,8 @@ static const struct {
     {"shieldMode", MOD_SHIELD_MODE},
     {"turboMode", MOD_TURBO_MODE},
     {"widescreen", MOD_WIDESCREEN},
+    {"motionInterpolation", MOD_MOTION_INTERPOLATION},
+    {"smoothGameplay", MOD_SMOOTH_GAMEPLAY},
 };
 
 static const char *const sound_asset_names[65] = {

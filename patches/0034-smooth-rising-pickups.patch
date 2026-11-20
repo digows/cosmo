@@ -1,0 +1,60 @@
+diff --git a/game1.c b/game1.c
+index a5ead93..0ead26c 100644
+--- a/game1.c
++++ b/game1.c
+@@ -173,7 +173,8 @@ static Shard shards[MAX_SHARDS];
+ static dword previewShardIdentity[MAX_SHARDS];
+ static Explosion explosions[MAX_EXPLOSIONS];
+ static dword previewExplosionIdentity[MAX_EXPLOSIONS];
+-static Spawner spawners[MAX_SPAWNERS];
++static Spawner spawners[MAX_SPAWNERS];
++static dword previewSpawnerIdentity[MAX_SPAWNERS];
+ static Decoration decorations[MAX_DECORATIONS];
+ /* Holds each decoration's currently displayed frame. Why this isn't in the Decoration struct, who knows. */
+ static word decorationFrame[MAX_DECORATIONS];
+@@ -6834,6 +6835,7 @@ void NewSpawner(word actor_type, word x_origin, word y_origin)
+ 
+         if (sp->actor != ACT_BASKET_NULL) continue;
+ 
++        ++previewSpawnerIdentity[i];
+         sp->actor = actor_type;
+         sp->x = x_origin;
+         sp->y = y_origin;
+@@ -6849,6 +6851,17 @@ Animate one frame for each active spawner, expiring old ones in the process.
+ NOTE: This function only behaves correctly for actors whose sprite type number
+ matches the actor type number. While spawning, frame 0 of the sprite is used.
+ */
++static void DrawPreviewSpawner(word index, Spawner *sp, word y, word mode)
++{
++    /* Health power-ups use the same rising motion as other pickups. */
++    if (sp->actor == ACT_HAMBURGER) {
++        DrawSprite(sp->actor, 0, sp->x, y, mode);
++        return;
++    }
++    DrawSmoothEffect((previewSpawnerIdentity[index] << 16) | (0x2000u | index),
++                     sp->actor, 0, sp->x, y, mode);
++}
++
+ static void MoveAndDrawSpawners(void)
+ {
+     word i;
+@@ -6868,16 +6881,16 @@ static void MoveAndDrawSpawners(void)
+             )
+         ) {
+             NewActor(sp->actor, sp->x, sp->y + 1);
+-            DrawSprite(sp->actor, 0, sp->x, sp->y + 1, DRAW_MODE_NORMAL);
++            DrawPreviewSpawner(i, sp, sp->y + 1, DRAW_MODE_NORMAL);
+             sp->actor = ACT_BASKET_NULL;
+ 
+         } else if (sp->age == 11) {
+             NewActor(sp->actor, sp->x, sp->y);
+-            DrawSprite(sp->actor, 0, sp->x, sp->y, DRAW_MODE_FLIPPED);
++            DrawPreviewSpawner(i, sp, sp->y, DRAW_MODE_FLIPPED);
+             sp->actor = ACT_BASKET_NULL;
+ 
+         } else {
+-            DrawSprite(sp->actor, 0, sp->x, sp->y, DRAW_MODE_FLIPPED);
++            DrawPreviewSpawner(i, sp, sp->y, DRAW_MODE_FLIPPED);
+         }
+     }
+ }

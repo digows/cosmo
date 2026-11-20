@@ -1,0 +1,78 @@
+diff --git a/game1.c b/game1.c
+index 4a5d4ee..c15db97 100644
+--- a/game1.c
++++ b/game1.c
+@@ -270,7 +270,11 @@ To remain faithful to the original game, these functions use non-`static`
+ external linkage even though nothing depends on that.
+ */
+ void DrawSprite(word, word, word, word, word);
+-void DrawPlayer(byte, word, word, word);
++void DrawPlayer(byte, word, word, word);
++void BeginPreviewPlayerFrame(void);
++int BeginPreviewPlayer(int x, int y);
++void DrawPreviewPlayerTile(const byte *pixels, word x, word y, int white);
++void OccludePreviewPlayerTile(word x, word y);
+ void DrawCartoon(byte, word, word);
+ word GetMapTile(word, word);
+ void SetMapTile(word, word, word);
+@@ -878,6 +882,8 @@ static void DrawMapRegion(void)
+     if (wide_columns) BeginWideTerrain();
+ #endif
+ 
++    BeginPreviewPlayerFrame();
++
+     if (hasHScrollBackdrop) {
+         if (scrollX % 2 != 0) {
+             /* Use the version of the backdrop that's shifted to the left */
+@@ -914,7 +920,8 @@ static void DrawMapRegion(void)
+         register int x = 0;
+ 
+         do {
+-            mapcell = mapData.w + ymap + x + scrollX;
++            mapcell = mapData.w + ymap + x + scrollX;
++            if (TILE_IN_FRONT(*mapcell)) OccludePreviewPlayerTile(x + 1, yscreen);
+ 
+             if (*mapcell < TILE_STRIPED_PLATFORM) {
+                 /* "Air" tile or platform direction command; show just backdrop */
+@@ -933,7 +940,8 @@ static void DrawMapRegion(void)
+ 
+ #ifdef COSMO_WIDESCREEN
+         for (word col = 0; col < wide_columns && scrollX + SCROLLW + col < mapWidth; ++col) {
+-            word tile = mapData.w[ymap + scrollX + SCROLLW + col];
++            word tile = mapData.w[ymap + scrollX + SCROLLW + col];
++            if (TILE_IN_FRONT(tile)) OccludePreviewPlayerTile(SCROLLW + col + 1, yscreen);
+             word backdrop_cell = (bdoff % 80 + SCROLLW + col) % BACKDROP_WIDTH;
+             word backdrop = bdsrc + backdropTable[bdoff - bdoff % 80 + backdrop_cell];
+             unsigned masked_offset = (unsigned)tile - TILE_MASKED_0;
+@@ -1442,7 +1450,21 @@ void DrawPlayer(byte frame, word x_origin, word y_origin, word mode)
+ 
+     /* `mode` would go to ax if this was a switch, which doesn't happen */
+     if (mode == DRAW_MODE_IN_FRONT) goto infront;
+-    if (mode == DRAW_MODE_ABSOLUTE) goto absolute;
++    if (mode == DRAW_MODE_ABSOLUTE) goto absolute;
++
++    if ((mode == DRAW_MODE_NORMAL || mode == DRAW_MODE_WHITE) &&
++        BeginPreviewPlayer((int)x_origin - scrollX, (int)y_origin - scrollY)) {
++        for (word row = 0; row < height; ++row) {
++            int sy = (int)y_origin - height + 1 + row - scrollY + 1;
++            for (word col = 0; col < width; ++col) {
++                int sx = (int)x_origin + col - scrollX + 1;
++                if (sx > 0 && sx <= WorldDrawRight() - scrollX && sy > 0 && sy <= SCROLLH)
++                    DrawPreviewPlayerTile(src, sx, sy, mode == DRAW_MODE_WHITE);
++                src += 40;
++            }
++        }
++        return;
++    }
+ 
+     for (;;) {
+         if (
+@@ -10604,6 +10626,8 @@ static void LoadBackdropData(char *entry_name, byte *scratch)
+     */
+     CopyTilesToEGA(scratch, BACKDROP_SIZE_EGA_MEM, EGA_OFFSET_BDROP_EVEN);
+ 
++    BeginPreviewPlayerFrame();
++
+     if (hasHScrollBackdrop) {
+         /*
+         To do horizontal backdrop scrolling, we need a copy of the backdrop

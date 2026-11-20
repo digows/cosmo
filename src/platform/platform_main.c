@@ -50,7 +50,6 @@ extern uint8_t scancodeJump, scancodeBomb;
 #   include <windows.h>
 #endif
 
-#define TARGET_PRESENT_HZ 60.0
 #define SCANCODE_QUEUE_SIZE 64
 
 enum haptic_cue {
@@ -97,8 +96,10 @@ enum game_sound_number {
 };
 
 static SDL_AtomicInt game_running;
-static SDL_AtomicInt frame_pending;
 static SDL_AtomicInt haptic_pending;
+static uint16_t camera_scroll_x, camera_scroll_y;
+static bool camera_backdrop_x, camera_backdrop_y;
+static unsigned camera_frame_ticks;
 
 static void request_haptic(int cue)
 {
@@ -633,7 +634,23 @@ static void play_pending_haptic(void)
  */
 void platform_page_flipped(void)
 {
-    SDL_SetAtomicInt(&frame_pending, 1);
+    video_capture_motion_frame(camera_scroll_x, camera_scroll_y,
+                               camera_backdrop_x, camera_backdrop_y, camera_frame_ticks);
+}
+
+void PlatformSetCameraPosition(uint16_t scroll_x, uint16_t scroll_y,
+                               int backdrop_x, int backdrop_y, uint16_t frame_ticks)
+{
+    camera_scroll_x = scroll_x;
+    camera_scroll_y = scroll_y;
+    camera_backdrop_x = backdrop_x != 0;
+    camera_backdrop_y = backdrop_y != 0;
+    camera_frame_ticks = frame_ticks;
+}
+
+void PlatformSetMotionInterpolationPaused(int paused)
+{
+    video_pause_motion_interpolation(paused != 0);
 }
 
 /* ------------------------------------------------------------------------ */
@@ -713,6 +730,58 @@ static int SDLCALL game_thread(void *data)
 }
 
 /*
+ * Keep PIT delivery independent of display presentation. VSync may wait for
+ * the next refresh (8.3 ms on a 120 Hz display), which is too long to service
+ * the game's 560 Hz timer on the presentation thread.
+ */
+static int SDLCALL timer_thread(void *unused)
+{
+    uint64_t freq = SDL_GetPerformanceFrequency();
+    uint64_t now = SDL_GetPerformanceCounter();
+    uint64_t next_tick = now;
+    uint64_t next_debug = now;
+    uint64_t tick_attempts = 0, tick_delivered = 0;
+    bool debug_enabled = SDL_getenv("COSMO_DEBUG") != NULL;
+
+    (void)unused;
+    while (SDL_GetAtomicInt(&game_running)) {
+        double hz = pit_frequency();
+        uint64_t period = (uint64_t)((double)freq / (hz > 0.0 ? hz : 18.2));
+
+        if (period == 0) period = 1;
+        now = SDL_GetPerformanceCounter();
+
+        if (debug_enabled && now >= next_debug) {
+            fprintf(stderr,
+                    "[cosmo] pit=%u (%.1f Hz) adlib=%u oplwrites=%lu int8 fired=%llu delivered=%llu"
+                    " | keys space=%u ctrl=%u alt=%u left=%u right=%u"
+                    " | cmd jump=%u west=%u east=%u bomb=%u\n",
+                    pit_divisor(), hz, (unsigned)isAdLibPresent, adlib_writes,
+                    (unsigned long long)tick_attempts,
+                    (unsigned long long)tick_delivered,
+                    isKeyDown[0x39], isKeyDown[0x1D], isKeyDown[0x38],
+                    isKeyDown[0x4B], isKeyDown[0x4D],
+                    cmdJump, cmdWest, cmdEast, cmdBomb);
+            next_debug = now + freq;
+        }
+
+        if (now >= next_tick) {
+            /* Bound catch-up after a scheduler stall. */
+            int budget = 8;
+            while (now >= next_tick && budget--) {
+                tick_attempts++;
+                if (interrupt_deliver(8)) tick_delivered++;
+                next_tick += period;
+            }
+            if (now >= next_tick) next_tick = now + period;
+        }
+
+        SDL_DelayNS(250000);
+    }
+    return 0;
+}
+
+/*
  * Give the program somewhere to say things.
  *
  * On Windows the game is built for the GUI subsystem, so that no console window
@@ -766,9 +835,8 @@ int main(int argc, char *argv[])
 #endif
 {
     SDL_Thread *thread;
-    uint64_t freq, now, next_tick, next_frame, start_ms, next_debug;
-    uint64_t tick_attempts = 0, tick_delivered = 0;
-    bool debug_enabled = SDL_getenv("COSMO_DEBUG") != NULL;
+    SDL_Thread *timer;
+    uint64_t start_ms;
 
     /*
      * Settles where the group files are and moves there, so every bare
@@ -804,6 +872,8 @@ int main(int argc, char *argv[])
 
     if (!video_init("Cosmo's Cosmic Adventure", 3,
                     mods_feature_enabled(MOD_WIDESCREEN))) return 1;
+    video_set_motion_interpolation(
+        mods_feature_enabled(MOD_MOTION_INTERPOLATION));
     if (argc > 1 && SDL_strcmp(argv[1], "--fullscreen") == 0)
         video_set_fullscreen(true);
 
@@ -812,18 +882,22 @@ int main(int argc, char *argv[])
 
     SDL_SetAtomicInt(&game_running, 1);
 
+    timer = SDL_CreateThread(timer_thread, "cosmo-pit", NULL);
+    if (!timer) {
+        SDL_SetAtomicInt(&game_running, 0);
+        fprintf(stderr, "SDL_CreateThread (PIT): %s\n", SDL_GetError());
+        return 1;
+    }
+
     thread = SDL_CreateThread(game_thread, "cosmo-game", argv[0]);
     if (!thread) {
+        SDL_SetAtomicInt(&game_running, 0);
+        SDL_WaitThread(timer, NULL);
         fprintf(stderr, "SDL_CreateThread: %s\n", SDL_GetError());
         return 1;
     }
 
     start_ms = SDL_GetTicks();
-    freq = SDL_GetPerformanceFrequency();
-    now = SDL_GetPerformanceCounter();
-    next_tick = now;
-    next_frame = now;
-    next_debug = now;
 
     while (SDL_GetAtomicInt(&game_running)) {
         SDL_Event event;
@@ -836,6 +910,8 @@ int main(int argc, char *argv[])
                  * the process outright rather than joining a thread that will
                  * never return.
                  */
+                SDL_SetAtomicInt(&game_running, 0);
+                SDL_WaitThread(timer, NULL);
                 audio_shutdown();
                 gamepad_close();
                 video_shutdown();
@@ -865,6 +941,10 @@ int main(int argc, char *argv[])
                 uint8_t code;
 
                 if (event.key.scancode == SDL_SCANCODE_F12) {
+                    if (event.key.mod & SDL_KMOD_SHIFT) {
+                        video_start_frame_capture();
+                        continue;
+                    }
                     char path[64];
                     snprintf(path, sizeof path, "cosmo-%llu.png",
                              (unsigned long long)SDL_GetTicks());
@@ -899,58 +979,13 @@ int main(int argc, char *argv[])
 
         drain_scancodes();
 
-        now = SDL_GetPerformanceCounter();
-
-        /*
-         * Fire the timer interrupt at whatever rate the game programmed. It
-         * asks for 140 Hz without an AdLib and 560 Hz with one, and the game
-         * clock is derived entirely from how often this lands.
-         */
-        {
-            double hz = pit_frequency();
-            uint64_t period = (uint64_t)((double)freq / (hz > 0.0 ? hz : 18.2));
-
-            if (period == 0) period = 1;
-
-            if (debug_enabled && now >= next_debug) {
-                fprintf(stderr,
-                        "[cosmo] pit=%u (%.1f Hz) adlib=%u oplwrites=%lu int8 fired=%llu delivered=%llu"
-                        " | keys space=%u ctrl=%u alt=%u left=%u right=%u"
-                        " | cmd jump=%u west=%u east=%u bomb=%u\n",
-                        pit_divisor(), hz, (unsigned)isAdLibPresent, adlib_writes,
-                        (unsigned long long)tick_attempts,
-                        (unsigned long long)tick_delivered,
-                        isKeyDown[0x39], isKeyDown[0x1D], isKeyDown[0x38],
-                        isKeyDown[0x4B], isKeyDown[0x4D],
-                        cmdJump, cmdWest, cmdEast, cmdBomb);
-                next_debug = now + freq;
-            }
-
-            if (now >= next_tick) {
-                /* Never chase more than a few ticks; a stall must not turn
-                 * into a burst that outruns the game thread. */
-                int budget = 8;
-                while (now >= next_tick && budget--) {
-                    tick_attempts++;
-                    if (interrupt_deliver(8)) tick_delivered++;
-                    next_tick += period;
-                }
-                if (now >= next_tick) next_tick = now + period;
-            }
-        }
-
-        if (now >= next_frame) {
-            video_present();
-            SDL_SetAtomicInt(&frame_pending, 0);
-            next_frame = now + (uint64_t)((double)freq / TARGET_PRESENT_HZ);
-            screenshots_update((uint32_t)(SDL_GetTicks() - start_ms));
-            if (!input_script_active()) reconcile_held_keys();
-        }
-
-        SDL_DelayNS(250000);  /* 0.25 ms; keeps the loop from spinning hot */
+        video_present();
+        screenshots_update((uint32_t)(SDL_GetTicks() - start_ms));
+        if (!input_script_active()) reconcile_held_keys();
     }
 
     SDL_WaitThread(thread, NULL);
+    SDL_WaitThread(timer, NULL);
     audio_shutdown();
     gamepad_close();
     video_shutdown();

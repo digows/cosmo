@@ -1,0 +1,34 @@
+diff --git a/game1.c b/game1.c
+index 93c36d2..accac1b 100644
+--- a/game1.c
++++ b/game1.c
+@@ -10141,19 +10141,26 @@ byte ProcessGameInput(byte demo_state)
+         } else if (isKeyDown[SCANCODE_M]) {
+             ToggleMusic();
+         } else if (isKeyDown[SCANCODE_ESC] || isKeyDown[SCANCODE_Q]) {
+-            if (PromptQuitConfirm()) return GAME_INPUT_QUIT;
++            PlatformSetMotionInterpolationPaused(1);
++            bool quit = PromptQuitConfirm();
++            PlatformSetMotionInterpolationPaused(0);
++            if (quit) return GAME_INPUT_QUIT;
+         } else if (isKeyDown[SCANCODE_F1]) {
+             PlatformSetMusicPaused(true);
++            PlatformSetMotionInterpolationPaused(1);
+             byte result = ShowHelpMenu();
+             if (result == HELP_MENU_QUIT && !PromptQuitConfirm())
+-                result = HELP_MENU_CONTINUE;
++                result = HELP_MENU_CONTINUE;
++            PlatformSetMotionInterpolationPaused(0);
+             PlatformSetMusicPaused(false);
+             if (result == HELP_MENU_RESTART) return GAME_INPUT_RESTART;
+             if (result == HELP_MENU_QUIT) return GAME_INPUT_QUIT;
+         } else if (isKeyDown[SCANCODE_P]) {
+             PlatformSetMusicPaused(true);
+             StartSound(SND_PAUSE_GAME);
+-            ShowPauseMessage();
++            PlatformSetMotionInterpolationPaused(1);
++            ShowPauseMessage();
++            PlatformSetMotionInterpolationPaused(0);
+             PlatformSetMusicPaused(false);
+         }
+     } else if ((inportb(0x0060) & 0x80) == 0) {
