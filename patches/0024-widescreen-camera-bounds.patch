@@ -121,7 +121,16 @@ diff --git a/game1.c b/game1.c
  #endif
          ) {
              if (dec->sprite != SPR_SPARKLE_SLIPPERY) {
-@@ -7917,7 +7945,7 @@
+@@ -7858,3 +7886,7 @@
+-    if (IsSpriteVisible(act->sprite, act->frame, act->x, act->y)) {
++    if (IsSpriteVisible(act->sprite, act->frame, act->x, act->y)
++#ifdef COSMO_WIDESCREEN
++        || SpriteInWideView(act->sprite, act->frame, act->x, act->y)
++#endif
++    ) {
+         if (act->stayactive) {
+             act->forceactive = true;
+@@ -7917,7 +7946,7 @@
          }
      } else if (!act->forceactive) {
  #ifdef COSMO_WIDESCREEN
