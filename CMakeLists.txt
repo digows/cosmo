@@ -5,6 +5,10 @@ project(cosmo
     DESCRIPTION "Native port of Cosmo's Cosmic Adventure (Apogee, 1992)"
     LANGUAGES C CXX)
 
+if(IOS)
+    enable_language(OBJCXX)
+endif()
+
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 set(CMAKE_C_EXTENSIONS OFF)
@@ -25,6 +29,8 @@ option(COSMO_BUILD_TESTS "Build the test suite" ON)
 option(COSMO_BUILD_GAME "Build the game itself from the Cosmore sources" ON)
 option(COSMO_BUNDLE "Build as an application rather than a terminal program" OFF)
 option(COSMO_WIDESCREEN "Enable the widescreen mod by default for preview builds" OFF)
+option(COSMO_ANDROID_APP "Build Episode 1 as an SDL Android shared library" OFF)
+option(COSMO_IOS_APP "Build Episode 1 as an SDL iOS application bundle" OFF)
 
 # --------------------------------------------------------------------------
 # Warnings
@@ -72,8 +78,14 @@ endif()
 if(NOT SDL3_FOUND)
     message(STATUS "Building SDL3 from source")
     include(FetchContent)
-    set(SDL_SHARED OFF CACHE BOOL "" FORCE)
-    set(SDL_STATIC ON CACHE BOOL "" FORCE)
+    if(ANDROID)
+        # SDLActivity loads SDL3 and main as Android shared libraries.
+        set(SDL_SHARED ON CACHE BOOL "" FORCE)
+        set(SDL_STATIC OFF CACHE BOOL "" FORCE)
+    else()
+        set(SDL_SHARED OFF CACHE BOOL "" FORCE)
+        set(SDL_STATIC ON CACHE BOOL "" FORCE)
+    endif()
     set(SDL_TEST_LIBRARY OFF CACHE BOOL "" FORCE)
     FetchContent_Declare(SDL3
         GIT_REPOSITORY https://github.com/libsdl-org/SDL.git
@@ -145,17 +157,42 @@ target_link_libraries(cosmo_core PRIVATE cosmo_warnings)
 
 # paths.c belongs here rather than in core: working out where an application's
 # data lives means asking SDL, and core is kept free of it.
-add_library(cosmo_video STATIC
-    src/platform/video.c
-    src/platform/paths.c
-    src/platform/font.c
-    src/platform/group.c
-    src/platform/mods.c)
-target_link_libraries(cosmo_video
-    PUBLIC cosmo_core SDL3::SDL3
-    PRIVATE cosmo_warnings)
+if(WIN32)
+    # The launcher and episode modules share this one runtime so an episode
+    # can take over the launcher's existing SDL window without creating a
+    # second process or top-level window. EGA state lives here too, so both
+    # sides draw into the same adapter.
+    add_library(cosmo_video SHARED
+        src/platform/ega.c
+        src/platform/png.c
+        src/platform/video.c
+        src/platform/paths.c
+        src/platform/font.c
+        src/platform/group.c
+        src/platform/mods.c)
+    target_include_directories(cosmo_video PUBLIC include)
+    set_target_properties(cosmo_video PROPERTIES
+        PREFIX ""
+        WINDOWS_EXPORT_ALL_SYMBOLS ON)
+    target_link_libraries(cosmo_video
+        PUBLIC SDL3::SDL3
+        PRIVATE cosmo_warnings)
+else()
+    add_library(cosmo_video STATIC
+        src/platform/video.c
+        src/platform/paths.c
+        src/platform/font.c
+        src/platform/group.c
+        src/platform/mods.c)
+    target_link_libraries(cosmo_video
+        PUBLIC cosmo_core SDL3::SDL3
+        PRIVATE cosmo_warnings)
+endif()
 if(COSMO_WIDESCREEN)
     target_compile_definitions(cosmo_video PRIVATE COSMO_DEFAULT_WIDESCREEN)
+endif()
+if(COSMO_IOS_APP)
+    target_compile_definitions(cosmo_video PRIVATE COSMO_IOS_APP=1)
 endif()
 
 # --------------------------------------------------------------------------
@@ -168,7 +205,21 @@ endif()
 
 if(COSMO_BUILD_GAME)
     include(cmake/PrepareCosmoreSources.cmake)
-    configure_file(Mods/widescreen/mod.json Mods/widescreen/mod.json COPYONLY)
+    # Stage all bundled mods for source-run builds, not only Widescreen.
+    # Track additions and content changes so regeneration keeps the build copy
+    # in sync with the source package.
+    file(GLOB_RECURSE COSMO_MOD_FILES CONFIGURE_DEPENDS LIST_DIRECTORIES false
+         "${CMAKE_CURRENT_SOURCE_DIR}/Mods/*")
+    foreach(COSMO_MOD_FILE IN LISTS COSMO_MOD_FILES)
+        file(RELATIVE_PATH COSMO_MOD_RELATIVE_PATH
+             "${CMAKE_CURRENT_SOURCE_DIR}/Mods" "${COSMO_MOD_FILE}")
+        get_filename_component(COSMO_MOD_DESTINATION
+             "${CMAKE_BINARY_DIR}/Mods/${COSMO_MOD_RELATIVE_PATH}" DIRECTORY)
+        file(MAKE_DIRECTORY "${COSMO_MOD_DESTINATION}")
+        configure_file("${COSMO_MOD_FILE}"
+                       "${CMAKE_BINARY_DIR}/Mods/${COSMO_MOD_RELATIVE_PATH}"
+                       COPYONLY)
+    endforeach()
 
     # Everything that does not depend on which episode is being built. The
     # platform layer reaches the game through a handful of externs rather than
@@ -179,12 +230,18 @@ if(COSMO_BUILD_GAME)
         src/platform/interrupts.c
         src/platform/audio.c
         src/platform/opl.cpp
-        src/platform/input.c
-        src/platform/platform_main.c)
+        src/platform/input.c)
     if(WIN32)
         target_sources(cosmo_platform PRIVATE src/platform/mp3_decoder.cpp)
         target_link_libraries(cosmo_platform PRIVATE mfplat mfreadwrite mfuuid ole32)
         target_compile_definitions(cosmo_platform PRIVATE COSMO_MP3_MUSIC=1)
+    elseif(IOS)
+        target_sources(cosmo_platform PRIVATE src/platform/mp3_decoder_apple.mm)
+        find_library(COSMO_AVFOUNDATION_FRAMEWORK AVFoundation REQUIRED)
+        target_link_libraries(cosmo_platform PRIVATE ${COSMO_AVFOUNDATION_FRAMEWORK})
+        target_compile_definitions(cosmo_platform PRIVATE COSMO_MP3_MUSIC=1)
+        set_target_properties(cosmo_platform PROPERTIES
+            XCODE_ATTRIBUTE_CLANG_ENABLE_OBJC_ARC YES)
     endif()
     target_link_libraries(cosmo_platform
         PUBLIC cosmo_video
@@ -225,19 +282,105 @@ if(COSMO_BUILD_GAME)
         target_compile_definitions(cosmo_lowlevel${episode} PRIVATE EPISODE=${episode})
         target_compile_options(cosmo_lowlevel${episode} PRIVATE
             ${COSMO_FORCE_INCLUDE} "${CMAKE_CURRENT_SOURCE_DIR}/include/cosmo/dos_compat.h")
-        target_link_libraries(cosmo_lowlevel${episode}
-            PUBLIC cosmo_core PRIVATE cosmo_warnings)
+        if(WIN32)
+            target_link_libraries(cosmo_lowlevel${episode}
+                PUBLIC cosmo_video PRIVATE cosmo_warnings)
+        else()
+            target_link_libraries(cosmo_lowlevel${episode}
+                PUBLIC cosmo_core PRIVATE cosmo_warnings)
+        endif()
+
+        # Mobile app targets host the selected episode in the launcher process
+        # instead of starting a sibling episode executable.
+        if(COSMO_ANDROID_APP OR COSMO_IOS_APP)
+            return()
+        endif()
 
         if(COSMO_BUNDLE AND WIN32)
             add_executable(cosmo${episode} WIN32
-                $<TARGET_OBJECTS:cosmore_game${episode}> "${COSMO_WIN_ICON_RC}")
+                $<TARGET_OBJECTS:cosmore_game${episode}>
+                src/platform/platform_main.c "${COSMO_WIN_ICON_RC}")
         else()
-            add_executable(cosmo${episode} $<TARGET_OBJECTS:cosmore_game${episode}>)
+            add_executable(cosmo${episode}
+                $<TARGET_OBJECTS:cosmore_game${episode}>
+                src/platform/platform_main.c)
         endif()
         target_link_libraries(cosmo${episode}
             PRIVATE cosmo_lowlevel${episode} cosmo_platform)
         add_dependencies(cosmo${episode} cosmore_game${episode})
+
+        if(WIN32)
+            add_library(cosmo${episode}_module MODULE
+                $<TARGET_OBJECTS:cosmore_game${episode}>
+                src/platform/platform_main.c)
+            target_compile_definitions(cosmo${episode}_module
+                PRIVATE COSMO_EPISODE_MODULE=1)
+            target_link_libraries(cosmo${episode}_module
+                PRIVATE cosmo_lowlevel${episode} cosmo_platform)
+            set_target_properties(cosmo${episode}_module PROPERTIES
+                PREFIX ""
+                OUTPUT_NAME "cosmo${episode}"
+                LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/episodes"
+                RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/episodes"
+                WINDOWS_EXPORT_ALL_SYMBOLS ON)
+            add_dependencies(cosmo${episode}_module cosmore_game${episode})
+        endif()
+
     endfunction()
+
+    if(COSMO_ANDROID_APP)
+        if(NOT ANDROID)
+            message(FATAL_ERROR "COSMO_ANDROID_APP requires the Android NDK toolchain")
+        endif()
+
+        cosmo_add_episode(1)
+        add_library(main SHARED
+            $<TARGET_OBJECTS:cosmore_game1>
+            src/platform/platform_main.c
+            src/launcher.c)
+        target_compile_definitions(main PRIVATE COSMO_EPISODE_MODULE)
+        target_link_libraries(main PRIVATE cosmo_lowlevel1 cosmo_platform cosmo_video)
+        add_dependencies(main cosmore_game1)
+        return()
+    endif()
+
+    if(COSMO_IOS_APP)
+        if(NOT IOS)
+            message(FATAL_ERROR "COSMO_IOS_APP requires the iOS SDK toolchain")
+        endif()
+
+        set(COSMO_IOS_EXECUTABLE_NAME "CosmoEnhanced")
+        set(COSMO_IOS_BUNDLE_NAME "Cosmo Enhanced")
+        set(COSMO_IOS_BUNDLE_IDENTIFIER "com.digows.cosmoenhanced")
+        set(COSMO_IOS_BUNDLE_VERSION "1")
+        set(COSMO_IOS_SHORT_VERSION "0.4.0")
+        configure_file(ios-build/Info.plist.in
+            "${CMAKE_CURRENT_BINARY_DIR}/CosmoEnhanced-Info.plist" @ONLY)
+
+        # iOS, like Android, runs one episode inside the launcher process. SDL3
+        # supplies the UIKit application entry point through SDL_main.h.
+        cosmo_add_episode(1)
+        add_executable(cosmo_ios MACOSX_BUNDLE
+            $<TARGET_OBJECTS:cosmore_game1>
+            src/platform/platform_main.c
+            src/launcher.c)
+        target_compile_definitions(cosmo_ios PRIVATE
+            COSMO_EPISODE_MODULE=1 COSMO_IOS_APP=1)
+        target_link_libraries(cosmo_ios PRIVATE
+            cosmo_lowlevel1 cosmo_platform cosmo_video cosmo_warnings)
+        add_dependencies(cosmo_ios cosmore_game1)
+        set_target_properties(cosmo_ios PROPERTIES
+            OUTPUT_NAME "${COSMO_IOS_EXECUTABLE_NAME}"
+            MACOSX_BUNDLE_BUNDLE_NAME "${COSMO_IOS_BUNDLE_NAME}"
+            MACOSX_BUNDLE_GUI_IDENTIFIER "${COSMO_IOS_BUNDLE_IDENTIFIER}"
+            MACOSX_BUNDLE_BUNDLE_VERSION "${COSMO_IOS_BUNDLE_VERSION}"
+            MACOSX_BUNDLE_SHORT_VERSION_STRING "${COSMO_IOS_SHORT_VERSION}"
+            MACOSX_BUNDLE_INFO_PLIST
+                "${CMAKE_CURRENT_BINARY_DIR}/CosmoEnhanced-Info.plist"
+            XCODE_ATTRIBUTE_TARGETED_DEVICE_FAMILY "1,2"
+            XCODE_ATTRIBUTE_IPHONEOS_DEPLOYMENT_TARGET "15.0")
+        return()
+    endif()
 
     cosmo_add_episode(1)
     cosmo_add_episode(2)
@@ -258,11 +401,19 @@ if(COSMO_BUILD_GAME)
         add_executable(cosmo src/launcher.c)
     endif()
     target_link_libraries(cosmo PRIVATE cosmo_video cosmo_warnings)
-    add_dependencies(cosmo cosmo1 cosmo2 cosmo3)
+    if(WIN32)
+        add_dependencies(cosmo cosmo1_module cosmo2_module cosmo3_module)
+    else()
+        add_dependencies(cosmo cosmo1 cosmo2 cosmo3)
+    endif()
 
     if(COSMO_EPISODE4)
         target_compile_definitions(cosmo PRIVATE COSMO_HAVE_EPISODE4)
-        add_dependencies(cosmo cosmo4)
+        if(WIN32)
+            add_dependencies(cosmo cosmo4_module)
+        else()
+            add_dependencies(cosmo cosmo4)
+        endif()
     endif()
 
     # ----------------------------------------------------------------------

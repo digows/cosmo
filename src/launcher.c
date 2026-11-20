@@ -1,16 +1,13 @@
 /*
  * launcher.c -- Front door for the three episodes.
  *
- * Cosmo shipped as three programs and this port builds three too, which is not
- * a packaging decision: the episodes differ by preprocessor conditionals that
- * include or exclude whole actor implementations, so they compile to genuinely
- * different code. See the comment in CMakeLists.txt.
+ * Each episode differs by preprocessor conditionals that include or exclude
+ * whole actor implementations. Windows loads the selected episode module into
+ * this process and reuses this window.
  *
  * The menu is drawn with the game's own font on the game's own title art,
  * through the same emulated EGA the game uses, so it looks like part of the
- * game rather than part of the host. Once an episode is chosen the process is
- * replaced by it -- not spawned as a child, which leaves two programs fighting
- * over one window.
+ * game rather than part of the host.
  */
 
 #include <stdio.h>
@@ -18,7 +15,6 @@
 #include <string.h>
 
 #ifdef _WIN32
-#   include <process.h>
 #   ifndef WIN32_LEAN_AND_MEAN
 #       define WIN32_LEAN_AND_MEAN
 #   endif
@@ -33,6 +29,9 @@
 #endif
 
 #include <SDL3/SDL.h>
+#if defined(__ANDROID__) || defined(COSMO_IOS_APP)
+#include <SDL3/SDL_main.h>
+#endif
 
 #include "cosmo/ega.h"
 #include "cosmo/font.h"
@@ -270,10 +269,11 @@ static void draw_menu(int selected)
     }
 
     row = MENU_TOP + MENU_HEIGHT - 3;
-    snprintf(line, sizeof line, "%d) Mods", MODS_MENU_NUMBER);
-    if (selected == EPISODE_COUNT) font_draw(cursor_x, row, ">");
-    font_draw(title_x, row, line);
-    font_draw_centered(MENU_TOP + MENU_HEIGHT - 2, "Enter select, Esc quit");
+    snprintf(line, sizeof line, "%d)", MODS_MENU_NUMBER);
+    if (selected == EPISODE_COUNT) font_draw_colored(cursor_x, row, ">", TEXT_RED);
+    font_draw_colored(title_x, row, line, TEXT_RED);
+    int customise_x = title_x + (int)strlen(line) + 1;
+    font_draw_colored(customise_x, row, "Customise", TEXT_GREEN);
 }
 
 struct mods_selector {
@@ -358,7 +358,7 @@ static void draw_mods_menu(const struct mods_row *rows, size_t count,
 {
     size_t end = SDL_min(count, first + MODS_VISIBLE_ROWS);
     font_draw_frame(1, 4, 38, 21);
-    font_draw_centered(5, "Mods");
+    font_draw_colored(15, 5, "Customise", TEXT_GREEN);
 
     for (size_t i = first; i < end; ++i) {
         int y = MODS_LIST_TOP + (int)(i - first);
@@ -386,19 +386,15 @@ static void draw_mods_menu(const struct mods_row *rows, size_t count,
     if (end < count) font_draw(36, MODS_LIST_TOP + MODS_VISIBLE_ROWS, "\x19");
 
     const struct mods_row *row = &rows[selected];
-    const char *help;
     if (row->selector) {
         draw_mod_description(row->selector->description);
-        help = "Left/Right: change  Esc: return";
     } else if (selected == 0) {
         draw_mod_description("Change Cosmo's body and accents");
-        help = "Enter/Space: open  Esc: return";
     } else {
         draw_mod_description(row->rumble ? "Controller vibration in menus and gameplay."
                                         : mods_get(row->primary)->description);
-        help = "Enter/Space: toggle  Esc: return";
     }
-    font_draw_centered(23, save_failed ? "Could not save mod settings" : help);
+    if (save_failed) font_draw_centered(23, "Could not save mod settings");
 }
 
 static bool run_colour_menu(int episode);
@@ -574,8 +570,7 @@ static bool run_colour_menu(int episode)
             font_draw(3, 12, line);
             font_draw(3, 16, selected == 2 ? "> Reset colours" : "  Reset colours");
             draw_player_preview(&preview, selected == 2 ? NULL : colours);
-            font_draw_centered(22, "Arrows or D-pad to change");
-            font_draw_centered(23, save_failed ? "Could not save colours" : "Enter/A save   Esc/B back");
+            if (save_failed) font_draw_centered(23, "Could not save colours");
             redraw = false;
         }
 
@@ -845,17 +840,76 @@ static void report_missing_data(void)
  * The two spellings differ in more than name: Windows takes the argument
  * vector as const, POSIX does not.
  */
+#if !defined(_WIN32) && !defined(__ANDROID__) && !defined(COSMO_IOS_APP)
 static int replace_process(const char *program, char *argv[])
 {
-#ifdef _WIN32
-    return (int)_execv(program, (const char *const *)argv);
-#else
     return execv(program, argv);
-#endif
 }
+#endif
 
 static int run_episode(int number)
 {
+#if defined(__ANDROID__) || defined(COSMO_IOS_APP)
+    extern int cosmo_episode_main(int argc, char *argv[]);
+    char *episode_argv[] = {"cosmo", NULL};
+    return number == 1 ? cosmo_episode_main(1, episode_argv) : 1;
+#elif defined(_WIN32)
+    static const char *const WHERE[] = {"episodes/", ""};
+    char module_path[1024];
+    char fullscreen_arg[] = "--fullscreen";
+    char *module_argv[] = {module_path, NULL, NULL};
+    SDL_PathInfo info;
+    SDL_SharedObject *module;
+    int (*episode_main)(int, char **) = NULL;
+    size_t i;
+    bool found = false;
+    int argc = 1;
+    int result;
+
+    for (i = 0; i < SDL_arraysize(WHERE) && !found; i++) {
+        int written = snprintf(module_path, sizeof module_path,
+                               "%s/%scosmo%d.dll", paths_program_dir(),
+                               WHERE[i], number);
+        if (written < 0 || (size_t)written >= sizeof module_path) continue;
+        found = SDL_GetPathInfo(module_path, &info);
+    }
+
+    if (!found) {
+        fprintf(stderr, "cosmo: episode %d module is not installed beside "
+                        "the launcher\n", number);
+        return 1;
+    }
+
+    module = SDL_LoadObject(module_path);
+    if (!module) {
+        fprintf(stderr, "cosmo: cannot load %s: %s\n",
+                module_path, SDL_GetError());
+        return 1;
+    }
+
+    if (launcher_gamepad) {
+        SDL_CloseGamepad(launcher_gamepad);
+        launcher_gamepad = NULL;
+    }
+
+    episode_main = (int (*)(int, char **))SDL_LoadFunction(
+        module, "cosmo_episode_main");
+    if (!episode_main) {
+        fprintf(stderr, "cosmo: %s has no episode entry point: %s\n",
+                module_path, SDL_GetError());
+        SDL_UnloadObject(module);
+        return 1;
+    }
+
+    if (video_is_fullscreen()) {
+        module_argv[1] = fullscreen_arg;
+        argc = 2;
+    }
+
+    result = episode_main(argc, module_argv);
+    SDL_UnloadObject(module);
+    return result;
+#else
     /*
      * The episode programs are looked for in a subdirectory first and beside
      * the launcher second.
@@ -912,6 +966,7 @@ static int run_episode(int number)
     /* Only reached if the replacement failed. */
     fprintf(stderr, "cosmo: cannot start %s\n", program);
     return 1;
+#endif
 }
 
 int main(int argc, char *argv[])

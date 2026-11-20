@@ -23,10 +23,10 @@ missing required values, unsupported manifest versions, inaccessible files,
 and duplicate IDs are logged and skipped. A folder's name may differ from its
 ID.
 
-Open **Mods** from the launcher. Use Up/Down to browse, Left/Right to change
-**Filter**, **Soundtrack** or **SFX**, and Enter or Space to toggle individual
-mods. Escape returns to the episode list. The launcher and
-episode programs share the same preference file. It is stored under
+Open **Customise** from the launcher. Use Up/Down to browse, Left/Right to
+change **Filter**, **Soundtrack** or **SFX**, and Enter or Space to toggle
+individual mods. Escape returns to the episode list. The launcher and episode
+programs share the same preference file. It is stored under
 `Settings/mods.json` in the writable data/save directory; when the install
 folder is read-only, that directory is the user's Cosmo application-data
 folder.
@@ -70,7 +70,7 @@ gives Cosmo a blue body and cyan accents:
 The remap applies to opaque pixels in `PLAYERS.MNI` after any raw asset
 replacement is loaded. Keep one skin enabled at a time. If several are
 enabled, the first skin in alphabetical folder order wins. The Character Colour
-picker under **Mods** overrides installed skin colours until you select
+picker under **Customise** overrides installed skin colours until you select
 **Reset colours**.
 A palette effect such as Aurora can still tint the final picture.
 
@@ -88,7 +88,7 @@ Mods/soft-soundtrack/
 ```
 
 The manifest needs the usual required fields, such as `id`, `name`, and
-`version`. Enable the mod in the launcher's **Mods** menu.
+`version`. Enable the mod in the launcher's **Customise** menu.
 
 The game decodes the replacement when that track starts and loops it until the
 game switches tracks. The in-game Music toggle also stops and resumes it. If
@@ -170,8 +170,8 @@ and glow:
 ```
 
 Create `Mods/crt-shader/mod.json` with that content, launch the built game,
-open **Mods**, and set **Filter** to **CRT**. It applies a small Gaussian phosphor
-blur and glow to gameplay and launcher screenshots.
+open **Customise**, and set **Filter** to **CRT**. It applies a small Gaussian
+phosphor blur and glow to gameplay and launcher screenshots.
 
 Scanlines are a separate effect. Put `"crtScanlines": true` in another mod's
 manifest to enable them independently, or enable both mods together:

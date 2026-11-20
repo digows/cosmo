@@ -1,4 +1,4 @@
-# Cosmo Enhanced — Windows edition of Cosmo's Cosmic Adventure
+# Cosmo Enhanced - Windows edition of Cosmo's Cosmic Adventure
 
 A fun Windows project to bring **Cosmo's Cosmic Adventure: Forbidden Planet**
 (Apogee Software, 1992) to a new generation. It adds controller support,
@@ -19,12 +19,12 @@ and display filter from the launcher.
 | ![Cosmo's Cosmic Adventure title screen, Forbidden Planet](docs/screenshots/title1.png) | ![The game's credits screen](docs/screenshots/credit.png) |
 | ![Cosmo running through a jungle level](docs/screenshots/gameplay-jungle.png) | ![Episode selection launcher drawn in the game's own font](docs/screenshots/launcher.png) |
 
-Screenshots are produced by this port from the original 1992 data files — not
+Screenshots are produced by this port from the original 1992 data files - not
 captured from an emulator.
 
 ## Download and play
 
-**[Get the latest Windows release](https://github.com/GITitdoneboi/enhanced-cosmo/releases/latest)** —
+**[Get the latest Windows release](https://github.com/GITitdoneboi/enhanced-cosmo/releases/latest)** -
 the Windows download includes the shareware Episode 1 and
 plays as soon as it is unpacked; nothing to install. If you own Episodes 2 and
 3, the launcher will ask you to point it at your copy.
@@ -39,7 +39,7 @@ layer that talked to PC hardware.
 
 Everything above that layer is the game as Todd Replogle wrote it: the physics,
 the actors, the collision handling, the bugs. What was written from scratch is
-the machine underneath — an emulated EGA adapter, the programmable interval
+the machine underneath - an emulated EGA adapter, the programmable interval
 timer, the keyboard controller, the PC speaker, and an AdLib.
 
 If you want the story of what broke along the way, that is in
@@ -50,8 +50,8 @@ If you want the story of what broke along the way, that is in
 - **Widescreen** shows more of the level in 16:9 with a full-width HUD.
   The original view is the default. CRT blur and scanlines work in both modes.
 - **Episode launcher** uses the original animated dialog frame, marks missing
-  episodes, and lets you locate their files. **Mods** uses a scrolling list
-  with colour-coded toggles and longer descriptions.
+  episodes, and lets you locate their files. **Customise** offers filters,
+  soundtrack and sound choices, controller rumble, and mods.
 - **Character Colour** lets you choose Cosmo's body and accent colours with a
   live preview.
 - **Game Settings** includes keyboard remapping, a gamepad layout guide,
@@ -65,21 +65,21 @@ If you want the story of what broke along the way, that is in
 
 | Subsystem | State |
 |---|---|
-| All three episodes, behind an in-game-style launcher | ✅ |
-| Application bundle with an icon, and downloads that just run | ✅ |
-| Emulated EGA — write modes, latches, bit mask, map mask, set/reset | ✅ unit tested |
-| Planar decode, palette, SDL3 presentation | ✅ unit tested |
-| Interrupt and timing layer — int 8 / int 9, PIT, PIC | ✅ 140 Hz, measured |
-| Map loading, scrolling, actors, the attract-mode demo | ✅ |
-| Keyboard, including jump while moving | ✅ verified by script |
-| Gamepad controls in the launcher, menus and episodes | ✅ |
-| Controller rumble for menus and gameplay events | ✅ on supported controllers |
-| Saving and restoring a game | ✅ |
-| PC speaker sound effects | ✅ verified against the game's own sound data |
-| AdLib (OPL2) music, via [ymfm](https://github.com/aaronsgiles/ymfm) | ✅ |
-| Sound and music volume controls (0–100%, 25% steps) | ✅ |
-| Separate mods for MP3 music, filtered sound effects, CRT Shader and CRT Scanlines | ✅ |
-| Windows x64 build (MinGW-w64) | ✅ green in CI |
+| All three episodes, behind an in-game-style launcher | ? |
+| Application bundle with an icon, and downloads that just run | ? |
+| Emulated EGA - write modes, latches, bit mask, map mask, set/reset | ? unit tested |
+| Planar decode, palette, SDL3 presentation | ? unit tested |
+| Interrupt and timing layer - int 8 / int 9, PIT, PIC | ? 140 Hz, measured |
+| Map loading, scrolling, actors, the attract-mode demo | ? |
+| Keyboard, including jump while moving | ? verified by script |
+| Gamepad controls in the launcher, menus and episodes | ? |
+| Controller rumble for menus and gameplay events | ? on supported controllers |
+| Saving and restoring a game | ? |
+| PC speaker sound effects | ? verified against the game's own sound data |
+| AdLib (OPL2) music, via [ymfm](https://github.com/aaronsgiles/ymfm) | ? |
+| Sound and music volume controls (0-100%, 25% steps) | ? |
+| Separate mods for MP3 music, filtered sound effects, CRT Shader and CRT Scanlines | ? |
+| Windows x64 build (MinGW-w64) | ? green in CI |
 | Optional 16:9 widescreen and full-width HUD | Tested in Episode 1 |
 
 The game runs end to end: `cosmo` starts the original `InnerMain()` on its own
@@ -117,13 +117,13 @@ from source needs it putting in place.
 
 `COSMO1.STN` and `COSMO1.VOL` are looked for beside the program, inside the
 directory the game was started from. Whichever is found first is used, and if
-it can be written to the saves go there too — so an unpacked folder carries its
+it can be written to the saves go there too - so an unpacked folder carries its
 own. See
 [gamedata/README.md](gamedata/README.md) for where to get the data, with
 checksums.
 
 If a `COSMOn.CFG` is already present it wins over this port's defaults,
-including the jump key — the original distributions shipped one with ctrl.
+including the jump key - the original distributions shipped one with ctrl.
 Delete it to get the defaults, or rebind in game.
 
 ## Running
@@ -135,7 +135,7 @@ Delete it to get the defaults, or rebind in game.
 Leave it alone for a minute and it plays its attract-mode demo.
 
 `cosmo` is a launcher: it lists the episodes, marks the ones whose data is
-missing, and offers a file picker for those — and it does the listing in the
+missing, and offers a file picker for those - and it does the listing in the
 game's own font on the game's own title art, drawn through the same emulated
 EGA. Name an episode to skip the menu:
 
@@ -143,7 +143,7 @@ EGA. Name an episode to skip the menu:
 ./build/cosmo.exe 2
 ```
 
-The three episodes are separate programs — `cosmo1`, `cosmo2`, `cosmo3` — which
+The three episodes are separate programs - `cosmo1`, `cosmo2`, `cosmo3` - which
 is not a packaging choice. They differ by preprocessor conditionals that include
 or exclude whole actor implementations, so they compile to genuinely different
 code. Apogee shipped three executables for the same reason.
@@ -163,7 +163,7 @@ Arrow keys move, **Space** jumps, **Alt** throws a bomb.
 The original shipped ctrl for jump, which was ordinary in 1992; space has been
 the platformer convention for a long time since, and it is the binding no window
 manager fights over. That is the one deliberate change this port makes to the
-game's behaviour — see [patches/0007](patches/). Bomb is unchanged.
+game's behaviour - see [patches/0007](patches/). Bomb is unchanged.
 
 Gamepads work in the launcher, menus and episodes. On a rumble-capable
 controller, menu navigation and selection, typing, jumps, pickups, impacts and
@@ -177,7 +177,8 @@ through the game with **Q**, then **Y**, to save high scores.
 
 ## Mods
 
-Open **Mods** in the launcher to choose filters, music and sound effects, or toggle individual mods.
+Open **Customise** in the launcher to choose filters, music and sound effects,
+controller rumble, character colours, or toggle individual mods.
 
 | Mod | Effect | Default |
 |---|---|---|
@@ -187,8 +188,8 @@ Open **Mods** in the launcher to choose filters, music and sound effects, or tog
 | Gamepad Rumble | Controller vibration in menus and gameplay | On |
 | Widescreen | 16:9 gameplay with a wider playfield and HUD | Off |
 
-Open **Mods > Character Colour** to pick Cosmo's body and accent colours with a
-live preview.
+Open **Customise > Character Colour** to pick Cosmo's body and accent colours
+with a live preview.
 
 See [docs/modding.md](docs/modding.md) for manifest fields, installation paths,
 supported raw graphics replacements, and priority rules.
@@ -200,7 +201,7 @@ part of the CPU. Cosmo's main loop never yields: it busy-waits on a counter its
 own timer interrupt increments, and reads keyboard state its own keyboard
 interrupt fills in. On real hardware those handlers fired underneath the running
 program, so here the main thread fires them at whatever rate the game programmed
-into the PIT — 140 Hz, or 560 with music — while the game runs alongside.
+into the PIT - 140 Hz, or 560 with music - while the game runs alongside.
 
 The original programs the EGA through I/O ports and writes into video memory at
 segment 0xA000. Rather than rewriting the drawing code, this port emulates the
@@ -253,21 +254,21 @@ docs/              porting notes and screenshots
 Source preparation applies three mechanical transformations to upstream: it
 drops the `#include` lines for Borland headers with no modern equivalent,
 comments out the 16-bit inline assembly, and pins the base types to their
-original widths — `unsigned int` was 16 bits on DOS and the game leans on the
+original widths - `unsigned int` was 16 bits on DOS and the game leans on the
 wraparound. Anything those cannot express is a numbered patch under
 [`patches/`](patches/), each explaining the defect and why the change is correct.
 
 It all runs in CMake rather than a shell script, so it behaves the same on every
 platform, and each patch is fingerprinted before and after: a patch that reports
 success while changing nothing fails the configure step rather than silently
-doing nothing. That is not hypothetical — it happened, and
+doing nothing. That is not hypothetical - it happened, and
 [the notes](docs/porting-notes.md) describe it.
 
 ## License and attribution
 
 Code in this repository: MIT, see [LICENSE](LICENSE).
 
-*Cosmo's Cosmic Adventure*, its assets and trademarks are © 1992 Apogee
-Software, Ltd. and are not redistributed here. Cosmore is MIT, © Scott Smitelli
-and contributors; ymfm is BSD 3-Clause, © Aaron Giles. Full credits, including
+*Cosmo's Cosmic Adventure*, its assets and trademarks are c 1992 Apogee
+Software, Ltd. and are not redistributed here. Cosmore is MIT, c Scott Smitelli
+and contributors; ymfm is BSD 3-Clause, c Aaron Giles. Full credits, including
 the game's original authors, are in [ATTRIBUTION.md](ATTRIBUTION.md).
