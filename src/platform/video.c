@@ -422,6 +422,11 @@ void video_set_fullscreen(bool fullscreen)
 bool video_poll_event(SDL_Event *event)
 {
     while (SDL_PollEvent(event)) {
+        if ((event->type == SDL_EVENT_KEY_DOWN || event->type == SDL_EVENT_KEY_UP) &&
+            event->key.key == SDLK_AC_BACK) {
+            event->key.key = SDLK_ESCAPE;
+            event->key.scancode = SDL_SCANCODE_ESCAPE;
+        }
         if (event->type == SDL_EVENT_KEY_DOWN) {
             const SDL_KeyboardEvent *key = &event->key;
             bool enter = key->scancode == SDL_SCANCODE_RETURN ||

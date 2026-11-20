@@ -2,6 +2,9 @@
 #include "cosmo/group.h"
 
 #include <SDL3/SDL.h>
+#ifdef __ANDROID__
+#include <SDL3/SDL_system.h>
+#endif
 
 #include <stdio.h>
 #include <string.h>
@@ -233,6 +236,25 @@ static int shipped_locations(char slots[][MAX_PATH_LEN])
 
 bool paths_init(void)
 {
+#ifdef __ANDROID__
+    const char *internal = SDL_GetAndroidInternalStoragePath();
+
+    if (!internal || !path_copy(data_dir, sizeof data_dir, internal) ||
+        !path_copy(write_dir, sizeof write_dir, internal)) {
+        fprintf(stderr, "cosmo: Android internal storage is unavailable\n");
+        return false;
+    }
+
+    resolve_program_dir(internal);
+    resolve_install_dir();
+
+    if (!dir_has_any_episode(data_dir)) {
+        fprintf(stderr, "cosmo: Episode 1 data was not installed in app storage\n");
+        return false;
+    }
+
+    return change_dir(data_dir) == 0;
+#else
     char shipped[5][MAX_PATH_LEN];
     int count = shipped_locations(shipped);
     const char *prefs;
@@ -279,6 +301,7 @@ bool paths_init(void)
     if (!dir_has_any_episode(data_dir)) return false;
 
     return change_dir(data_dir) == 0;
+#endif
 }
 
 const char *paths_data_dir(void)

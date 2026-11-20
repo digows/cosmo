@@ -1,5 +1,8 @@
 build/
 compile_commands.json
+/android/.gradle/
+/android/local.properties
+/android/app/.cxx/
 
 # Game data is Apogee Software's property. Never commit it.
 gamedata/*
@@ -12,6 +15,7 @@ gamedata/*
 !docs/*.png
 !assets/*.png
 !docs/screenshots/*.png
+!android/app/src/main/res/**/*.png
 .DS_Store
 .cache/
 

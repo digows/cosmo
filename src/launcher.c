@@ -11,6 +11,7 @@
  */
 
 #include <stdio.h>
+#include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -34,8 +35,9 @@
 #endif
 
 #include "cosmo/ega.h"
-#include "cosmo/font.h"
+#include "cosmo/audio.h"
 #include "cosmo/group.h"
+#include "cosmo/font.h"
 #include "cosmo/paths.h"
 #include "cosmo/mods.h"
 #include "cosmo/video.h"
@@ -66,6 +68,94 @@ static SDL_Gamepad *launcher_gamepad;
 static Uint64 launcher_next_gamepad_scan;
 static bool launcher_gamepad_previous[6];
 static Uint64 launcher_gamepad_repeat_at[4];
+static bool launcher_audio_ready;
+static int launcher_music_mode = -1;
+static SDL_Thread *launcher_music_thread;
+static SDL_AtomicInt launcher_music_result;
+
+struct launcher_music_job {
+    char path[1024];
+};
+
+static int SDLCALL load_launcher_remix(void *userdata)
+{
+    struct launcher_music_job *job = userdata;
+    bool loaded = audio_music_play_mp3(job->path);
+    free(job);
+    SDL_SetAtomicInt(&launcher_music_result, loaded ? 1 : -1);
+    return loaded ? 1 : 0;
+}
+
+static void launcher_poll_music_worker(void);
+
+/* Preview original M2Easy by default, or its MP3 remix when selected. Keep the
+ * audio device open while moving between launcher menus. */
+static void launcher_sync_music(void)
+{
+    char path[1024];
+    bool wants_remix = mods_music_override("MEASY2.MNI", path, sizeof path);
+    int mode = wants_remix ? 1 : 0;
+
+    if (!launcher_audio_ready || mode == launcher_music_mode) return;
+    if (wants_remix) {
+        if (launcher_music_thread) return;
+        struct launcher_music_job *job = malloc(sizeof *job);
+        if (!job) return;
+        SDL_strlcpy(job->path, path, sizeof job->path);
+        SDL_SetAtomicInt(&launcher_music_result, 0);
+        launcher_music_thread = SDL_CreateThread(load_launcher_remix,
+                                                  "cosmo-music-load", job);
+        if (!launcher_music_thread) free(job);
+    } else {
+        size_t size = group_entry_size(paths_data_dir(), 1, "MEASY2.MNI");
+        uint8_t *music = size ? malloc(size) : NULL;
+        if (music && group_read(paths_data_dir(), 1, "MEASY2.MNI", music, size) == size &&
+            audio_music_play_imf(music, size)) {
+            launcher_music_mode = mode;
+        } else {
+            audio_music_stop_mp3();
+            launcher_music_mode = -1;
+            SDL_Log("Cosmo launcher: original M2Easy track is unavailable");
+        }
+        free(music);
+    }
+}
+
+static void launcher_poll_music_worker(void)
+{
+    int result;
+
+    if (!launcher_music_thread) return;
+    result = SDL_GetAtomicInt(&launcher_music_result);
+    if (!result || !SDL_CompareAndSwapAtomicInt(&launcher_music_result, result, 0)) return;
+    SDL_WaitThread(launcher_music_thread, NULL);
+    launcher_music_thread = NULL;
+
+    if (result > 0) {
+        char path[1024];
+        if (mods_music_override("MEASY2.MNI", path, sizeof path)) {
+            launcher_music_mode = 1;
+        } else {
+            /* A choice changed while decoding. Restore its current track. */
+            launcher_music_mode = -1;
+            launcher_sync_music();
+        }
+    } else {
+        SDL_Log("Cosmo launcher: could not load the M2Easy remix");
+    }
+}
+
+static void launcher_audio_shutdown(void)
+{
+    if (!launcher_audio_ready) return;
+    if (launcher_music_thread) {
+        SDL_WaitThread(launcher_music_thread, NULL);
+        launcher_music_thread = NULL;
+    }
+    audio_shutdown();
+    launcher_audio_ready = false;
+    launcher_music_mode = -1;
+}
 
 static Uint16 launcher_boost_rumble(Uint16 strength)
 {
@@ -411,10 +501,12 @@ static bool run_mods_menu(int episode)
             draw_mods_menu(rows, count, selected, first, save_failed);
             redraw = false;
         }
+        launcher_poll_music_worker();
         launcher_poll_gamepad();
         while (video_poll_event(&event)) {
             if (event.type == SDL_EVENT_QUIT) return true;
-            if (event.type == SDL_EVENT_KEY_DOWN && event.key.key == SDLK_ESCAPE) {
+            if (event.type == SDL_EVENT_KEY_DOWN &&
+                (event.key.key == SDLK_ESCAPE || event.key.key == SDLK_AC_BACK)) {
                 launcher_menu_haptic(false);
                 return false;
             }
@@ -430,6 +522,7 @@ static bool run_mods_menu(int episode)
             } else if (event.key.key == SDLK_LEFT || event.key.key == SDLK_RIGHT) {
                 if (!rows[selected].selector || event.key.repeat) continue;
                 save_failed = !step_mods_choice(&rows[selected], event.key.key == SDLK_LEFT ? -1 : 1);
+                if (!save_failed) launcher_sync_music();
                 launcher_menu_haptic(!save_failed);
             } else if (event.key.key == SDLK_RETURN || event.key.key == SDLK_KP_ENTER || event.key.key == SDLK_SPACE) {
                 if (event.key.repeat) continue;
@@ -439,6 +532,7 @@ static bool run_mods_menu(int episode)
                     (void)draw_background(episode);
                 } else if (rows[selected].selector) {
                     save_failed = !step_mods_choice(&rows[selected], 1);
+                    if (!save_failed) launcher_sync_music();
                     launcher_menu_haptic(!save_failed);
                 } else if (rows[selected].rumble) {
                     bool enabled = !mods_gamepad_rumble_enabled();
@@ -575,6 +669,7 @@ static bool run_colour_menu(int episode)
         }
 
         SDL_Event event;
+        launcher_poll_music_worker();
         launcher_poll_gamepad();
         while (video_poll_event(&event)) {
             if (event.type == SDL_EVENT_QUIT) return true;
@@ -693,6 +788,7 @@ static bool offer_import(int episode)
     /* The callback arrives on the main thread, so events have to keep moving. */
     while (import_state == 0) {
         SDL_Event event;
+        launcher_poll_music_worker();
         while (video_poll_event(&event)) {
             if (event.type == SDL_EVENT_QUIT) return false;
         }
@@ -746,6 +842,7 @@ static int run_menu(void)
             }
         }
 
+        launcher_poll_music_worker();
         launcher_poll_gamepad();
         while (video_poll_event(&event)) {
             if (event.type == SDL_EVENT_QUIT) return 0;
@@ -753,6 +850,7 @@ static int run_menu(void)
             if (event.type != SDL_EVENT_KEY_DOWN) continue;
 
             SDL_Keycode key = event.key.key;
+            if (key == SDLK_AC_BACK) key = SDLK_ESCAPE;
             if (key >= SDLK_1 && key <= SDLK_6) {
                 if (event.key.repeat) continue;
                 int shortcut = (int)(key - SDLK_1) + 1;
@@ -764,6 +862,7 @@ static int run_menu(void)
 
             switch (key) {
             case SDLK_ESCAPE:
+            case SDLK_AC_BACK:
             case SDLK_Q:
                 launcher_menu_haptic(false);
                 return 0;
@@ -852,6 +951,10 @@ static int run_episode(int number)
 #if defined(__ANDROID__) || defined(COSMO_IOS_APP)
     extern int cosmo_episode_main(int argc, char *argv[]);
     char *episode_argv[] = {"cosmo", NULL};
+    /* Release the launcher's SDL window before the embedded episode creates
+     * its own. Mobile platforms host both entry points in one process. */
+    launcher_audio_shutdown();
+    video_shutdown();
     return number == 1 ? cosmo_episode_main(1, episode_argv) : 1;
 #elif defined(_WIN32)
     static const char *const WHERE[] = {"episodes/", ""};
@@ -906,6 +1009,7 @@ static int run_episode(int number)
         argc = 2;
     }
 
+    launcher_audio_shutdown();
     result = episode_main(argc, module_argv);
     SDL_UnloadObject(module);
     return result;
@@ -952,6 +1056,7 @@ static int run_episode(int number)
 
     /* Give up the window before the process image is replaced. */
     if (video_is_fullscreen()) child_argv[1] = fullscreen_arg;
+    launcher_audio_shutdown();
     video_shutdown();
 
     /*
@@ -1024,10 +1129,13 @@ int main(int argc, char *argv[])
         install_palette();
         ega_select_active_page(0);
         unfold_launch_frame();
+        launcher_audio_ready = audio_init();
+        launcher_sync_music();
 
         number = run_menu();
 
         if (number == 0) {
+            launcher_audio_shutdown();
             video_shutdown();
             return 0;
         }

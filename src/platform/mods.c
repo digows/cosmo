@@ -566,7 +566,12 @@ bool mods_music_override(const char *asset_name, char *path, size_t path_size)
     if (!extension || SDL_strcasecmp(extension,".mni")) return false;
     size_t stem = (size_t)(extension - asset_name);
     if (!stem || stem + 5 >= sizeof filename) return false;
-    SDL_memcpy(filename,asset_name,stem);
+    /* The bundled soundtrack files use uppercase names. Windows finds them
+     * case-insensitively, but Android's app storage does not. */
+    for (size_t i = 0; i < stem; ++i) {
+        char c = asset_name[i];
+        filename[i] = c >= 'a' && c <= 'z' ? (char)(c - 'a' + 'A') : c;
+    }
     SDL_memcpy(filename + stem,".mp3",5);
 
     for (size_t i = 0; i < mod_count; ++i) if (mods[i].enabled) {

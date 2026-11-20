@@ -1,0 +1,90 @@
+plugins {
+    id 'com.android.application'
+}
+
+def cosmoRoot = projectDir.parentFile.parentFile
+def generatedCosmoAssets = layout.buildDirectory.dir('generated/cosmoAssets')
+
+android {
+    namespace = 'com.digows.cosmoenhanced'
+    compileSdk = 36
+    ndkVersion = '30.0.16248370'
+
+    defaultConfig {
+        applicationId = 'com.digows.cosmoenhanced'
+        minSdk = 21
+        targetSdk = 35
+        versionCode = 401
+        versionName = '0.4.1'
+
+        externalNativeBuild {
+            cmake {
+                arguments '-DANDROID_PLATFORM=android-21',
+                    '-DANDROID_STL=c++_static',
+                    '-DCOSMO_ANDROID_APP=ON',
+                    '-DCOSMO_FETCH_SDL=ON',
+                    '-DCOSMO_BUILD_TESTS=OFF'
+                abiFilters 'arm64-v8a', 'x86_64'
+                targets 'main'
+            }
+        }
+    }
+
+    buildTypes {
+        debug {
+            applicationIdSuffix = '.debug'
+        }
+        release {
+            minifyEnabled = false
+            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+        }
+    }
+
+    externalNativeBuild {
+        cmake {
+            path = file('../../CMakeLists.txt')
+            version = '3.31.6'
+        }
+    }
+
+    sourceSets {
+        main {
+            assets.srcDir generatedCosmoAssets
+        }
+    }
+
+    lint {
+        abortOnError = false
+    }
+
+    applicationVariants.all { variant ->
+        tasks["merge${variant.name.capitalize()}Assets"]
+            .dependsOn("externalNativeBuild${variant.name.capitalize()}")
+    }
+}
+
+tasks.register('syncCosmoAndroidAssets', Sync) {
+    from(file("${cosmoRoot}/gamedata/COSMO1.STN"))
+    from(file("${cosmoRoot}/gamedata/COSMO1.VOL"))
+    from("${cosmoRoot}/Mods") {
+        into 'Mods'
+    }
+    into generatedCosmoAssets
+
+    doFirst {
+        ['COSMO1.STN', 'COSMO1.VOL'].each { fileName ->
+            if (!file("${cosmoRoot}/gamedata/${fileName}").isFile()) {
+                throw new GradleException(
+                    "Missing ${fileName}. Run .github/scripts/fetch-shareware.sh gamedata first.")
+            }
+        }
+    }
+}
+
+tasks.named('preBuild').configure {
+    dependsOn tasks.named('syncCosmoAndroidAssets')
+}
+
+dependencies {
+    implementation fileTree(include: ['*.jar'], dir: 'libs')
+}

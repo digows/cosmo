@@ -281,7 +281,8 @@ void PlatformRecolorPlayer(uint8_t *tiles, unsigned size)
 static uint8_t sdl_to_xt(SDL_Scancode sc)
 {
     switch (sc) {
-    case SDL_SCANCODE_ESCAPE:       return 0x01;
+    case SDL_SCANCODE_ESCAPE:
+    case SDL_SCANCODE_AC_BACK:      return 0x01;
     case SDL_SCANCODE_1:            return 0x02;
     case SDL_SCANCODE_2:            return 0x03;
     case SDL_SCANCODE_3:            return 0x04;
@@ -758,7 +759,11 @@ static void logging_init(void)
 #endif
 }
 
+#if defined(COSMO_EPISODE_MODULE)
+int cosmo_episode_main(int argc, char *argv[])
+#else
 int main(int argc, char *argv[])
+#endif
 {
     SDL_Thread *thread;
     uint64_t freq, now, next_tick, next_frame, start_ms, next_debug;

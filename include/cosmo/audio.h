@@ -12,6 +12,7 @@
 #define COSMO_AUDIO_H
 
 #include <stdbool.h>
+#include <stddef.h>
 #include <stdint.h>
 
 /*
@@ -31,6 +32,9 @@ void audio_record_to(const char *path);
 /* Play a decoded MP3 as the active music track. False means no decoder or
  * the file could not be decoded; callers should use original IMF playback. */
 bool audio_music_play_mp3(const char *path);
+/* Play and loop an original Cosmo IMF music sequence from raw MNI bytes. */
+bool audio_music_play_imf(const void *data, size_t size);
+/* Stop whichever music format is currently active. */
 void audio_music_stop_mp3(void);
 /* Fade music to silence while the game is paused. */
 void audio_set_music_paused(bool paused);

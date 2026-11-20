@@ -1,4 +1,13 @@
-## What's new in v0.4.0
+## What's new in v0.4.1
+
+- **Android port**: build and play on Android 5.0 and newer, using a keyboard
+  or gamepad. The system Back button acts as Escape. Touch gameplay controls
+  are not included yet.
+- Launcher audio previews M2Easy and changes between original and remixed
+  soundtrack immediately when you change the setting.
+- Android launcher art uses the supplied adaptive and round icon resources.
+
+## Windows
 
 - **Widescreen** adds a 16:9 playfield and a full-width HUD. Enable it in
   **Mods**. CRT and scanlines work in widescreen and in the original view.
@@ -20,6 +29,15 @@ find your copy.
 | Download | For |
 |---|---|
 | `cosmo-*-windows.zip` | Windows, 64-bit |
+
+## Android
+
+| Download | For |
+|---|---|
+| `Cosmo-Android-v0.4.1.apk` | Android 5.0+, ARM64 or x86-64 |
+
+This is a debug-signed APK for sideloading. The Android source and build steps
+are in `android/README.md`.
 
 Arrow keys move, **space** jumps, **alt** bombs, **F1** helps, **Q** then **Y**
 quits and saves. All of it is rebindable from the game's own menu. `PLAYING.txt`

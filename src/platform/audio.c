@@ -41,6 +41,7 @@
 #define AMPLITUDE 6000
 #define MP3_MUSIC_GAIN 0.50f
 #define MUSIC_FADE_FRAMES (SAMPLE_RATE * 300 / 1000)
+#define IMF_TICK_RATE 560.0
 
 static SDL_AudioStream *stream;
 static double phase;          /* 0..1 across one square wave cycle */
@@ -51,6 +52,12 @@ static const char *wav_path;
 static int16_t *mp3_samples;
 static uint64_t mp3_frames;
 static uint64_t mp3_cursor;
+static uint8_t *imf_music_data;
+static size_t imf_music_size;
+static size_t imf_music_cursor;
+static uint32_t imf_music_tick;
+static uint32_t imf_music_next_due;
+static double imf_frames_to_tick;
 static int16_t *mp3_sound_samples;
 static uint64_t mp3_sound_frames;
 static uint64_t mp3_sound_cursor;
@@ -65,7 +72,42 @@ static SDL_AtomicInt music_volume_percent = { 100 };
 static SDL_AtomicInt music_paused;
 static int music_fade_frames = MUSIC_FADE_FRAMES; /* Audio callback only. */
 
-#ifdef _WIN32
+static void render_imf(int16_t *out, int frames)
+{
+    int rendered = 0;
+    const double frames_per_tick = (double)SAMPLE_RATE / IMF_TICK_RATE;
+
+    while (rendered < frames) {
+        if (imf_frames_to_tick <= 0.0) {
+            while (imf_music_cursor + 4 <= imf_music_size &&
+                   imf_music_next_due <= imf_music_tick) {
+                const uint8_t *event = imf_music_data + imf_music_cursor;
+                uint16_t delay = (uint16_t)(event[2] | ((uint16_t)event[3] << 8));
+                opl_write(event[0], event[1]);
+                imf_music_cursor += 4;
+                imf_music_next_due = imf_music_tick + delay;
+            }
+
+            ++imf_music_tick;
+            if (imf_music_cursor >= imf_music_size) {
+                imf_music_cursor = 0;
+                imf_music_tick = 0;
+                imf_music_next_due = 0;
+            }
+            imf_frames_to_tick += frames_per_tick;
+        }
+
+        int chunk = (int)imf_frames_to_tick;
+        if ((double)chunk < imf_frames_to_tick) ++chunk;
+        if (chunk > frames - rendered) chunk = frames - rendered;
+        if (chunk < 1) chunk = 1;
+        opl_generate(out + rendered, chunk);
+        rendered += chunk;
+        imf_frames_to_tick -= chunk;
+    }
+}
+
+#if defined(_WIN32) || defined(__ANDROID__)
 extern bool cosmo_mp3_decode(const char *path, int16_t **samples, uint64_t *frames);
 #endif
 
@@ -252,6 +294,7 @@ static void render(int16_t *out, int frames)
     int music_volume = SDL_GetAtomicInt(&music_volume_percent);
     bool paused = SDL_GetAtomicInt(&music_paused) != 0;
     bool playing_mp3 = mp3_samples && mp3_frames;
+    bool playing_imf = imf_music_data && imf_music_size >= 4;
     float music_gain = music_volume / 100.0f;
 
     if (playing_mp3) {
@@ -260,6 +303,8 @@ static void render(int16_t *out, int frames)
             out[i] = mp3_samples[mp3_cursor++];
             if (mp3_cursor >= mp3_frames) mp3_cursor = 0;
         }
+    } else if (playing_imf) {
+        render_imf(out, frames);
     } else {
         opl_generate(out, frames);
     }
@@ -305,12 +350,14 @@ void audio_set_volumes(int sound_percent, int music_percent)
 
 bool audio_music_play_mp3(const char *path)
 {
-#ifdef _WIN32
+#if defined(_WIN32) || defined(__ANDROID__)
     int16_t *decoded = NULL;
     uint64_t frames = 0;
     int16_t *old;
     if (!path || !cosmo_mp3_decode(path,&decoded,&frames) || !decoded || !frames) {
         free(decoded);
+        SDL_Log("Cosmo audio: could not decode MP3 music%s%s",
+                path ? " " : "", path ? path : "");
         return false;
     }
     if (stream) SDL_LockAudioStream(stream);
@@ -318,8 +365,16 @@ bool audio_music_play_mp3(const char *path)
     mp3_samples = decoded;
     mp3_frames = frames;
     mp3_cursor = 0;
+    uint8_t *old_imf = imf_music_data;
+    imf_music_data = NULL;
+    imf_music_size = imf_music_cursor = 0;
+    imf_music_tick = imf_music_next_due = 0;
+    imf_frames_to_tick = 0.0;
     if (stream) SDL_UnlockAudioStream(stream);
     free(old);
+    free(old_imf);
+    SDL_Log("Cosmo audio: loaded MP3 music (%llu frames)",
+            (unsigned long long)frames);
     return true;
 #else
     (void)path;
@@ -327,20 +382,57 @@ bool audio_music_play_mp3(const char *path)
 #endif
 }
 
+bool audio_music_play_imf(const void *data, size_t size)
+{
+    uint8_t *copy;
+    int16_t *old_mp3;
+    uint8_t *old_imf;
+
+    if (!data || size < 4 || (size & 3u)) return false;
+    copy = malloc(size);
+    if (!copy) return false;
+    memcpy(copy, data, size);
+
+    if (stream) SDL_LockAudioStream(stream);
+    old_mp3 = mp3_samples;
+    old_imf = imf_music_data;
+    mp3_samples = NULL;
+    mp3_frames = mp3_cursor = 0;
+    imf_music_data = copy;
+    imf_music_size = size;
+    imf_music_cursor = 0;
+    imf_music_tick = 0;
+    imf_music_next_due = 0;
+    imf_frames_to_tick = 0.0;
+    if (stream) SDL_UnlockAudioStream(stream);
+    free(old_mp3);
+    free(old_imf);
+    opl_reset();
+    return true;
+}
+
 void audio_music_stop_mp3(void)
 {
     int16_t *old;
+    uint8_t *old_imf;
     if (stream) SDL_LockAudioStream(stream);
     old = mp3_samples;
+    old_imf = imf_music_data;
     mp3_samples = NULL;
     mp3_frames = mp3_cursor = 0;
+    imf_music_data = NULL;
+    imf_music_size = imf_music_cursor = 0;
+    imf_music_tick = imf_music_next_due = 0;
+    imf_frames_to_tick = 0.0;
     if (stream) SDL_UnlockAudioStream(stream);
     free(old);
+    free(old_imf);
+    if (old_imf) opl_reset();
 }
 
 bool audio_sound_play_asset(const char *path)
 {
-#ifdef _WIN32
+#if defined(_WIN32) || defined(__ANDROID__)
     if (!path) return false;
     for (size_t i = 0; i < mp3_sound_cache_count; ++i) {
         if (!SDL_strcmp(mp3_sound_cache[i].path,path)) {
@@ -435,7 +527,11 @@ bool audio_init(void)
      * the callback fills in BUFFER_FRAMES chunks either way, so a frequency
      * change is never quantised more coarsely than that.
      */
+#ifdef __ANDROID__
+    SDL_SetHint(SDL_HINT_AUDIO_DEVICE_SAMPLE_FRAMES, "1024");
+#else
     SDL_SetHint(SDL_HINT_AUDIO_DEVICE_SAMPLE_FRAMES, "256");
+#endif
 
     spec.format = SDL_AUDIO_S16;
     spec.channels = 1;
