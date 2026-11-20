@@ -69,8 +69,9 @@ linux)
 
 windows)
     mkdir -p "$root/episodes"
-    cp "$build/cosmo.exe" "$root/"
-    cp "$build/cosmo1.exe" "$build/cosmo2.exe" "$build/cosmo3.exe" \
+    cp "$build/cosmo.exe" "$build/cosmo_video.dll" "$root/"
+    cp "$build/episodes/cosmo1.dll" "$build/episodes/cosmo2.dll" \
+       "$build/episodes/cosmo3.dll" \
        "$root/episodes/"
     cp "$repo/gamedata/COSMO1.STN" "$repo/gamedata/COSMO1.VOL" "$root/episodes/"
     cp -R "$repo/Mods" "$root/"
