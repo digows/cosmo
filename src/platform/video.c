@@ -422,6 +422,11 @@ void video_set_fullscreen(bool fullscreen)
 bool video_poll_event(SDL_Event *event)
 {
     while (SDL_PollEvent(event)) {
+        /* SDL3 reports the title-bar X as a per-window close request. Turn it
+         * into the app-wide quit event consumed by both launcher and game. */
+        if (event->type == SDL_EVENT_WINDOW_CLOSE_REQUESTED) {
+            event->type = SDL_EVENT_QUIT;
+        }
         if ((event->type == SDL_EVENT_KEY_DOWN || event->type == SDL_EVENT_KEY_UP) &&
             event->key.key == SDLK_AC_BACK) {
             event->key.key = SDLK_ESCAPE;
