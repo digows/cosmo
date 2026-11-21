@@ -32,15 +32,19 @@ plays as soon as it is unpacked; nothing to install. If you own Episodes 2 and
 The Android port bundles Episode 1 and supports keyboards and gamepads. The
 Android Back button acts as Escape. See [Android build instructions](android/README.md).
 
-## New in v0.4.4
+## Recent improvements
 
-- **Smooth Gameplay** adds intermediate positions for the camera, Cosmo,
-  selected actors, and effects such as pounce debris and rising pickups.
-  Collectible stars keep their original anticlockwise animation timing.
-- **CRT filters** work with Smooth Gameplay. The F1 menu, pause screen, quit
-  confirmation, and gameplay hints show while waiting for input.
-- **Frame capture** uses **Shift+F12** to save a numbered burst of 120 presented
-  frames. **F12** still saves a single screenshot.
+- **Smooth Gameplay** smooths scrolling, character movement, and animations.
+  It works with CRT filters and is enabled by default on fresh Android installs.
+- **Gameplay fixes** improve level transitions, pit behaviour, and how menus and
+  hints appear while smoothing is active.
+
+### In testing
+
+- **Widescreen** keeps enemies and projectiles active across the visible playfield.
+- **Visual fixes** improve scrolling backgrounds and smooth more animations.
+- **Android controls** improve system Back handling and let controller B go back
+  in Game Settings.
 
 ## What this is
 
@@ -161,14 +165,6 @@ is not a packaging choice. They differ by preprocessor conditionals that include
 or exclude whole actor implementations, so they compile to genuinely different
 code. Apogee shipped three executables for the same reason.
 
-`imgview` is a harness for the video layer alone, useful for inspecting the
-fullscreen images without starting the game:
-
-```bash
-./build/imgview.exe                                  # browse them
-./build/imgview.exe gamedata TITLE1.MNI shot.png 2   # headless screenshot
-```
-
 ## Controls
 
 Arrow keys move, **Space** jumps, **Alt** throws a bomb.
@@ -231,24 +227,6 @@ Assembly is avoided entirely. Upstream publishes a pure C implementation of
 every drawing routine in `C-DRAWING.md`, written as a curiosity because it is
 too slow for a 286. On a modern CPU that cost is irrelevant, and using it removes
 the dependency on Turbo Assembler, which Borland never released for free.
-
-## Debugging and automated checks
-
-`COSMO_SCRIPT` points at a file of timed key events, which drives the game
-without anyone at the keyboard. Each line is
-`<milliseconds> <down|up|tap> <key>`; see [tests/scripts](tests/scripts/).
-
-| Variable | Effect |
-|---|---|
-| `COSMO_DEBUG=1` | Timer rate, interrupt delivery, and the game's own key and command state, once a second |
-| `COSMO_SHOT_PATH=p COSMO_SHOT_MS=500,3000` | Screenshots at fixed moments after startup. `F12` takes one at any time |
-| `COSMO_AUDIO_WAV=out.wav` | Records everything the sound hardware produces. The header stays valid even if the game is killed rather than quit |
-| `COSMO_OPL_LOG=1` | Traces every write to the AdLib's registers |
-| `COSMO_SCRIPT=file` | Replays timed key events |
-
-Between them these are how the sound effects were checked against the game's own
-data, and how a keyboard bug was traced to the window system rather than to the
-emulation.
 
 ## Layout
 
