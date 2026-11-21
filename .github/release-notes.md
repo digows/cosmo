@@ -1,4 +1,4 @@
-## What's new in 5.0
+## What's new in 0.5.0
 
 - Android touch controls are now built into the gameplay HUD and episode launcher. They're enabled by default and can be toggled in the launcher settings.
 - Touch menus show Select and Back prompts, and you can enter high-score names with the device keyboard.

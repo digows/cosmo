@@ -499,7 +499,7 @@ index 21d4680..2b8ad78 100644
  {
 -    word x = UnfoldTextFrame(11, 4, 18, "Are you sure you", "want to quit? ");
 -    byte scancode = WaitSpinner(x + 14, 13);
-+    bbool touch = PlatformTouchControlsEnabled();
++    bbool touch = TOUCH_MENU_TEXT(false, true);
 +    word x = UnfoldTextFrame(11, 4, touch ? 22 : 18, touch ? "Quit the game?" : "Are you sure you", touch ? "Select or Back." : "want to quit? ");
 +    byte scancode = WaitSpinner(x + (touch ? 19 : 14), 13);
  
