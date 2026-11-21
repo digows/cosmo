@@ -136,22 +136,15 @@ with the music. WAV files must be mono 16-bit PCM; other sample rates are
 resampled automatically. Missing or unreadable clips fall back to the original
 effect. The bundled Soft Sound Effects mod is selected with **Customise → SFX → Softened**.
 
-## Built-in visual and gameplay options
+## Bundled gameplay mods
 
-Set any of these optional manifest fields to `true` to request the effect when
-the mod is enabled.
+Enable these bundled mods in **Customise**. Each mod's manifest uses the
+field shown below.
 
-| Field | Effect |
-|---|---|
-| `auroraPalette` | Adds cyan and violet tones while preserving neutral colours. |
-| `lowGravity` | Caps fall speed at one tile per gameplay step. |
-| `shieldMode` | Blocks normal health damage. Falling into a pit can still kill the player. |
-| `turboMode` | Runs gameplay steps every 10 ticks instead of 13. |
-| `widescreen` | Enables a wider playfield and HUD on Windows. The Android release already uses widescreen gameplay. |
-| `smoothGameplay` | Smooths scrolling, character movement, and animations. |
-
-The three gameplay options apply to player-controlled games. Title-screen
-demos use the original physics and timing.
+| Mod | Manifest field | Effect |
+|---|---|---|
+| Widescreen | `widescreen` | Enables a wider playfield and HUD on Windows. The Android release already uses widescreen gameplay. |
+| Smooth Gameplay | `smoothGameplay` | Smooths scrolling, character movement, and animations. |
 
 ## CRT shader example
 
