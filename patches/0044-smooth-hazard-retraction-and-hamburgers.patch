@@ -1,0 +1,43 @@
+diff --git a/game1.c b/game1.c
+index 9257e8c..da04911 100644
+--- a/game1.c
++++ b/game1.c
+@@ -5152,7 +5152,8 @@ void DrawPreviewEffectTile(const byte *pixels, word x, word y, word mode);
+ static bool CaptureSmoothEffect(dword identity, word sprite, word frame,
+                                 word x, word y, word mode)
+ {
+-    bool edge_padding = sprite == SPR_POUNCE_DEBRIS;
++    bool edge_padding = sprite == SPR_POUNCE_DEBRIS ||
++        sprite == SPR_STONE_HEAD_CRUSHER || sprite == SPR_SPEAR;
+     int screen_x = edge_padding ? (int16_t)(x - scrollX) : (int)x - scrollX;
+     int screen_y = edge_padding ? (int16_t)(y - scrollY) : (int)y - scrollY;
+     if (demoState != DEMO_STATE_NONE ||
+@@ -6882,11 +6883,6 @@ matches the actor type number. While spawning, frame 0 of the sprite is used.
+ */
+ static void DrawPreviewSpawner(word index, Spawner *sp, word y, word mode)
+ {
+-    /* Health power-ups use the same rising motion as other pickups. */
+-    if (sp->actor == ACT_HAMBURGER) {
+-        DrawSprite(sp->actor, 0, sp->x, y, mode);
+-        return;
+-    }
+     DrawSmoothEffect((previewSpawnerIdentity[index] << 16) | (0x2000u | index),
+                      sp->actor, 0, sp->x, y, mode);
+ }
+@@ -8129,11 +8125,15 @@ static void ProcessActor(word index)
+             DrawSprite(act->sprite, act->frame, act->x, act->y, DRAW_MODE_IN_FRONT);
+             return;
+         }
++        if (act->sprite == SPR_STONE_HEAD_CRUSHER || act->sprite == SPR_SPEAR) {
++            DrawSmoothEffect((previewStarIdentity[index] << 16) | index,
++                             act->sprite, act->frame, act->x, act->y, nextDrawMode);
++            return;
++        }
+         if (nextDrawMode == DRAW_MODE_NORMAL &&
+             demoState == DEMO_STATE_NONE &&
+             act->sprite != SPR_RED_CHOMPER &&
+             !(act->sprite == SPR_PARACHUTE_BALL && act->falltime >= 2) &&
+-            act->sprite != SPR_HAMBURGER &&
+             BeginPreviewStar((previewStarIdentity[index] << 16) | index,
+                              (int)act->x - scrollX, (int)act->y - scrollY, act->sprite == SPR_STAR)) {
+             word offset = actorInfoData[act->sprite] + act->frame * 4;

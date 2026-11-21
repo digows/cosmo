@@ -1,6 +1,8 @@
 package org.libsdl.app;
 
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.view.KeyEvent;
 
 import java.io.File;
@@ -10,9 +12,15 @@ import java.io.InputStream;
 
 /** Prepares bundled game data and mods before SDL starts the native entry point. */
 public final class CosmoActivity extends SDLActivity {
+    private static final long ESCAPE_HOLD_MS = 120;
+    private final Handler keyHandler = new Handler(Looper.getMainLooper());
+    private final Runnable releaseEscape = () -> SDLActivity.onNativeKeyUp(KeyEvent.KEYCODE_ESCAPE);
+
     private void sendEscapeToSDL() {
+        keyHandler.removeCallbacks(releaseEscape);
         SDLActivity.onNativeKeyDown(KeyEvent.KEYCODE_ESCAPE);
-        SDLActivity.onNativeKeyUp(KeyEvent.KEYCODE_ESCAPE);
+        // Cosmo polls the held key state once per game tick.
+        keyHandler.postDelayed(releaseEscape, ESCAPE_HOLD_MS);
     }
 
     @Override

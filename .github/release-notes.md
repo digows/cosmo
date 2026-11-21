@@ -1,69 +1,12 @@
-## What's new in v0.4.4
+## What's new
 
-- **Smooth Gameplay** adds intermediate camera, player, and selected actor
-  positions. It also smooths the original anticlockwise star animation,
-  pounce debris, floating scores, and rising pickups.
-- **CRT filters** work with smoothing. The F1 help menu, pause screen, quit
-  confirmation, and gameplay hints display while waiting for input.
-- **Shift+F12** captures 120 presented frames for frame-by-frame inspection.
-  **F12** saves a single screenshot.
+- Smoother scrolling, character movement, and animations with Smooth Gameplay.
+- Widescreen gameplay uses the full visible area for enemies, projectiles, and pickups.
+- Improved Android Back navigation and controller support in Game Settings.
 
-## Windows
+## Downloads
 
-- **Widescreen** adds a 16:9 playfield and a full-width HUD. Enable it in
-  **Mods**. CRT and scanlines work in widescreen and in the original view.
-- The launcher uses Cosmo's original dialog frames and marks missing episodes
-  as **Not found**. Select a missing episode to locate its files.
-- The scrolling **Mods** menu includes Character Colour with a live preview,
-  Gamepad Rumble, and separate choices for Filter, Soundtrack and SFX.
-- In-game **Game Settings** has working Keyboard Mapping, a Gamepad Controls
-  guide, music and sound volume controls, and the same Filter setting as Mods.
-- Music fades when the pause menu opens and returns when you resume. Save and
-  restore now check whether their file operations succeeded.
+- **Windows x64** · Unpack the ZIP and launch `cosmo.exe`.
+- **Android ARM64 and x86-64** · Install the APK and play with a keyboard or gamepad. Smooth Gameplay is enabled by default on fresh installs.
 
-The Windows download includes the shareware Episode 1 and plays as soon as it
-is unpacked.
-
-If you own Episodes 2 and 3, choose them in the launcher and it will ask you to
-find your copy.
-
-| Download | For |
-|---|---|
-| `cosmo-*-windows.zip` | Windows, 64-bit |
-
-## Android
-
-The Android port supports Android 5.0 and newer on ARM64 and x86-64, with a
-keyboard or gamepad. The system Back button acts as Escape.
-See the [Android build instructions](https://github.com/GITitdoneboi/enhanced-cosmo/blob/main/android/README.md)
-for the sideloadable debug APK. Fresh installs built from current source enable
-Smooth Gameplay by default.
-
-Arrow keys move, **space** jumps, **alt** bombs, **F1** helps, **Q** then **Y**
-quits and saves. All of it is rebindable from the game's own menu. `PLAYING.txt`
-in the archive has the rest.
-
-## What this is
-
-Built from the game's own code rather than a reimplementation, by way of
-[Cosmore](https://github.com/smitelli/cosmore) — Scott Smitelli's
-reconstruction of the 1992 source — with only the layer that talked to PC
-hardware replaced. The physics, the actors, the collision handling and the bugs
-are Todd Replogle's. What is new underneath is an emulated EGA adapter, the
-programmable interval timer, the keyboard controller, the PC speaker and an
-AdLib.
-
-`SHA256SUMS.txt` covers every archive.
-
-## Credits
-
-*Cosmo's Cosmic Adventure*, its artwork and its music are © 1992 Apogee
-Software, Ltd. Episode 1 is included as the freely distributable shareware
-release. Episodes 2 and 3 are not included and are still sold. The optional mod
-audio is derived from Episode 1's shareware data.
-
-This port's code is MIT. Cosmore is MIT, © Scott Smitelli and contributors;
-ymfm is BSD 3-Clause, © Aaron Giles. Full credits are in
-[ATTRIBUTION.md](https://github.com/digows/cosmo/blob/main/ATTRIBUTION.md), and
-the story of what it took is in
-[docs/porting-notes.md](https://github.com/digows/cosmo/blob/main/docs/porting-notes.md).
+Both downloads bundle shareware Episode 1. The Windows launcher can also play Episodes 2 and 3 using your own game files. See `SHA256SUMS.txt` for download checksums.

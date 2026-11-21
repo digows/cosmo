@@ -1,0 +1,86 @@
+diff --git a/game1.c b/game1.c
+index a6c2bc0..9257e8c 100644
+--- a/game1.c
++++ b/game1.c
+@@ -9761,39 +9761,52 @@ static void PromptSaveGame(void)
+     }
+ }
+ 
+-/*
+-Present a UI for the "warp mode" debug feature. This abandons any progress made
+-in the current level, and jumps unconditionally to the new level. Returns true
+-if the request was acceptable, or false if the input was bad or Esc was pressed.
+-*/
++static bbool WarpToLevel(int index)
++{
++#ifdef HAS_MAP_11
++    static const word levels[] = {0, 1, 4, 5, 8, 9, 12, 13, 16, 17, 20, 2, 3};
++#else
++    static const word levels[] = {0, 1, 4, 5, 8, 9, 12, 13, 16, 17, 2, 3};
++#endif
++    if (index < 0 || index >= (int)(sizeof levels / sizeof levels[0])) return false;
++
++    LoadGameState('T');
++    InitializeLevel(levels[index]);
++    return true;
++}
++
++/* Ask for a level number and restart the game loop at that level. */
+ static bbool PromptLevelWarp(void)
+ {
+ #ifdef HAS_MAP_11
+ #   define MAX_MAP "13"
+-    word levels[] = {0, 1, 4, 5, 8, 9, 12, 13, 16, 17, 20, 2, 3};
+ #else
+ #   define MAX_MAP "12"
+-    word levels[] = {0, 1, 4, 5, 8, 9, 12, 13, 16, 17, 2, 3};
+-#endif  /* HAS_MAP_11 */
++#endif
+     char buffer[3];
+     int x = UnfoldTextFrame(2, 4, 28, "Warp Mode!", "Enter level (1-" MAX_MAP "):");
+ #undef MAX_MAP
+ 
+     ReadAndEchoText(x + 21, 4, buffer, 2);
++    return WarpToLevel(atoi(buffer) - 1);
++}
+ 
+-    /* Repurposing x here to hold the level index */
+-    x = atoi(buffer) - 1;
+-
+-    if (x >= 0 && x <= (int)(sizeof levels / sizeof levels[0]) - 1) {
+-        levelNum = x;  /* no effect, next two calls both clobber this */
+-        LoadGameState('T');
+-        InitializeLevel(levels[x]);
+-
+-        return true;
++#ifdef COSMO_DEV_LEVEL_SHORTCUTS
++static bbool TryDeveloperLevelShortcut(void)
++{
++    static bool held;
++    if (isKeyDown[SCANCODE_GRAVE]) {
++        for (int key = SCANCODE_1; key <= SCANCODE_0; ++key) {
++            if (!isKeyDown[key]) continue;
++            if (held) return false;
++            held = true;
++            return WarpToLevel(key - SCANCODE_1);
++        }
+     }
+-
++    held = false;
+     return false;
+ }
++#endif
+ 
+ /*
+ Display the main title screen, credits (if the user waits long enough), and
+@@ -10122,6 +10135,10 @@ is needed.
+ */
+ byte ProcessGameInput(byte demo_state)
+ {
++#ifdef COSMO_DEV_LEVEL_SHORTCUTS
++    if (demo_state == DEMO_STATE_NONE && TryDeveloperLevelShortcut())
++        return GAME_INPUT_RESTART;
++#endif
+     if (demo_state != DEMO_STATE_PLAY) {
+         if (
+             isKeyDown[SCANCODE_TAB] && isKeyDown[SCANCODE_F12] &&

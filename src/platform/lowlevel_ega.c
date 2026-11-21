@@ -85,6 +85,11 @@ int BeginPreviewEffect(dword identity, int x, int y, word mode, int expand, int 
     return captured;
 }
 
+void MarkPreviewEffectSlowRise(void)
+{
+    video_preview_effect_mark_slow_rise(draw_page_number);
+}
+
 void DrawPreviewEffectTile(const byte *pixels, word x, word y, word mode)
 {
     byte flipped[40];

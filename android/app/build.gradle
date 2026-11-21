@@ -14,14 +14,15 @@ android {
         applicationId = 'com.digows.cosmoenhanced'
         minSdk = 21
         targetSdk = 35
-        versionCode = 401
-        versionName = '0.4.1'
+        versionCode = 407
+        versionName = '0.4.7'
 
         externalNativeBuild {
             cmake {
                 arguments '-DANDROID_PLATFORM=android-21',
                     '-DANDROID_STL=c++_static',
                     '-DCOSMO_ANDROID_APP=ON',
+                    "-DCOSMO_DEV_LEVEL_SHORTCUTS=${project.hasProperty('cosmoDevLevels') ? 'ON' : 'OFF'}",
                     '-DCOSMO_FETCH_SDL=ON',
                     '-DCOSMO_BUILD_TESTS=OFF'
                 abiFilters 'arm64-v8a', 'x86_64'

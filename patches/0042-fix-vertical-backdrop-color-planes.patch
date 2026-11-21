@@ -1,0 +1,63 @@
+diff --git a/game2.c b/game2.c
+index 6a1cc3a..b9bbe36 100644
+--- a/game2.c
++++ b/game2.c
+@@ -2045,47 +2045,24 @@ void WrapBackdropVertical(byte *src, byte *dest, byte *scratch)
+         offset = 0;
+         for (col = 0; col < BACKDROP_WIDTH; col++) {
+             for (i = 0; i < 16; i++) {
+-                /*
+-                Multiplication by 1,280 is used to skip one tile row ahead in
+-                the data. Addition of 16 skips one half-tile worth of data.
+-
+-                WARNING: Undefined behavior. `offset` on left side wants the
+-                PRE-incremented value.
+-                */
+-                *(dest + offset + (row * 1280)) = *(src + (row * 1280) + offset++ + 16);
++                dest[row * 1280 + offset] = src[row * 1280 + offset + 16];
++                offset++;
+             }
+ 
+             /* Skip 4 pixel rows to next tile */
+             offset += 16;
+         }
+ 
+-        /*
+-        This pair of loops copies the top half of every tile in the *subsequent*
+-        tile row into the bottom half of the current tile row.
+-        */
+-        offset = 0;
+-        for (col = 0; col < BACKDROP_WIDTH; col++) {
+-            for (i = 0; i < 16; i++) {
+-                /*
+-                This is similar to the previous loop pair, except here we add 16
+-                to the destination to target the bottom half-tile, and add 1,280
+-                to the source to read from the top half-tile in the next row.
+-
+-                WARNING: This reads out of bounds on the last `row` loop
+-                iteration, since (17 * 1,280) + 1,280 = 23,040, which is right
+-                after the end of the source data. The bottom-most row of half-
+-                tiles in the destination gets filled with garbage, but it
+-                doesn't matter because they are rewritten when the scratch
+-                buffer is restored later.
+-
+-                WARNING: Undefined behavior. `offset` on left side wants the
+-                PRE-incremented value.
+-                */
+-                *(dest + offset + (row * 1280) + 16) = *(src + (row * 1280) + offset++ + 1280);
++        /* The saved top row supplies the last tile row after this loop. */
++        if (row + 1 < BACKDROP_HEIGHT) {
++            offset = 0;
++            for (col = 0; col < BACKDROP_WIDTH; col++) {
++                for (i = 0; i < 16; i++) {
++                    dest[row * 1280 + offset + 16] = src[(row + 1) * 1280 + offset];
++                    offset++;
++                }
++                offset += 16;
+             }
+-
+-            /* Skip 4 pixel rows to next tile */
+-            offset += 16;
+         }
+     }
+ 

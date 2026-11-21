@@ -62,7 +62,7 @@ typedef struct {
 } blast_ring;
 
 typedef struct {
-    bool visible, tracked, spin, expand, in_front, edge_padding;
+    bool visible, tracked, spin, expand, in_front, edge_padding, slow_rise;
     uint32_t identity;
     int x, y;
     int left, right, top, bottom;
@@ -714,6 +714,13 @@ bool video_preview_star_begin(unsigned page, uint32_t identity, int x, int y,
     return true;
 }
 
+void video_preview_effect_mark_slow_rise(unsigned page)
+{
+    if (page >= 2) return;
+    preview_star_list *list = &preview_star_pages[page];
+    if (list->count) list->sprites[list->count - 1].slow_rise = true;
+}
+
 void video_preview_star_tile(unsigned page, const uint8_t *pixels,
                              unsigned x, unsigned y, bool white)
 {
@@ -957,7 +964,13 @@ static void render_preview_sprite(uint8_t *out, const preview_player *sprite,
     if (previous_visible && !cropped_on_ascent && abs(world_dx) <= 2 &&
         world_dy >= -max_rise && world_dy <= 2) {
         player_x -= (int)lround((1.0 - alpha) * world_dx * 8);
-        player_y -= (int)lround((1.0 - alpha) * world_dy * 8);
+        double vertical_offset = -(1.0 - alpha) * world_dy * 8;
+        /* The crusher climbs one tile every two ticks. Render half on each. */
+        if (sprite->slow_rise && world_dy == -1)
+            vertical_offset += alpha * 4;
+        else if (previous && previous->slow_rise && world_dy == 0)
+            vertical_offset = (1.0 - alpha) * 4;
+        player_y += (int)lround(vertical_offset);
     }
     if (sprite->right <= sprite->left || sprite->bottom <= sprite->top) return;
     if (sprite->expand && sprite->ring_count) {

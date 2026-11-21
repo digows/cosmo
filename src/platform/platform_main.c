@@ -97,6 +97,7 @@ enum game_sound_number {
 
 static SDL_AtomicInt game_running;
 static SDL_AtomicInt haptic_pending;
+static SDL_AtomicInt game_settings_open;
 static uint16_t camera_scroll_x, camera_scroll_y;
 static bool camera_backdrop_x, camera_backdrop_y;
 static unsigned camera_frame_ticks;
@@ -519,6 +520,11 @@ static bool gamepad_button(SDL_GamepadButton button)
     return gamepad && SDL_GetGamepadButton(gamepad, button);
 }
 
+void PlatformSetGameSettingsOpen(int open)
+{
+    SDL_SetAtomicInt(&game_settings_open, open);
+}
+
 static void update_gamepad(bool focused)
 {
     bool west = false, east = false, north = false, south = false;
@@ -541,14 +547,18 @@ static void update_gamepad(bool focused)
     gamepad_action(2, scancodeNorth, north);
     gamepad_action(3, scancodeSouth, south);
     gamepad_action(4, scancodeJump, gamepad_button(SDL_GAMEPAD_BUTTON_SOUTH));
-    gamepad_action(5, scancodeBomb, gamepad_button(SDL_GAMEPAD_BUTTON_EAST));
+    bool in_settings = SDL_GetAtomicInt(&game_settings_open) != 0;
+    uint8_t east_button_code = in_settings ? 0x01 : scancodeBomb;
+    /* Leaving settings while B is still down must not also press Bomb. */
+    if (gamepad_action_held[5]) east_button_code = gamepad_action_code[5];
+    gamepad_action(5, east_button_code, gamepad_button(SDL_GAMEPAD_BUTTON_EAST));
     /* A also confirms title and menu prompts. */
     gamepad_action(6, scancodeJump == 0x39 ? 0 : 0x39,
                    gamepad_button(SDL_GAMEPAD_BUTTON_SOUTH));
     /* Start opens the same in-game menu as F1. */
     gamepad_action(7, 0x3B, gamepad_button(SDL_GAMEPAD_BUTTON_START));
     /* Left shoulder acts as Escape in menus. */
-    gamepad_action(8, 0x01, gamepad_button(SDL_GAMEPAD_BUTTON_LEFT_SHOULDER));
+    gamepad_action(8, 0x01, !in_settings && gamepad_button(SDL_GAMEPAD_BUTTON_LEFT_SHOULDER));
 }
 
 static Uint16 boost_rumble(Uint16 strength)

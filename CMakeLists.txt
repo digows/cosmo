@@ -37,6 +37,7 @@ option(COSMO_BUILD_GAME "Build the game itself from the Cosmore sources" ON)
 option(COSMO_BUNDLE "Build as an application rather than a terminal program" OFF)
 option(COSMO_WIDESCREEN "Enable the widescreen mod by default for preview builds" OFF)
 option(COSMO_ANDROID_APP "Build Episode 1 as an SDL Android shared library" OFF)
+option(COSMO_DEV_LEVEL_SHORTCUTS "Enable developer level shortcuts" OFF)
 option(COSMO_IOS_APP "Build Episode 1 as an SDL iOS application bundle" OFF)
 
 # --------------------------------------------------------------------------
@@ -273,6 +274,9 @@ if(COSMO_BUILD_GAME)
         # Compile the extended renderer into every episode for the runtime mod.
         target_compile_definitions(cosmore_game${episode}
             PRIVATE EPISODE=${episode} COSMO_WIDESCREEN)
+        if(COSMO_DEV_LEVEL_SHORTCUTS)
+            target_compile_definitions(cosmore_game${episode} PRIVATE COSMO_DEV_LEVEL_SHORTCUTS)
+        endif()
         if(UNIX)
             # Strict C11 on newer glibc hides POSIX declarations such as
             # fileno() unless a POSIX feature level is selected explicitly.

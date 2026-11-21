@@ -24,20 +24,18 @@ captured from an emulator.
 
 ## Download and play
 
-**[Get the latest Windows release](https://github.com/GITitdoneboi/enhanced-cosmo/releases/latest)** -
+**[Download the latest release](https://github.com/GITitdoneboi/enhanced-cosmo/releases/latest)** -
 the Windows download includes the shareware Episode 1 and
 plays as soon as it is unpacked; nothing to install. If you own Episodes 2 and
 3, the launcher will ask you to point it at your copy.
 
-The Android port bundles Episode 1 and supports keyboards and gamepads. The
+The Android APK is available on the same release page. It bundles Episode 1 and supports keyboards and gamepads. The
 Android Back button acts as Escape. See [Android build instructions](android/README.md).
 
-## Recent improvements
+## New in v0.4.7
 
 - **Smooth Gameplay** smooths scrolling, character movement, and animations.
   It works with CRT filters and is enabled by default on fresh Android installs.
-
-### Preview improvements
 
 - **Widescreen** uses the full visible playfield for enemy activity, projectiles,
   and pickups.

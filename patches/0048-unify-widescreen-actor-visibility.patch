@@ -1,0 +1,167 @@
+diff --git a/game1.c b/game1.c
+index acefd47..4e5f578 100644
+--- a/game1.c
++++ b/game1.c
+@@ -971,6 +971,18 @@ static void DrawMapRegion(void)
++static word WorldDrawRight(void)
++{
++    word right = scrollX + SCROLLW;
++#ifdef COSMO_WIDESCREEN
++    if (WideWorldEnabled()) {
++        right += WideTerrainColumns();
++        if (right > mapWidth) right = mapWidth;
++    }
++#endif
++    return right;
++}
++
+ /*
+ Is any part of the sprite frame at x,y visible within the screen's scroll area?
+ */
+ static bool IsSpriteVisible(word sprite_type, word frame, word x_origin, word y_origin)
+ {
+     register word width, height;
+@@ -979,22 +991,8 @@ static bool IsSpriteVisible(word sprite_type, word frame, word x_origin, word y_
+     height = *(actorInfoData + offset);
+     width = *(actorInfoData + offset + 1);
+ 
+-    word actor_left = scrollX;
+-#ifdef COSMO_WIDESCREEN
+-    /* Keep the original activation width, following Cosmo into the right edge. */
+-    if (WideWorldEnabled() && playerX > scrollX + SCROLLW - 4) {
+-        word shift = playerX - (scrollX + SCROLLW - 4);
+-        if (shift > WideTerrainColumns()) shift = WideTerrainColumns();
+-        actor_left += shift;
+-    }
+-#endif
+-    return (
+-        (actor_left <= x_origin && actor_left + SCROLLW > x_origin) ||
+-        (actor_left >= x_origin && x_origin + width > actor_left)
+-    ) && (
+-        (scrollY + SCROLLH > (y_origin - height) + 1 && scrollY + SCROLLH <= y_origin) ||
+-        (y_origin >= scrollY && scrollY + SCROLLH > y_origin)
+-    );
++    return x_origin < WorldDrawRight() && x_origin + width > scrollX &&
++        y_origin >= scrollY && (int)y_origin - height + 1 < scrollY + SCROLLH;
+ }
+ 
+ /*
+@@ -1259,31 +1257,6 @@ static bool IsIntersecting(
+     );
+ }
+ 
+-/* Rendering can look ahead without extending the actor activation area. */
+-static word WorldDrawRight(void)
+-{
+-    word right = scrollX + SCROLLW;
+-#ifdef COSMO_WIDESCREEN
+-    if (WideWorldEnabled()) {
+-        right += WideTerrainColumns();
+-        if (right > mapWidth) right = mapWidth;
+-    }
+-#endif
+-    return right;
+-}
+-
+-#ifdef COSMO_WIDESCREEN
+-static bool SpriteInWideView(word sprite, word frame, word x, word y)
+-{
+-    if (!WideWorldEnabled() || x >= WorldDrawRight()) return false;
+-    word offset = actorInfoData[sprite] + frame * 4;
+-    word height = actorInfoData[offset];
+-    word width = actorInfoData[offset + 1];
+-    return x + width > scrollX && y >= scrollY &&
+-           (int)y - height + 1 < scrollY + SCROLLH;
+-}
+-#endif
+-
+ /*
+ Draw an actor sprite frame at {x,y}_origin with the requested mode.
+ */
+@@ -3033,11 +3006,7 @@ static void ActProjectile(word index)
+ {
+     Actor *act = actors + index;
+ 
+-    if (!IsSpriteVisible(SPR_PROJECTILE, 0, act->x, act->y)
+-#ifdef COSMO_WIDESCREEN
+-        && !SpriteInWideView(SPR_PROJECTILE, 0, act->x, act->y)
+-#endif
+-    ) {
++    if (!IsSpriteVisible(SPR_PROJECTILE, 0, act->x, act->y)) {
+         act->dead = true;
+         return;
+     }
+@@ -6694,11 +6663,7 @@ restart:
+         }
+ 
+         if (sh->age >= 9) {
+-            if (sh->age > 16 && !IsSpriteVisible(sh->sprite, sh->frame, sh->x, sh->y)
+-#ifdef COSMO_WIDESCREEN
+-                && !SpriteInWideView(sh->sprite, sh->frame, sh->x, sh->y)
+-#endif
+-            ) {
++            if (sh->age > 16 && !IsSpriteVisible(sh->sprite, sh->frame, sh->x, sh->y)) {
+                 sh->age = 0;
+                 continue;
+             }
+@@ -6980,12 +6945,7 @@ static void MoveAndDrawDecorations(void)
+ 
+         if (!dec->alive) continue;
+ 
+-        /* Possible BUG: dec->numframes should be decorationFrame[i] instead. */
+-        if (IsSpriteVisible(dec->sprite, dec->numframes, dec->x, dec->y)
+-#ifdef COSMO_WIDESCREEN
+-            || SpriteInWideView(dec->sprite, decorationFrame[i], dec->x, dec->y)
+-#endif
+-        ) {
++        if (IsSpriteVisible(dec->sprite, decorationFrame[i], dec->x, dec->y)) {
+             if (dec->sprite == SPR_POUNCE_DEBRIS) {
+                 DrawSmoothEffect((previewDecorationIdentity[i] << 16) | (0x1000u | i),
+                                  dec->sprite, decorationFrame[i], dec->x, dec->y,
+@@ -8052,19 +8012,11 @@ static void ProcessActor(word index)
+ 
+     if (act->hurtcooldown != 0) act->hurtcooldown--;
+ 
+-    if (IsSpriteVisible(act->sprite, act->frame, act->x, act->y)
+-#ifdef COSMO_WIDESCREEN
+-        || SpriteInWideView(act->sprite, act->frame, act->x, act->y)
+-#endif
+-    ) {
++    if (IsSpriteVisible(act->sprite, act->frame, act->x, act->y)) {
+         if (act->stayactive) {
+             act->forceactive = true;
+         }
+     } else if (!act->forceactive) {
+-#ifdef COSMO_WIDESCREEN
+-        if (SpriteInWideView(act->sprite, act->frame, act->x, act->y))
+-            DrawSprite(act->sprite, act->frame, act->x, act->y, DRAW_MODE_NORMAL);
+-#endif
+         return;
+     } else {
+         nextDrawMode = DRAW_MODE_HIDDEN;
+@@ -8101,11 +8053,7 @@ static void ProcessActor(word index)
+         }
+     }
+ 
+-    if (IsSpriteVisible(act->sprite, act->frame, act->x, act->y)
+-#ifdef COSMO_WIDESCREEN
+-        || SpriteInWideView(act->sprite, act->frame, act->x, act->y)
+-#endif
+-    ) {
++    if (IsSpriteVisible(act->sprite, act->frame, act->x, act->y)) {
+         nextDrawMode = DRAW_MODE_NORMAL;
+     }
+ 
+@@ -8120,11 +8068,7 @@ static void ProcessActor(word index)
+         return;
+     }
+ 
+-#ifdef COSMO_WIDESCREEN
+-    if (IsSpriteVisible(act->sprite, act->frame, act->x, act->y) ||
+-        !SpriteInWideView(act->sprite, act->frame, act->x, act->y))
+-#endif
+-        if (InteractPlayer(index, act->sprite, act->frame, act->x, act->y)) return;
++    if (InteractPlayer(index, act->sprite, act->frame, act->x, act->y)) return;
+ 
+     if (nextDrawMode != DRAW_MODE_HIDDEN) {
+         if (act->sprite == SPR_EXIT_SIGN) {
