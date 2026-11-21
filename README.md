@@ -1,13 +1,13 @@
 # Cosmo Enhanced for Windows and Android
 
-A fun Windows project to bring **Cosmo's Cosmic Adventure: Forbidden Planet**
-(Apogee Software, 1992) to a new generation. It adds controller support,
-rumble feedback, and menus you can navigate with a pad. It also adds handy
-quality of life extras like volume controls and save slots you can use with a
-controller.
-The game runs natively on 64-bit Windows. Choose the original view or a wider
-playfield, customize Cosmo's colours, and pick the soundtrack, sound effects,
-and display filter from the launcher.
+**Cosmo Enhanced** brings **Cosmo's Cosmic Adventure: Forbidden Planet**
+(Apogee Software, 1992) to Windows and Android. It adds controller support,
+rumble, gamepad-friendly menus and save slots, and separate music and sound
+volume controls.
+
+Choose the original view or a widescreen playfield, smooth out scrolling and
+animations, and customise Cosmo's colours, soundtrack, sound effects, and
+display filter.
 
 [![CI](https://github.com/GITitdoneboi/enhanced-cosmo/actions/workflows/ci.yml/badge.svg)](https://github.com/GITitdoneboi/enhanced-cosmo/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
@@ -39,10 +39,11 @@ Android Back button acts as Escape. See [Android build instructions](android/REA
 - **Gameplay fixes** improve level transitions, pit behaviour, and how menus and
   hints appear while smoothing is active.
 
-### In testing
+### Preview improvements
 
-- **Widescreen** keeps enemies and projectiles active across the visible playfield.
-- **Visual fixes** improve scrolling backgrounds and smooth more animations.
+- **Widescreen** uses the full visible playfield for enemy activity, projectiles,
+  and pickups.
+- **Visual fixes** address flickering backgrounds and smooth more animations.
 - **Android controls** improve system Back handling and let controller B go back
   in Game Settings.
 
