@@ -2,7 +2,7 @@
 
 - Smoother scrolling, character movement, and animations with Smooth Gameplay.
 - Fixed an issue where smoothing was skipped as stone heads and spears retracted.
-- Widescreen gameplay uses the full visible area for enemies, projectiles, and pickups.
+- Fixed an issue where projectiles could disappear before reaching the edge of the widescreen view. Enemies and pickups also use the full visible playfield.
 - Improved Android Back navigation and controller support in Game Settings.
 
 ## Downloads
