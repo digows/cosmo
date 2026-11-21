@@ -27,7 +27,7 @@ Use **Game Settings** to adjust music and sound effects volumes separately or ch
 
 Open **Customise** in the episode launcher to choose how the game looks and sounds.
 
-- Choose the original view or enable **Widescreen** for a wider playfield.
+- On Windows, choose the original view or enable **Widescreen** for a wider playfield. Android uses widescreen gameplay by default.
 - Enable **Smooth Gameplay** for smoother scrolling, character movement, and animations. It starts enabled on fresh Android installs.
 - Switch between the original and remixed Episode 1 soundtrack, or between original and softened sound effects.
 - Choose CRT effects, scanlines, both, or neither.

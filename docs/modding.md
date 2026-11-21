@@ -1,7 +1,10 @@
 # Mod support
 
-The launcher discovers mods in `Mods/` beside the launcher executable. Each
-mod lives in its own folder and has a UTF-8 `mod.json` file:
+On Windows, put mods in `Mods/` beside `cosmo.exe`. On Android, bundled mods
+are copied to the app's private files directory and can be toggled in the
+launcher. To bundle your own mods in an Android build, add them to `Mods/` in
+the source tree before building the APK. Each mod lives in its own folder
+and has a UTF-8 `mod.json` file.
 
 ```json
 {
@@ -25,7 +28,8 @@ ID.
 
 Open **Customise** from the launcher. Use Up/Down to browse, Left/Right to
 change **Filter**, **Soundtrack** or **SFX**, and Enter or Space to toggle
-individual mods. Escape returns to the episode list. The launcher and episode
+individual mods. On Android, use the arrow buttons, **Select**, and **Back**.
+Escape returns to the episode list on a keyboard. The launcher and episode
 programs share the same preference file. It is stored under
 `Settings/mods.json` in the writable data/save directory; when the install
 folder is read-only, that directory is the user's Cosmo application-data
@@ -76,7 +80,7 @@ A palette effect such as Aurora can still tint the final picture.
 
 ## MP3 music replacements
 
-On Windows, an enabled mod can replace a track with an MP3. Put the file in
+On Windows and Android, an enabled mod can replace a track with an MP3. Put the file in
 the mod's `music/` folder and use the original IMF track's basename with an
 `.mp3` extension. For example, `music/mzztop.mp3` replaces `mzztop.mni`:
 
@@ -93,8 +97,8 @@ The manifest needs the usual required fields, such as `id`, `name`, and
 The game decodes the replacement when that track starts and loops it until the
 game switches tracks. The in-game Music toggle also stops and resumes it. If
 the MP3 is missing or cannot be decoded, the original synthesized IMF track
-plays instead. Windows Media Foundation handles MP3 decoding; if decoding is
-unavailable, the original synthesized IMF music plays instead.
+plays instead. Windows uses Media Foundation for MP3 decoding. Android uses
+MediaCodec.
 
 ## Sound effect replacements
 
@@ -130,9 +134,7 @@ Available names are `big_prize`, `player_jump`, `player_land`, `player_cling`,
 A WAV or MP3 effect takes the place of its original PC speaker sound and mixes
 with the music. WAV files must be mono 16-bit PCM; other sample rates are
 resampled automatically. Missing or unreadable clips fall back to the original
-effect. On Windows, the optional Arcade Synth mod replaces eight effects. If
-SFX is set to **Softened**, Arcade Synth takes priority for those eight clips
-and Soft Sound Effects supplies its other replacements.
+effect. The bundled Soft Sound Effects mod is selected with **Customise → SFX → Softened**.
 
 ## Built-in visual and gameplay options
 
@@ -145,7 +147,8 @@ the mod is enabled.
 | `lowGravity` | Caps fall speed at one tile per gameplay step. |
 | `shieldMode` | Blocks normal health damage. Falling into a pit can still kill the player. |
 | `turboMode` | Runs gameplay steps every 10 ticks instead of 13. |
-| `widescreen` | Opens the episode in 16:9 with a wider playfield and HUD. The Filter setting also applies in widescreen. |
+| `widescreen` | Enables a wider playfield and HUD on Windows. The Android release already uses widescreen gameplay. |
+| `smoothGameplay` | Smooths scrolling, character movement, and animations. |
 
 The three gameplay options apply to player-controlled games. Title-screen
 demos use the original physics and timing.
@@ -169,9 +172,8 @@ and glow:
 }
 ```
 
-Create `Mods/crt-shader/mod.json` with that content, launch the built game,
-open **Customise**, and set **Filter** to **CRT**. It applies a small Gaussian
-phosphor blur and glow to gameplay and launcher screenshots.
+The release already includes the CRT and Scanlines mods. Choose **CRT**,
+**Scanlines**, **Both**, or **None** under **Customise → Filter**.
 
 Scanlines are a separate effect. Put `"crtScanlines": true` in another mod's
 manifest to enable them independently, or enable both mods together:
@@ -188,16 +190,15 @@ manifest to enable them independently, or enable both mods together:
 
 ## Windows build
 
-The source project uses CMake 3.21+, a C11/C++17 compiler, and SDL3. The
-documented Windows toolchain is MinGW-w64 (MSYS2 or the repository's Windows
-cross-build container); MSVC is not yet exercised by upstream. From the source
-root:
+The Windows release uses MSYS2's UCRT64 environment with GCC, CMake, Ninja,
+and Git. After cloning the repository with its submodules, run from the source
+root in the UCRT64 shell.
 
 ```text
-cmake --preset default
-cmake --build --preset default
-ctest --preset default
+cmake -S . -B build -G Ninja -DCOSMO_FETCH_SDL=ON -DCOSMO_BUNDLE=ON
+cmake --build build
+ctest --test-dir build --output-on-failure
 ```
 
-For a packaged Windows executable, configure with `-DCOSMO_BUNDLE=ON` using
-the Windows MinGW toolchain.
+See the [game data guide](../gamedata/README.md) for the files needed to play
+a source build.
