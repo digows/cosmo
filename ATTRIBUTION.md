@@ -1,50 +1,36 @@
-# Attribution and provenance
+# Attribution
 
-## Cosmo's Cosmic Adventure: Forbidden Planet
+## Cosmo's Cosmic Adventure
 
-© 1992 Apogee Software, Ltd. Released for MS-DOS in March 1992.
+*Cosmo's Cosmic Adventure* was released for MS-DOS by Apogee Software, Ltd.
+in 1992. The original game, artwork, music, and sound effects are © 1992
+Apogee Software, Ltd.
 
-- Programmer: Todd J. Replogle
-- Graphic artist: Stephen A. Hornback
-- Producer: Scott Miller
-- Level design: Todd J. Replogle
-- Level editor: Allen H. Blum III
-- AdLib music: Bobby Prince
-- Music routines: id Software
+- Todd J. Replogle programmed the game and designed the levels.
+- Stephen A. Hornback created the graphics.
+- Scott Miller produced the game.
+- Allen H. Blum III created the level editor.
+- Bobby Prince composed the AdLib music.
+- id Software provided the music routines.
 
-All rights to the game, its assets and its trademarks belong to Apogee
-Software. No game asset is redistributed by this repository.
+The Windows and Android downloads include the shareware release of Episode 1,
+*Forbidden Planet*. Episodes 2 and 3 use game files supplied by the player on
+Windows. The [MIT license](LICENSE) covers the project's code.
 
-## Cosmore
+## Cosmo Enhanced and upstream projects
 
-<https://github.com/smitelli/cosmore> — © 2020-2024 Scott Smitelli and
-contributors, MIT licensed.
+Cosmo Enhanced is an independently maintained fork of the Windows and SDL
+port maintained by digows. [Upstream Cosmo](https://github.com/digows/cosmo) ·
+[Cosmo Enhanced contributors](https://github.com/GITitdoneboi/enhanced-cosmo/graphs/contributors)
 
-A reconstruction of the v1.20 source code, recovered by disassembling the
-original executables and buildable with Turbo C 2.0 and TASM 1.0. It took
-close to five years and reaches 96.3% byte-for-byte agreement with the 1992
-binaries. The remainder is uninitialized data segment addresses, whose original
-layout cannot be recovered from a binary — the code itself matches.
-
-Pinned commit: `80418d1ee9026594e4dcc8445ec801d374074d84` (2024-10-23).
-
-Beyond the source, this project uses the pure C implementation of the drawing
-routines published in `C-DRAWING.md`, and the porting notes in
-`MODERN-COMPILERS.md`.
-
-## ymfm
-
-<https://github.com/aaronsgiles/ymfm> — © 2021 Aaron Giles, BSD 3-Clause.
-
-Emulates Yamaha's OPx family; this project uses only its YM3812 core, which is
-the chip on an AdLib card. Chosen over the more widely used Nuked-OPL3 because
-its licence carries no obligation when binaries are distributed, which keeps
-this repository uniformly permissive.
-
-Pinned commit: `17decfae857b92ab55fbb30ade2287ace095a381` (2025-01-28).
-
-## Cosmodoc
-
-<https://cosmodoc.org/> — roughly 262,000 words documenting the internals of
-the game, also by Scott Smitelli. The reference for the file formats and for
-the hardware behaviour emulated here.
+- **Cosmore** reconstructs the v1.20 source and provides the C drawing routines
+  used by the port. © 2020–2024 Scott Smitelli and contributors. MIT.
+  [Cosmore](https://github.com/smitelli/cosmore)
+- **Cosmodoc**, also by Scott Smitelli, documents the original game's file
+  formats and behaviour. [Cosmodoc](https://cosmodoc.org/)
+- **ymfm** emulates the Yamaha YM3812 used for AdLib music.
+  © 2021 Aaron Giles. BSD 3-Clause.
+  [ymfm and its license](https://github.com/aaronsgiles/ymfm/blob/17decfae857b92ab55fbb30ade2287ace095a381/LICENSE)
+- **SDL3** provides platform support for graphics, audio, input, and the
+  Android activity. zlib license.
+  [SDL3 and its license](https://github.com/libsdl-org/SDL/blob/release-3.4.12/LICENSE.txt)

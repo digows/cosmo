@@ -1,136 +1,60 @@
-Cosmo's Cosmic Adventure
-========================
+Cosmo Enhanced
+==============
 
-A native port of the 1992 Apogee game. No DOS emulator.
+An independently maintained fork of the Cosmo port, focused on playing
+Cosmo's Cosmic Adventure on Windows and Android.
 
+Download and play
+-----------------
 
-Starting it
------------
+Windows x64
+  Extract the entire ZIP and open cosmo.exe. Select Forbidden Planet to play
+  Episode 1. If you own Episode 2 or 3, select it in the launcher and point
+  the file picker to the matching COSMO2.STN or COSMO3.STN. Keep the matching
+  VOL file in the same folder as the STN file.
 
-macOS      Double-click Cosmo. macOS will refuse the first time, because this
-           is not signed by a paid Apple developer account -- there is no way
-           to avoid that without one.
+Android ARM64 and x86-64
+  Install the APK and select Forbidden Planet. Touch controls are enabled
+  by default. Keyboards and gamepads are also supported.
 
-           To allow it: open System Settings, go to Privacy & Security, scroll
-           down to Security, and click "Open Anyway" next to the message about
-           Cosmo. Confirm, and it opens normally from then on.
-
-           On macOS 15 and later that panel is the only route. Right-clicking
-           and choosing Open used to work and no longer does.
-
-           From a terminal, this does the same thing in one step:
-
-               xattr -dr com.apple.quarantine /path/to/Cosmo.app
-
-Windows    Run cosmo.exe.
-
-Linux      Run ./cosmo. If your desktop will not start it from a file manager,
-           run it from a terminal.
-
-Episode 1 is included, so it plays straight away.
-
-Open Mods in the launcher and choose Character Colour to change Cosmo's body
-and accents.
-Use Up/Down to pick a row and Left/Right to cycle colours. The preview updates
-as you browse. Enter or A saves, and Esc or B goes back without saving.
-Reset colours returns to the original look, or the colours of an installed
-skin if one is enabled.
+Both downloads include the shareware Episode 1, Forbidden Planet.
 
 Controls
 --------
 
-Arrow keys    move
-Space         jump
-Alt           bomb
-F1            help, in game
-F11           toggle fullscreen (Alt+Enter also works)
-Q then Y      quit, saving your settings and high scores
+Keyboard
+  Arrow keys move, Space jumps, and Alt drops a bomb. F1 opens the in-game
+  help menu. On Windows, F11 or Alt+Enter toggles fullscreen.
 
-Xbox-style controllers are supported. Use the D-pad or left stick to move,
-A to jump, confirm, or answer yes; B to drop a bomb or answer no; Start
-opens the in-game F1 menu; LB acts as
-Escape. The game uses your current key bindings for movement,
-jumping, and bombs.
+Gamepad
+  Use the D-pad or left stick to move and A to jump. Open Game Settings
+  and choose Gamepad Controls for the full layout.
 
-On the title menu, Up/Down or the D-pad/left stick moves the selection marker;
-A chooses the highlighted option.
+Android touch
+  Use the directional arrows, jump and bomb buttons in the HUD. Tap Pause
+  to open the in-game menu and use Select and Back to navigate. The Android
+  system Back button acts as Escape. Use the device keyboard to enter your
+  name on the high-score screen.
 
-At save/restore prompts, Up/Down selects a slot from 1 to 9, A confirms it,
-and B cancels.
+Open Game Settings to remap keyboard controls and adjust music volume,
+sound effects volume, or the display filter. Use the game's Quit option
+to save your high scores.
 
-Open Game Settings from the main or pause menu. Select Keyboard Mapping
-with Enter or A, choose an action, and press its new key. Gamepad Controls
-shows the controller layout. Use Left/Right to adjust Music Volume, Sound
-Volume, or Filter. The Filter choice is shared with the launcher's Mods menu.
+Customise
+---------
 
-The original used ctrl to jump. Space is this port's one deliberate change,
-because ctrl with an arrow key is a window manager shortcut on most systems
-today. On macOS, Command jumps as well.
+Choose Customise in the episode launcher to change the soundtrack, sound
+effects, display filter, character colours, or gamepad rumble. Smooth Gameplay
+smooths scrolling, character movement, and animations. It starts enabled on
+fresh Android installs.
 
-Keyboard changes save as each key is assigned. Quit through the game to save
-your high scores.
+On Windows, turn on Widescreen to see more of the level. Android uses
+widescreen gameplay. To hide the touch HUD on Android, turn off Touch Controls
+in Customise.
 
+Credits and downloads
+---------------------
 
-The window
-----------
-
-It opens at the largest whole multiple of the original 640x400 that fits your
-screen, so the title bar always stays reachable. To choose the size yourself:
-
-    COSMO_SCALE=2 ./cosmo        (1 is the original size, 3 is large)
-
-Resizing is fine. The picture is letterboxed rather than stretched, so it never
-distorts.
-
-
-What is in this folder
-----------------------
-
-    cosmo          the launcher, and the only thing you need to run
-    episodes/      the episodes: one program each, and their data
-
-The episodes are separate programs rather than one with a switch. They differ
-by preprocessor conditionals that include or exclude whole actor
-implementations, so each compiles to genuinely different code -- Apogee shipped
-three executables for the same reason. Each one sits beside the COSMO*.STN and
-COSMO*.VOL files it reads, in a subdirectory, so there is one obvious thing to
-run at the top.
-
-On macOS all of that is inside Cosmo.app, where none of it needs looking at.
-
-
-Episodes 2 and 3
-----------------
-
-Only Episode 1 was shareware. Episodes 2 and 3 were the paid ones and are still
-sold by Apogee, so they cannot be included here.
-
-If you already own them, choose the episode in the launcher and it will ask you
-to find your copy. Point it at COSMO2.STN or COSMO3.STN and both files are
-installed for you; they will be there next time.
-
-
-Where your saves go
--------------------
-
-If the folder this was unpacked into can be written to, the game keeps
-everything in episodes/, beside the data it saves against, so a copy on a USB
-stick carries its own saves.
-
-The macOS application cannot write inside itself, so it uses
-~/Library/Application Support/digows/Cosmo instead, and copies the game data
-there the first time it runs.
-
-
-Credits
--------
-
-Cosmo's Cosmic Adventure, its artwork and its music are Copyright (c) 1992
-Apogee Software, Ltd. Episode 1 is included as the freely distributable
-shareware release.
-
-This port is built on Cosmore, Scott Smitelli's reconstruction of the original
-source, and uses ymfm by Aaron Giles to synthesise the AdLib. Its own code is
-MIT licensed. Full credits are in ATTRIBUTION.md.
-
-Source, and the story of what it took:  https://github.com/digows/cosmo
+See ATTRIBUTION.md for original game and project credits.
+Latest downloads and guides are available at
+https://github.com/GITitdoneboi/enhanced-cosmo
