@@ -18,6 +18,7 @@
 #include "cosmo/mods.h"
 #include "cosmo/png.h"
 #include "cosmo/video.h"
+#include "cosmo/font.h"
 
 #define FB_PIXELS (EGA_SCREEN_W * EGA_SCREEN_H)
 #define FB_BYTES  (FB_PIXELS * 3)
@@ -239,6 +240,286 @@ SDL_Window *video_get_window(void)
 }
 static SDL_Renderer *renderer;
 static SDL_Texture  *texture;
+static SDL_Texture *launcher_touch_texture;
+static bool touch_controls;
+static unsigned touch_context;
+static SDL_AtomicInt touch_hud_enabled;
+static unsigned touch_pressed;
+enum { TOUCH_SPRITE_SIDE = 32 };
+static uint8_t touch_bomb_pixels[TOUCH_SPRITE_SIDE][TOUCH_SPRITE_SIDE];
+static unsigned touch_bomb_left, touch_bomb_top, touch_bomb_right, touch_bomb_bottom;
+static SDL_AtomicInt touch_bomb_ready;
+enum { TOUCH_GUTTER = 80, TOUCH_CANVAS_W = EGA_SCREEN_W + 2 * TOUCH_GUTTER };
+static const SDL_FRect touch_buttons[TOUCH_BUTTON_COUNT] = {
+    [TOUCH_LEFT]  = {  7, 129, 32, 32},
+    [TOUCH_RIGHT] = { 41, 129, 32, 32},
+    [TOUCH_UP]    = { 24,  95, 32, 32},
+    [TOUCH_DOWN]  = { 24, 163, 32, 32},
+    [TOUCH_JUMP]  = {416, 154, 56, 46},
+    [TOUCH_BOMB]  = {427,  88, 46, 46},
+    [TOUCH_PAUSE] = {436,  18, 36, 34},
+};
+static const SDL_FRect hud_touch_buttons[TOUCH_BUTTON_COUNT] = {
+    [TOUCH_LEFT]  = { 13, 191, 31, 43},
+    [TOUCH_RIGHT] = { 73, 191, 31, 43},
+    [TOUCH_UP]    = { 49, 191, 19, 20},
+    [TOUCH_DOWN]  = { 49, 214, 19, 20},
+    [TOUCH_JUMP]  = {374, 191, 44, 43},
+    [TOUCH_BOMB]  = {340, 208, 33, 26},
+    [TOUCH_PAUSE] = {340, 189, 33, 16},
+};
+
+void video_set_touch_controls(bool enabled)
+{
+    if (touch_controls == enabled) return;
+    touch_controls = enabled;
+    if (video_is_widescreen()) {
+        SDL_SetAtomicInt(&touch_hud_enabled, enabled);
+        int scale = enabled ? 1 : (int)wide_destination.w / WIDE_PRESENT_W;
+        SDL_SetRenderLogicalPresentation(renderer, WIDE_PRESENT_W * scale,
+            WIDE_WINDOW_H * scale, SDL_LOGICAL_PRESENTATION_LETTERBOX);
+        return;
+    }
+    SDL_SetRenderLogicalPresentation(renderer,
+        enabled ? TOUCH_CANVAS_W : EGA_SCREEN_W, CORRECTED_EGA_H,
+        SDL_LOGICAL_PRESENTATION_LETTERBOX);
+}
+
+void video_set_touch_pressed(unsigned buttons)
+{
+    touch_pressed = buttons;
+}
+
+void video_set_touch_context(unsigned context)
+{
+    touch_context = context;
+}
+
+void video_set_touch_bomb_sprite(const uint8_t *tiles, unsigned columns, unsigned rows)
+{
+    if (!columns || columns > TOUCH_SPRITE_SIDE / 8 ||
+        !rows || rows > TOUCH_SPRITE_SIDE / 8) return;
+    touch_bomb_left = columns * 8;
+    touch_bomb_top = rows * 8;
+    touch_bomb_right = touch_bomb_bottom = 0;
+    for (unsigned ty = 0; ty < rows; ++ty) {
+        for (unsigned tx = 0; tx < columns; ++tx, tiles += 40) {
+            for (unsigned y = 0; y < 8; ++y) {
+                const uint8_t *planes = tiles + y * 5;
+                for (unsigned x = 0; x < 8; ++x) {
+                    unsigned bit = 0x80u >> x;
+                    unsigned color = 0;
+                    for (unsigned plane = 0; plane < EGA_PLANES; ++plane)
+                        if (planes[plane + 1] & bit) color |= 1u << plane;
+                    unsigned px = tx * 8 + x, py = ty * 8 + y;
+                    touch_bomb_pixels[py][px] = (planes[0] & bit) ? 0 : color + 1;
+                    if (!(planes[0] & bit)) {
+                        touch_bomb_left = SDL_min(touch_bomb_left, px);
+                        touch_bomb_top = SDL_min(touch_bomb_top, py);
+                        touch_bomb_right = SDL_max(touch_bomb_right, px + 1);
+                        touch_bomb_bottom = SDL_max(touch_bomb_bottom, py + 1);
+                    }
+                }
+            }
+        }
+    }
+    SDL_SetAtomicInt(&touch_bomb_ready, touch_bomb_right > touch_bomb_left);
+}
+
+static bool touch_button_visible(int button)
+{
+    return touch_context == TOUCH_PLAY || (touch_context == TOUCH_MENU && button != TOUCH_PAUSE);
+}
+
+static SDL_FRect touch_button_rect(int button)
+{
+    if (!video_is_widescreen()) return touch_buttons[button];
+    if (touch_context == TOUCH_MENU && button == TOUCH_BOMB)
+        return (SDL_FRect){329, 201, 44, 33};
+    return hud_touch_buttons[button];
+}
+
+int video_touch_button(SDL_Event *event)
+{
+    if (!touch_controls || !SDL_ConvertEventToRenderCoordinates(renderer, event))
+        return -1;
+    SDL_FPoint point = {event->tfinger.x, event->tfinger.y};
+    for (int i = 0; i < TOUCH_BUTTON_COUNT; ++i) {
+        SDL_FRect button = touch_button_rect(i);
+        if (touch_button_visible(i) && SDL_PointInRectFloat(&point, &button)) return i;
+    }
+    return -1;
+}
+
+static void touch_rect(float x, float y, float w, float h, uint32_t rgb)
+{
+    SDL_FRect rect = {x, y, w, h};
+    SDL_SetRenderDrawColor(renderer, (Uint8)(rgb >> 16), (Uint8)(rgb >> 8),
+                           (Uint8)rgb, 255);
+    SDL_RenderFillRect(renderer, &rect);
+}
+
+void video_load_launcher_touch_texture(void)
+{
+    SDL_Surface *art = SDL_LoadPNG("launcher-touch-panel.png");
+    if (!art) {
+        SDL_Log("Touch panel artwork unavailable: %s", SDL_GetError());
+        return;
+    }
+    launcher_touch_texture = SDL_CreateTextureFromSurface(renderer, art);
+    SDL_DestroySurface(art);
+    if (launcher_touch_texture)
+        SDL_SetTextureScaleMode(launcher_touch_texture, SDL_SCALEMODE_NEAREST);
+}
+
+static void draw_launcher_touch_panel(int x)
+{
+    SDL_FRect panel = {x + 1, 1, TOUCH_GUTTER - 2, CORRECTED_EGA_H - 2};
+    if (launcher_touch_texture)
+        SDL_RenderTexture(renderer, launcher_touch_texture, NULL, &panel);
+    else
+        touch_rect(panel.x, panel.y, panel.w, panel.h, 0xaa5500);
+}
+
+static void draw_touch_bomb(SDL_FRect button, bool pressed)
+{
+    float x = SDL_floorf(button.x + (button.w - touch_bomb_right + touch_bomb_left) / 2);
+    float y = SDL_floorf(button.y + (button.h - touch_bomb_bottom + touch_bomb_top) / 2) + pressed;
+    for (unsigned row = touch_bomb_top; row < touch_bomb_bottom; ++row) {
+        for (unsigned col = touch_bomb_left; col < touch_bomb_right; ++col) {
+            unsigned index = touch_bomb_pixels[row][col];
+            if (!index) continue;
+            --index;
+            uint8_t rgb[3];
+            ega_palette_rgb(index < 8 ? index : index + 8, rgb);
+            touch_rect(x + col - touch_bomb_left, y + row - touch_bomb_top, 1, 1,
+                       ((uint32_t)rgb[0] << 16) | ((uint32_t)rgb[1] << 8) | rgb[2]);
+        }
+    }
+}
+
+static void draw_touch_glyph(const uint8_t rows[8], float x, float y, float pixel,
+                             bool bevel)
+{
+    float shadow = SDL_max(1.0f, pixel * 0.5f);
+    for (int row = 0; row < 8; ++row)
+        for (int col = 0; col < 8; ++col)
+            if (rows[row] & (0x80u >> col))
+                touch_rect(x + col * pixel - shadow, y + row * pixel + shadow,
+                           pixel, pixel, 0x000000);
+
+    int detail = bevel && pixel >= 1.5f ? 2 : 1;
+    float unit = pixel / detail;
+    for (int row = 0; row < 8 * detail; ++row) {
+        for (int col = 0; col < 8 * detail; ++col) {
+            int glyph_row = row / detail;
+            unsigned bit = 0x80u >> (col / detail);
+            if (!(rows[glyph_row] & bit)) continue;
+            uint32_t ink = 0x55ffff;
+            if (bevel) {
+                bool top = row % detail == 0 &&
+                    (glyph_row == 0 || !(rows[glyph_row - 1] & bit));
+                if (top) ink = 0x62ffff;
+                else if (row < 4 * detail) ink = 0x00c6cd;
+                else if (row < 6 * detail) ink = ((row + col) & 1) ? 0x006b70 : 0x00b9be;
+                else ink = 0x007c82;
+            }
+            touch_rect(x + col * unit, y + row * unit, unit, unit, ink);
+        }
+    }
+}
+
+static void draw_touch_frame(SDL_FRect button, bool pressed)
+{
+    /* The score well's stepped corners, grey fill and down-left shadow. */
+    static const char *const rows[] = {
+        "wwrrrryww",
+        "wkwwwwyww",
+        "kwwkkkkyw",
+        "kwrgggkrw",
+        "kwwrrrrrw",
+        "wkwwwwrww",
+        "wwkkkkwww",
+    };
+    const uint32_t palette[] = {0xaa5500, 0x000000, 0xff5555, 0xffff55,
+                               pressed ? 0x343434 : 0x555555};
+    float y = button.y;
+    for (unsigned row = 0; row < SDL_arraysize(rows); ++row) {
+        float height = row == 3 ? button.h - 6 : 1;
+        float x = button.x;
+        for (unsigned col = 0; col < 9; ++col) {
+            float width = col == 4 ? button.w - 8 : 1;
+            char color = rows[row][col];
+            uint32_t rgb = color == 'w' ? palette[0] : color == 'k' ? palette[1] :
+                           color == 'r' ? palette[2] :
+                           color == 'y' ? palette[3] : palette[4];
+            touch_rect(x, y, width, height, rgb);
+            x += width;
+        }
+        y += height;
+    }
+}
+
+static void draw_touch_label(const char *label, SDL_FRect button, bool pressed, bool bevel)
+{
+    size_t length = SDL_strlen(label);
+    float preferred_pixel = length <= 2 ? 1.5f : 1;
+    float pixel = SDL_min(preferred_pixel, (button.w - 8) / (length * 8));
+    float x = SDL_floorf(button.x + (button.w - length * 8 * pixel) / 2);
+    float y = SDL_floorf(button.y + (button.h - 8 * pixel) / 2) + pressed;
+    for (size_t i = 0; i < length; ++i) {
+        const uint8_t *tile = font_glyph(label[i]);
+        if (!tile) continue;
+        uint8_t rows[8];
+        for (unsigned row = 0; row < 8; ++row)
+            rows[row] = tile[row * 5 + 1] & tile[row * 5 + 2] &
+                        tile[row * 5 + 3] & tile[row * 5 + 4];
+        draw_touch_glyph(rows, x + i * 8 * pixel, y, pixel, bevel);
+    }
+}
+
+static void render_touch_controls(bool hud)
+{
+    if (!hud) {
+        draw_launcher_touch_panel(0);
+        draw_launcher_touch_panel(TOUCH_GUTTER + EGA_SCREEN_W);
+    }
+
+    static const uint8_t icons[TOUCH_BUTTON_COUNT][8] = {
+        {0x10, 0x30, 0x70, 0xfe, 0xfe, 0x70, 0x30, 0x10},
+        {0x08, 0x0c, 0x0e, 0x7f, 0x7f, 0x0e, 0x0c, 0x08},
+        {0, 0x18, 0x3c, 0x7e, 0x18, 0x18, 0x18, 0},
+        {0, 0x18, 0x18, 0x18, 0x7e, 0x3c, 0x18, 0},
+        {0, 0x18, 0x3c, 0x7e, 0x18, 0x18, 0x18, 0},
+        {0x03, 0x04, 0x18, 0x3c, 0x7e, 0x7e, 0x7e, 0x3c},
+        {0, 0, 0x66, 0x66, 0x66, 0x66, 0, 0},
+    };
+    for (int i = 0; i < TOUCH_BUTTON_COUNT; ++i) {
+        if (!touch_button_visible(i)) continue;
+        SDL_FRect r = touch_button_rect(i);
+        bool down = (touch_pressed & (1u << i)) != 0;
+        draw_touch_frame(r, down);
+        if (touch_context == TOUCH_MENU && (i == TOUCH_JUMP || i == TOUCH_BOMB)) {
+            draw_touch_label(i == TOUCH_JUMP ? "SELECT" : "BACK", r, down, false);
+            continue;
+        }
+        if (i == TOUCH_PAUSE && font_glyph('P')) {
+            draw_touch_label("PAUSE", r, down, true);
+            continue;
+        }
+        if (i == TOUCH_BOMB && SDL_GetAtomicInt(&touch_bomb_ready)) {
+            draw_touch_bomb(r, down);
+            continue;
+        }
+        float pixel = i == TOUCH_JUMP ? 4 : (hud && SDL_min(r.w, r.h) <= 21) ? 1.5f : 3;
+        pixel = SDL_min(pixel, (SDL_min(r.w, r.h) - 10) / 8);
+        float x = r.x + (r.w - 8 * pixel) / 2;
+        if (i == TOUCH_LEFT) x += pixel / 2;
+        if (i == TOUCH_RIGHT) x -= pixel / 2;
+        float y = r.y + (r.h - 8 * pixel) / 2 + (down ? 2 : 0);
+        draw_touch_glyph(icons[i], x, y, pixel, i <= TOUCH_JUMP);
+    }
+}
 static bool renderer_vsync;
 static double display_refresh_hz = 60.0;
 static uint64_t next_manual_present;
@@ -292,8 +573,34 @@ void video_render_rgb(uint8_t *out)
     if (!video_is_widescreen()) apply_display_filters(out, EGA_SCREEN_W);
 }
 
-static void render_wide_hud_row(uint8_t *out, const uint8_t *src)
+static void render_touch_hud_row(uint8_t *out, const uint8_t *src, unsigned y)
 {
+    /* Copy the original 320-pixel HUD artwork without resampling it. */
+    static const struct {
+        unsigned source_x, width, dest_x;
+    } counters[] = {
+        { 19, 65, 109 }, /* Score */
+        { 97, 54, 178 }, /* Health */
+        {173, 44, 236 }, /* Bombs */
+        {239, 53, 284 }, /* Stars */
+    };
+    const unsigned trim = 12;
+    memcpy(out, src, trim * 3);
+    memcpy(out + (WIDE_PRESENT_W - trim) * 3,
+           src + (EGA_SCREEN_W - trim) * 3, trim * 3);
+    for (unsigned x = trim; x < WIDE_PRESENT_W - trim; ++x)
+        memcpy(out + x * 3, src + 91 * 3, 3);
+    for (unsigned i = y >= 188 && y < 197 ? 1 : 0; i < SDL_arraysize(counters); ++i)
+        memcpy(out + counters[i].dest_x * 3,
+               src + counters[i].source_x * 3, counters[i].width * 3);
+}
+
+static void render_wide_hud_row(uint8_t *out, const uint8_t *src, unsigned y)
+{
+    if (SDL_GetAtomicInt(&touch_hud_enabled)) {
+        render_touch_hud_row(out, src, y);
+        return;
+    }
     /* Cuts in the original HUD artwork between the four counters. */
     static const unsigned cuts[] = {92, 157, 222};
     const unsigned extra = WIDE_PRESENT_W - EGA_SCREEN_W;
@@ -342,7 +649,7 @@ static void render_presentation(uint8_t *out, bool filters)
         uint8_t *row = out + y * WIDE_PRESENT_W * 3;
         const uint8_t *source_row = classic + y * EGA_SCREEN_W * 3;
         if (terrain && y >= playfield_end) {
-            render_wide_hud_row(row, source_row);
+            render_wide_hud_row(row, source_row, y);
             continue;
         }
 
@@ -1217,6 +1524,11 @@ static int fitting_scale(int wanted, int width, int height)
 
 bool video_init(const char *title, int scale, bool widescreen)
 {
+    touch_controls = false;
+    touch_context = TOUCH_HIDDEN;
+    SDL_SetAtomicInt(&touch_hud_enabled, false);
+    touch_pressed = 0;
+    SDL_SetAtomicInt(&touch_bomb_ready, 0);
     int width = widescreen ? WIDE_PRESENT_W : EGA_SCREEN_W;
     int height = widescreen ? WIDE_WINDOW_H : CORRECTED_EGA_H;
 
@@ -1361,6 +1673,8 @@ void video_present(void)
         }
     }
 
+    bool touch_hud = touch_controls && video_is_widescreen();
+
     if (frame_capture && present_width != frame_capture_width) save_frame_capture();
     if (frame_capture) {
         size_t row_size = (size_t)row_bytes;
@@ -1370,9 +1684,14 @@ void video_present(void)
         }
     }
     SDL_UnlockTexture(texture);
+    SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
     SDL_RenderClear(renderer);
+    SDL_FRect touch_playfield = {TOUCH_GUTTER, 0, EGA_SCREEN_W, CORRECTED_EGA_H};
+    SDL_FRect touch_wide = {0, WIDE_CONTENT_Y, WIDE_PRESENT_W, CORRECTED_EGA_H};
     SDL_RenderTexture(renderer, texture, NULL,
+                      touch_hud ? &touch_wide : touch_controls ? &touch_playfield :
                       video_is_widescreen() ? &wide_destination : NULL);
+    if (touch_controls && touch_context != TOUCH_HIDDEN) render_touch_controls(touch_hud);
     if (SDL_RenderPresent(renderer) && frame_capture) {
         frame_capture_times[frame_capture_count++] = SDL_GetTicksNS();
         if (frame_capture_count == FRAME_CAPTURE_COUNT) save_frame_capture();
@@ -1534,6 +1853,8 @@ void video_shutdown(void)
         SDL_free(preview_star_pages[page].sprites);
         preview_star_pages[page] = (preview_star_list){0};
     }
+    if (launcher_touch_texture) SDL_DestroyTexture(launcher_touch_texture);
+    launcher_touch_texture = NULL;
     if (texture) SDL_DestroyTexture(texture);
     if (renderer) SDL_DestroyRenderer(renderer);
     if (window) SDL_DestroyWindow(window);

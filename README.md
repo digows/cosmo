@@ -29,8 +29,13 @@ the Windows download includes the shareware Episode 1 and
 plays as soon as it is unpacked; nothing to install. If you own Episodes 2 and
 3, the launcher will ask you to point it at your copy.
 
-The Android APK is available on the same release page. It bundles Episode 1 and supports keyboards and gamepads. The
+The Android APK is available on the same release page. It bundles Episode 1 and supports touch controls, keyboards, and gamepads. The
 Android Back button acts as Escape. See [Android build instructions](android/README.md).
+
+## New in v0.5.0
+
+- Android touch controls are built into the gameplay HUD and launcher and are enabled by default. You can turn them off in the launcher settings.
+- Android high-score name entry supports the device keyboard.
 
 ## New in v0.4.7
 

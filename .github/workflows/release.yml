@@ -42,13 +42,13 @@ jobs:
 
       - uses: msys2/setup-msys2@v2
         with:
-          msystem: MINGW64
+          msystem: UCRT64
           update: true
           install: >-
             git unzip zip
-            mingw-w64-x86_64-gcc
-            mingw-w64-x86_64-cmake
-            mingw-w64-x86_64-ninja
+            mingw-w64-ucrt-x86_64-gcc
+            mingw-w64-ucrt-x86_64-cmake
+            mingw-w64-ucrt-x86_64-ninja
 
       - name: Validate release version
         if: github.event_name == 'workflow_dispatch' && inputs.publish
@@ -120,8 +120,14 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          publish_options=()
+          if [[ "$RELEASE_VERSION" == v0.5.0 ]]; then
+            # Keep the release in draft until the locally signed Android APK is attached.
+            publish_options+=(--draft)
+          fi
           gh release create "$RELEASE_VERSION" \
             --target "$GITHUB_SHA" \
             --title "$RELEASE_VERSION" \
             --notes-file .github/release-notes.md \
+            "${publish_options[@]}" \
             dist/*

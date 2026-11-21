@@ -37,5 +37,4 @@ It supports `arm64-v8a` and `x86_64`.
 
 This is a development build signed with the standard debug key. Android app
 signing and store release configuration are separate follow-up work.
-The first port supports a connected gamepad or keyboard; touch gameplay
-controls have not been added yet.
+Touch controls are enabled by default on Android and can be changed in the launcher settings.

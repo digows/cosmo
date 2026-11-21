@@ -1,0 +1,18 @@
+diff --git a/game1.c b/game1.c
+--- a/game1.c
++++ b/game1.c
+@@ -8491,6 +8491,14 @@ static void Startup(void)
+ 
+     actorInfoData = malloc((word)GroupEntryLength("ACTRINFO.MNI"));
+     LoadInfoData("ACTRINFO.MNI", actorInfoData, (word)GroupEntryLength("ACTRINFO.MNI"));
++#ifdef COSMO_TOUCH_PREVIEW
++    {
++        void video_set_touch_bomb_sprite(const byte *, unsigned, unsigned);
++        word bomb = actorInfoData[SPR_BOMB_IDLE];
++        const byte *tiles = actorTileData[actorInfoData[bomb + 3]] + actorInfoData[bomb + 2];
++        video_set_touch_bomb_sprite(tiles, actorInfoData[bomb + 1], actorInfoData[bomb]);
++    }
++#endif
+ 
+     playerInfoData = malloc((word)GroupEntryLength("PLYRINFO.MNI"));
+     LoadInfoData("PLYRINFO.MNI", playerInfoData, (word)GroupEntryLength("PLYRINFO.MNI"));

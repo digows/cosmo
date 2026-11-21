@@ -402,8 +402,9 @@ static void queue_scancode(uint8_t code)
  * Reconciling against SDL's own view once a frame catches all of it.
  */
 static bool key_held[SDL_SCANCODE_COUNT];
-static bool gamepad_action_held[9];
-static uint8_t gamepad_action_code[9];
+enum { GAMEPAD_ACTION_COUNT = 9 };
+static bool gamepad_action_held[GAMEPAD_ACTION_COUNT + TOUCH_BUTTON_COUNT + 1];
+static uint8_t gamepad_action_code[GAMEPAD_ACTION_COUNT + TOUCH_BUTTON_COUNT + 1];
 static SDL_Gamepad *gamepad;
 static bool gamepad_scan_done;
 static bool window_focused = true;
@@ -486,9 +487,204 @@ static void gamepad_action(int action, uint8_t code, bool down)
 
 static void release_gamepad_actions(void)
 {
-    for (int i = 0; i < (int)SDL_arraysize(gamepad_action_held); ++i)
+    for (int i = 0; i < GAMEPAD_ACTION_COUNT; ++i)
         gamepad_action(i, gamepad_action_code[i], false);
 }
+
+#ifdef __ANDROID__
+static SDL_AtomicInt name_input_requested;
+static SDL_SpinLock name_input_lock;
+static uint8_t name_input_queue[64];
+static unsigned name_input_head, name_input_tail;
+
+void PlatformSetNameInput(int enabled)
+{
+    SDL_LockSpinlock(&name_input_lock);
+    name_input_head = name_input_tail = 0;
+    SDL_SetAtomicInt(&name_input_requested, enabled);
+    SDL_UnlockSpinlock(&name_input_lock);
+}
+
+int PlatformReadNameInput(void)
+{
+    SDL_LockSpinlock(&name_input_lock);
+    int character = 0;
+    if (name_input_head != name_input_tail) {
+        character = name_input_queue[name_input_head];
+        name_input_head = (name_input_head + 1) % SDL_arraysize(name_input_queue);
+    }
+    SDL_UnlockSpinlock(&name_input_lock);
+    return character;
+}
+
+static void queue_name_input(uint8_t character)
+{
+    SDL_LockSpinlock(&name_input_lock);
+    unsigned next = (name_input_tail + 1) % SDL_arraysize(name_input_queue);
+    if (SDL_GetAtomicInt(&name_input_requested) && next != name_input_head) {
+        name_input_queue[name_input_tail] = character;
+        name_input_tail = next;
+    }
+    SDL_UnlockSpinlock(&name_input_lock);
+}
+
+static void update_name_keyboard(void)
+{
+    static bool requested;
+    bool active = SDL_GetAtomicInt(&name_input_requested) != 0;
+    if (active == requested) return;
+    requested = active;
+    if (!active) {
+        SDL_StopTextInput(video_get_window());
+        return;
+    }
+    SDL_PropertiesID props = SDL_CreateProperties();
+    SDL_SetNumberProperty(props, SDL_PROP_TEXTINPUT_TYPE_NUMBER, SDL_TEXTINPUT_TYPE_TEXT_NAME);
+    SDL_SetBooleanProperty(props, SDL_PROP_TEXTINPUT_AUTOCORRECT_BOOLEAN, false);
+    SDL_StartTextInputWithProperties(video_get_window(), props);
+    SDL_DestroyProperties(props);
+}
+
+static bool handle_name_input(const SDL_Event *event)
+{
+    if (!SDL_GetAtomicInt(&name_input_requested)) return false;
+    if (event->type == SDL_EVENT_TEXT_INPUT) {
+        for (const unsigned char *p = (const unsigned char *)event->text.text; *p; ++p) {
+            if ((*p >= 'A' && *p <= 'Z') || (*p >= 'a' && *p <= 'z') ||
+                (*p >= '0' && *p <= '9') || *p == ' ' || *p == '-' || *p == '\'')
+                queue_name_input(*p);
+            else if (*p == '\n') queue_name_input('\r');
+        }
+        return true;
+    }
+    if (event->type == SDL_EVENT_KEY_DOWN) {
+        switch (event->key.scancode) {
+        case SDL_SCANCODE_BACKSPACE: queue_name_input('\b'); break;
+        case SDL_SCANCODE_RETURN:
+        case SDL_SCANCODE_KP_ENTER: queue_name_input('\r'); break;
+        case SDL_SCANCODE_ESCAPE:
+        case SDL_SCANCODE_AC_BACK: queue_name_input(0x1b); break;
+        default: break;
+        }
+        return true;
+    }
+    return false;
+}
+#endif
+
+#ifdef COSMO_TOUCH_PREVIEW
+static SDL_AtomicInt touch_enabled;
+static SDL_AtomicInt touch_context_request;
+static SDL_AtomicInt touch_pause_depth;
+static char touch_settings_file[1024];
+static struct {
+    SDL_FingerID id;
+    bool active;
+    bool direction;
+    int button;
+} touch_fingers[8];
+static Uint64 touch_until[TOUCH_BUTTON_COUNT];
+
+void PlatformSetTouchContext(int context)
+{
+    SDL_SetAtomicInt(&touch_context_request, context);
+}
+
+int PlatformTouchControlsEnabled(void)
+{
+    return SDL_GetAtomicInt(&touch_enabled);
+}
+
+void PlatformLoadTouchControls(void)
+{
+    SDL_snprintf(touch_settings_file, sizeof touch_settings_file, "%s/touch-controls",
+                 paths_write_dir());
+    size_t size = 0;
+    char *setting = SDL_LoadFile(touch_settings_file, &size);
+    SDL_SetAtomicInt(&touch_enabled, !(setting && size == 1 && setting[0] == '0'));
+    SDL_free(setting);
+}
+
+int PlatformToggleTouchControls(void)
+{
+    char setting = PlatformTouchControlsEnabled() ? '0' : '1';
+    if (!SDL_SaveFile(touch_settings_file, &setting, 1)) return 0;
+    SDL_SetAtomicInt(&touch_enabled, setting == '1');
+    return 1;
+}
+
+static void touch_handle_event(SDL_Event *event)
+{
+    int button = video_touch_button(event);
+    if (event->type == SDL_EVENT_FINGER_DOWN && button >= 0) {
+        for (int i = 0; i < (int)SDL_arraysize(touch_fingers); ++i) {
+            if (touch_fingers[i].active) continue;
+            touch_fingers[i].active = true;
+            touch_fingers[i].id = event->tfinger.fingerID;
+            touch_fingers[i].button = button;
+            touch_fingers[i].direction = button <= TOUCH_DOWN;
+            touch_until[button] = SDL_GetTicks() + 55;
+            break;
+        }
+    } else if (event->type != SDL_EVENT_FINGER_DOWN) {
+        for (int i = 0; i < (int)SDL_arraysize(touch_fingers); ++i) {
+            if (!touch_fingers[i].active || touch_fingers[i].id != event->tfinger.fingerID)
+                continue;
+            if (event->type != SDL_EVENT_FINGER_MOTION) {
+                if (event->type == SDL_EVENT_FINGER_CANCELED && touch_fingers[i].button >= 0)
+                    touch_until[touch_fingers[i].button] = 0;
+                touch_fingers[i].active = false;
+            } else if (touch_fingers[i].direction) {
+                int previous = touch_fingers[i].button;
+                if (previous >= 0) touch_until[previous] = 0;
+                touch_fingers[i].button = button <= TOUCH_DOWN ? button : -1;
+            }
+            break;
+        }
+    }
+}
+
+static void touch_update(void)
+{
+    static int previous_context;
+    int context = SDL_GetAtomicInt(&touch_context_request);
+    if (SDL_GetAtomicInt(&name_input_requested)) context = TOUCH_HIDDEN;
+    if (context == TOUCH_PLAY && SDL_GetAtomicInt(&touch_pause_depth) > 0)
+        context = TOUCH_MENU;
+    bool enabled = PlatformTouchControlsEnabled();
+    video_set_touch_controls(enabled);
+    video_set_touch_context(context);
+    if (previous_context != context) {
+        SDL_zeroa(touch_fingers);
+        SDL_zeroa(touch_until);
+        previous_context = context;
+    }
+    unsigned pressed = 0;
+    if (enabled && window_focused) {
+        Uint64 now = SDL_GetTicks();
+        for (unsigned i = 0; i < TOUCH_BUTTON_COUNT; ++i)
+            if (touch_until[i] > now) pressed |= 1u << i;
+        for (unsigned i = 0; i < SDL_arraysize(touch_fingers); ++i)
+            if (touch_fingers[i].active && touch_fingers[i].button >= 0)
+                pressed |= 1u << touch_fingers[i].button;
+    } else {
+        SDL_zeroa(touch_fingers);
+        SDL_zeroa(touch_until);
+    }
+    const uint8_t keys[] = {scancodeWest, scancodeEast, scancodeNorth, scancodeSouth,
+                            context == TOUCH_MENU ? 0x39 : scancodeJump,
+                            context == TOUCH_MENU ? 0x01 : scancodeBomb, 0x3B};
+    for (unsigned i = 0; i < TOUCH_BUTTON_COUNT; ++i) {
+        unsigned action = GAMEPAD_ACTION_COUNT + i;
+        uint8_t key = gamepad_action_held[action] ? gamepad_action_code[action] : keys[i];
+        gamepad_action(action, key, (pressed & (1u << i)) != 0);
+    }
+    gamepad_action(GAMEPAD_ACTION_COUNT + TOUCH_BUTTON_COUNT,
+                   scancodeJump == 0x39 || context != TOUCH_PLAY ? 0 : 0x39,
+                   (pressed & (1u << TOUCH_JUMP)) != 0);
+    video_set_touch_pressed(pressed);
+}
+#endif
 
 static void gamepad_open_first(void)
 {
@@ -660,6 +856,9 @@ void PlatformSetCameraPosition(uint16_t scroll_x, uint16_t scroll_y,
 
 void PlatformSetMotionInterpolationPaused(int paused)
 {
+#ifdef COSMO_TOUCH_PREVIEW
+    SDL_AddAtomicInt(&touch_pause_depth, paused ? 1 : -1);
+#endif
     video_pause_motion_interpolation(paused != 0);
 }
 
@@ -880,8 +1079,18 @@ int main(int argc, char *argv[])
     input_script_load(SDL_getenv("COSMO_SCRIPT"));
     audio_record_to(SDL_getenv("COSMO_AUDIO_WAV"));
 
-    if (!video_init("Cosmo's Cosmic Adventure", 3,
-                    mods_feature_enabled(MOD_WIDESCREEN))) return 1;
+    bool widescreen = mods_feature_enabled(MOD_WIDESCREEN);
+#ifdef COSMO_TOUCH_PREVIEW
+    widescreen = true;
+    SDL_SetHint(SDL_HINT_ORIENTATIONS, "LandscapeLeft LandscapeRight");
+    SDL_SetHint(SDL_HINT_TOUCH_MOUSE_EVENTS, "0");
+    PlatformLoadTouchControls();
+#endif
+    if (!video_init("Cosmo's Cosmic Adventure", 3, widescreen)) return 1;
+#ifdef COSMO_TOUCH_PREVIEW
+    SDL_SetWindowFullscreen(video_get_window(), true);
+    touch_update();
+#endif
     video_set_motion_interpolation(
         mods_feature_enabled(MOD_MOTION_INTERPOLATION));
     if (argc > 1 && SDL_strcmp(argv[1], "--fullscreen") == 0)
@@ -919,7 +1128,13 @@ int main(int argc, char *argv[])
     while (SDL_GetAtomicInt(&game_running)) {
         SDL_Event event;
 
+#ifdef __ANDROID__
+        update_name_keyboard();
+#endif
         while (video_poll_event(&event)) {
+#ifdef __ANDROID__
+            if (handle_name_input(&event)) continue;
+#endif
             if (event.type == SDL_EVENT_QUIT) {
                 /*
                  * The game thread may be parked in one of its busy-wait loops
@@ -939,6 +1154,13 @@ int main(int argc, char *argv[])
                 release_gamepad_actions();
             } else if (event.type == SDL_EVENT_WINDOW_FOCUS_GAINED) {
                 window_focused = true;
+#ifdef COSMO_TOUCH_PREVIEW
+            } else if (event.type == SDL_EVENT_FINGER_DOWN ||
+                       event.type == SDL_EVENT_FINGER_MOTION ||
+                       event.type == SDL_EVENT_FINGER_UP ||
+                       event.type == SDL_EVENT_FINGER_CANCELED) {
+                if (window_focused) touch_handle_event(&event);
+#endif
             } else if (event.type == SDL_EVENT_GAMEPAD_ADDED) {
                 if (!gamepad) {
                     gamepad = SDL_OpenGamepad(event.gdevice.which);
@@ -983,6 +1205,9 @@ int main(int argc, char *argv[])
         }
 
         update_gamepad(window_focused);
+#ifdef COSMO_TOUCH_PREVIEW
+        touch_update();
+#endif
         play_pending_haptic();
 
         if (input_script_active()) {

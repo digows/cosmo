@@ -153,38 +153,6 @@ if(_cosmore_patches)
     endforeach()
 endif()
 
-# Apply narrow settings-menu edits after the numbered source patches. These
-# edits use exact, unique source blocks instead of line-numbered diffs because
-# earlier patches add lines before the menu and make unified-diff offsets
-# fragile. Configuration fails loudly if upstream/generated source changes.
-function(_replace_once file_path old_text new_text description)
-    file(READ "${file_path}" _content)
-    string(FIND "${_content}" "${old_text}" _first)
-    if(_first EQUAL -1)
-        message(FATAL_ERROR "Settings transform could not find ${description} in ${file_path}")
-    endif()
-    string(LENGTH "${old_text}" _old_length)
-    math(EXPR _tail_start "${_first} + ${_old_length}")
-    string(SUBSTRING "${_content}" ${_tail_start} -1 _tail)
-    string(FIND "${_tail}" "${old_text}" _second)
-    if(NOT _second EQUAL -1)
-        message(FATAL_ERROR "Settings transform found multiple ${description} blocks in ${file_path}")
-    endif()
-    string(REPLACE "${old_text}" "${new_text}" _updated "${_content}")
-    file(WRITE "${file_path}" "${_updated}")
-endfunction()
-
-set(_game2_gen "${COSMORE_GEN_DIR}/game2.c")
-_replace_once("${COSMORE_GEN_DIR}/game1.c"
-    [=[    DrawTextLine(x, 8,  " G)ame redefine");]=]
-    [=[    DrawTextLine(x, 8,  " G)ame settings");]=]
-    "F1 Game Settings label")
-
-_replace_once("${_game2_gen}"
-    [=[    DrawTextLine(x, 10,          " G)ame Redefine");]=]
-    [=[    DrawTextLine(x, 10,          " G)ame Settings");]=]
-    "main menu Game Settings label")
-
 # main.c is deliberately excluded: it only performs the 8086 detection that
 # refuses to start on a pre-286 machine, then calls InnerMain(). The platform
 # layer provides its own entry point and calls InnerMain() directly.

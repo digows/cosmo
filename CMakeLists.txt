@@ -38,6 +38,7 @@ option(COSMO_BUNDLE "Build as an application rather than a terminal program" OFF
 option(COSMO_WIDESCREEN "Enable the widescreen mod by default for preview builds" OFF)
 option(COSMO_ANDROID_APP "Build Episode 1 as an SDL Android shared library" OFF)
 option(COSMO_DEV_LEVEL_SHORTCUTS "Enable developer level shortcuts" OFF)
+option(COSMO_TOUCH_PREVIEW "Enable the Android touch-control preview" OFF)
 option(COSMO_IOS_APP "Build Episode 1 as an SDL iOS application bundle" OFF)
 
 # --------------------------------------------------------------------------
@@ -354,6 +355,10 @@ if(COSMO_BUILD_GAME)
             src/platform/platform_main.c
             src/launcher.c)
         target_compile_definitions(main PRIVATE COSMO_EPISODE_MODULE)
+        if(COSMO_TOUCH_PREVIEW)
+            target_compile_definitions(main PRIVATE COSMO_TOUCH_PREVIEW)
+            target_compile_definitions(cosmore_game1 PRIVATE COSMO_TOUCH_PREVIEW)
+        endif()
         target_link_libraries(main PRIVATE cosmo_lowlevel1 cosmo_platform cosmo_video)
         add_dependencies(main cosmore_game1)
         return()

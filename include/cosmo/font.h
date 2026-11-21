@@ -19,6 +19,7 @@
 
 /* Load FONTS.MNI for `episode` out of `datadir`. */
 bool font_load(const char *datadir, int episode);
+const uint8_t *font_glyph(char character);
 
 /* Draw `text` with its first character at tile position x, y. */
 void font_draw(int x, int y, const char *text);

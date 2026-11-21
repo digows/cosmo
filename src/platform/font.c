@@ -99,9 +99,10 @@ static void draw_tile(const uint8_t *src, int x, int y)
     }
 }
 
-static const uint8_t *tile_for(char c)
+const uint8_t *font_glyph(char c)
 {
     unsigned offset;
+    if (!font_ready) return NULL;
 
     if (c >= 'a' && c <= 'z') {
         offset = FONT_LOWER_A + (unsigned)(c - 'a') * FONT_TILE_BYTES;
@@ -122,7 +123,7 @@ void font_draw_colored(int x, int y, const char *text, uint8_t color)
     ega_out_word(EGA_PORT_GC_INDEX, (0x00 << 8) | GC_MODE);
 
     for (int i = 0; text[i] != '\0'; i++) {
-        const uint8_t *tile = tile_for(text[i]);
+        const uint8_t *tile = font_glyph(text[i]);
 
         if (!tile) continue;
         uint8_t tinted[FONT_TILE_BYTES];

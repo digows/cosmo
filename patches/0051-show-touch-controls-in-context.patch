@@ -1,0 +1,56 @@
+diff --git a/game1.c b/game1.c
+index 14ba8c0..ecf1036 100644
+--- a/game1.c
++++ b/game1.c
+@@ -9787,6 +9787,11 @@ static byte MainMenuOptionKey(byte option)
+     return option < sizeof options / sizeof options[0] ? options[option] : SCANCODE_B;
+ }
+ 
++#ifdef COSMO_TOUCH_PREVIEW
++void PlatformSetTouchContext(int context);
++enum { TOUCH_HIDDEN, TOUCH_MENU, TOUCH_PLAY };
++#endif
++
+ static byte TitleLoop(void)
+ {
+ #ifdef FOREIGN_ORDERS
+@@ -9805,6 +9810,9 @@ static byte TitleLoop(void)
+ title:
+     StartMenuMusic(MUSIC_ZZTOP);
+     DrawFullscreenImage(IMAGE_TITLE);
++#ifdef COSMO_TOUCH_PREVIEW
++    PlatformSetTouchContext(TOUCH_MENU);
++#endif
+     idlecount = 0;
+     gameTickCount = 0;
+ 
+@@ -10846,6 +10854,9 @@ initialization tasks.
+ */
+ void InitializeLevel(word level_num)
+ {
++#ifdef COSMO_TOUCH_PREVIEW
++    PlatformSetTouchContext(TOUCH_HIDDEN);
++#endif
+     PlatformSetMotionInterpolationPaused(1);
+     static word mapVariables, musicNum;
+     FILE *fp;
+@@ -10939,6 +10950,9 @@ void InitializeLevel(word level_num)
+     }
+ #endif  /* EXPLOSION_PALETTE */
+     PlatformSetMotionInterpolationPaused(0);
++#ifdef COSMO_TOUCH_PREVIEW
++    PlatformSetTouchContext(demoState == DEMO_STATE_NONE ? TOUCH_PLAY : TOUCH_MENU);
++#endif
+ }
+ 
+ /*
+@@ -10991,6 +11005,9 @@ void InnerMain(int argc, char *argv[])
+         ClearWideTerrain();
+ #endif
+         isInGame = false;
++#ifdef COSMO_TOUCH_PREVIEW
++        PlatformSetTouchContext(TOUCH_MENU);
++#endif
+ 
+         StopMusic();
+ 

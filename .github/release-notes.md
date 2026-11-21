@@ -1,14 +1,11 @@
-## What's new
+## What's new in 5.0
 
-- Smoother scrolling, character movement, and animations with Smooth Gameplay.
-- Fixed an issue where smoothing was skipped as stone heads and spears retracted.
-- Fixed an issue where projectiles could disappear before reaching the edge of the widescreen view. Enemies and pickups also use the full visible playfield.
-- Fixed a vertical scrolling bug that could scramble the backdrop’s colors in the cliff and bonus levels.
-- Improved Android Back navigation and controller support in Game Settings.
+- Android touch controls are now built into the gameplay HUD and episode launcher. They're enabled by default and can be toggled in the launcher settings.
+- Touch menus show Select and Back prompts, and you can enter high-score names with the device keyboard.
 
 ## Downloads
 
 - **Windows x64** · Unpack the ZIP and launch `cosmo.exe`.
-- **Android ARM64 and x86-64** · Install the APK and play with a keyboard or gamepad. Smooth Gameplay is enabled by default on fresh installs.
+- **Android ARM64 and x86-64** · Install the APK and play with touch controls, a keyboard, or a gamepad.
 
 Both downloads bundle shareware Episode 1. The Windows launcher can also play Episodes 2 and 3 using your own game files. See `SHA256SUMS.txt` for download checksums.

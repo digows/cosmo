@@ -26,6 +26,16 @@ bool video_write_png(const char *path, int scale);
 bool video_init(const char *title, int scale, bool widescreen);
 bool video_is_widescreen(void);
 void video_present(void);
+enum { TOUCH_LEFT, TOUCH_RIGHT, TOUCH_UP, TOUCH_DOWN, TOUCH_JUMP, TOUCH_BOMB,
+       TOUCH_PAUSE, TOUCH_BUTTON_COUNT };
+union SDL_Event;
+void video_set_touch_controls(bool enabled);
+void video_load_launcher_touch_texture(void);
+enum { TOUCH_HIDDEN, TOUCH_MENU, TOUCH_PLAY };
+void video_set_touch_context(unsigned context);
+void video_set_touch_pressed(unsigned buttons);
+void video_set_touch_bomb_sprite(const uint8_t *tiles, unsigned columns, unsigned rows);
+int video_touch_button(union SDL_Event *event);
 void video_start_frame_capture(void);
 void video_set_motion_interpolation(bool enabled);
 void video_pause_motion_interpolation(bool paused);
@@ -49,7 +59,6 @@ bool video_is_fullscreen(void);
 void video_set_fullscreen(bool fullscreen);
 
 /* Handle display shortcuts before passing events to the caller. */
-union SDL_Event;
 bool video_poll_event(union SDL_Event *event);
 
 /*

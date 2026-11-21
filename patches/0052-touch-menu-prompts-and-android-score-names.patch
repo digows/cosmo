@@ -1,0 +1,756 @@
+diff --git a/glue.h b/glue.h
+index a5b2809..7d0d221 100644
+--- a/glue.h
++++ b/glue.h
+@@ -220,6 +220,12 @@ void PlatformSetCameraPosition(word scroll_x, word scroll_y, int backdrop_x, int
+ void PlatformSetMotionInterpolationPaused(int paused);
+ const char *PlatformDisplayFilterName(void);
+ int PlatformStepDisplayFilter(int direction);
++#ifdef COSMO_TOUCH_PREVIEW
++int PlatformTouchControlsEnabled(void);
++#define TOUCH_MENU_TEXT(keyboard, touch) (PlatformTouchControlsEnabled() ? (touch) : (keyboard))
++#else
++#define TOUCH_MENU_TEXT(keyboard, touch) (keyboard)
++#endif
+ void PlatformSetMusicPaused(int paused);
+ int PlatformLowGravity(void);
+ int PlatformShieldMode(void);
+diff --git a/game1.c b/game1.c
+index f8381c4..d187a3a 100644
+--- a/game1.c
++++ b/game1.c
+@@ -9650,7 +9650,7 @@ Present a UI for restoring a saved game, and return the result of the prompt.
+ static byte PromptRestoreGame(void)
+ {
+     byte scancode;
+-    word x = UnfoldTextFrame(11, 7, 28, "Restore a game.", "Press ESC to quit.");
++    word x = UnfoldTextFrame(11, 7, 28, "Restore a game.", TOUCH_MENU_TEXT("Press ESC to quit.", "Select or Back."));
+ 
+     DrawTextLine(x, 14, " What game number (1-9)?");
+     scancode = PromptGameSlot(x + 24, 14);
+@@ -9668,7 +9668,7 @@ static byte PromptRestoreGame(void)
+             return RESTORE_GAME_SUCCESS;
+         }
+     } else {
+-        x = UnfoldTextFrame(11, 4, 28, "Invalid game number!", "Press ANY key.");
++        x = UnfoldTextFrame(11, 4, 28, "Invalid game number!", TOUCH_MENU_TEXT("Press ANY key.", "Tap Select."));
+         WaitSpinner(x + 25, 13);
+     }
+ 
+@@ -9685,7 +9685,7 @@ static void PromptSaveGame(void)
+     word tmphealth, tmpbombs, tmplevel, tmpstars, tmpbars;
+     dword tmpscore;
+     bbool saved;
+-    word x = UnfoldTextFrame(8, 10, 28, "Save a game.", "Press ESC to quit.");
++    word x = UnfoldTextFrame(8, 10, 28, "Save a game.", TOUCH_MENU_TEXT("Press ESC to quit.", "Select or Back."));
+ 
+     DrawTextLine(x, 11, " What game number (1-9)?");
+     DrawTextLine(x, 13, " NOTE: Game is saved at");
+@@ -9717,10 +9717,10 @@ static void PromptSaveGame(void)
+         playerHealthCells = tmpbars;
+ 
+         x = UnfoldTextFrame(7, 4, 20,
+-            saved ? "Game Saved." : "Couldn't save game.", "Press ANY key.");
++            saved ? "Game Saved." : "Couldn't save game.", TOUCH_MENU_TEXT("Press ANY key.", "Tap Select."));
+         WaitSpinner(x + 17, 9);
+     } else {
+-        x = UnfoldTextFrame(11, 4, 28, "Invalid game number!", "Press ANY key.");
++        x = UnfoldTextFrame(11, 4, 28, "Invalid game number!", TOUCH_MENU_TEXT("Press ANY key.", "Tap Select."));
+         WaitSpinner(x + 25, 13);
+     }
+ }
+@@ -9948,19 +9948,19 @@ if the game should continue, restart on a different level, or exit.
+ */
+ static byte ShowHelpMenu(void)
+ {
+-    word x = UnfoldTextFrame(2, 12, 22, "HELP MENU", "Press ESC to quit.");
++    word x = UnfoldTextFrame(2, 12, 22, "HELP MENU", TOUCH_MENU_TEXT("Press ESC to quit.", "Select or Back."));
+     static const byte menu_keys[] = {
+         SCANCODE_S, SCANCODE_R, SCANCODE_H, SCANCODE_G, SCANCODE_V, SCANCODE_Q
+     };
+     static const byte menu_rows[] = {5, 6, 7, 8, 9, 10};
+     byte selection = 0;
+ 
+-    DrawTextLine(x, 5,  " S)ave your game");
+-    DrawTextLine(x, 6,  " R)estore a game");
+-    DrawTextLine(x, 7,  " H)elp");
+-    DrawTextLine(x, 8,  " G)ame redefine");
+-    DrawTextLine(x, 9,  " V)iew High Scores");
+-    DrawTextLine(x, 10, " Q)uit Game");
++    DrawTextLine(x, 5,  " Save your game");
++    DrawTextLine(x, 6,  " Restore a game");
++    DrawTextLine(x, 7,  " Help");
++    DrawTextLine(x, 8,  " Game settings");
++    DrawTextLine(x, 9,  " View High Scores");
++    DrawTextLine(x, 10, " Quit Game");
+     DrawTextLine(x, menu_rows[selection], ">");
+ 
+     for (;;) {
+@@ -10370,7 +10370,7 @@ static void NextLevel(void)
+     case 19:
+     case 23:
+     case 27:
+-        ShowSectionIntermission("Bonus Level Completed!!", "Press ANY key.");
++        ShowSectionIntermission("Bonus Level Completed!!", TOUCH_MENU_TEXT("Press ANY key.", "Tap Select."));
+         /* FALL THROUGH */
+ 
+     case 0:  /* First levels in each section... */
+@@ -10390,7 +10390,7 @@ static void NextLevel(void)
+     case 17:
+     case 21:
+     case 25:
+-        ShowSectionIntermission("Section Completed!", "Press ANY key.");
++        ShowSectionIntermission("Section Completed!", TOUCH_MENU_TEXT("Press ANY key.", "Tap Select."));
+ 
+         if (stars > 24) {
+             /* Fade/clear not strictly needed */
+diff --git a/game2.c b/game2.c
+index 21d4680..2b8ad78 100644
+--- a/game2.c
++++ b/game2.c
+@@ -1085,7 +1085,7 @@ static void ShowJoystickConfiguration(word stick_num)
+     byte scancode = SCANCODE_NULL;
+     JoystickState state;
+ 
+-    xframe = UnfoldTextFrame(3, 16, 30, "Joystick Config.", "Press ANY key.");
++    xframe = UnfoldTextFrame(3, 16, 30, "Joystick Config.", TOUCH_MENU_TEXT("Press ANY key.", "Tap Select."));
+ 
+     /* Wait for all keys to be released */
+     while ((lastScancode & 0x80) == 0)
+@@ -1358,7 +1358,7 @@ void ShowHighScoreTable(void)
+     for (;;) {
+         byte scancode;
+         word i;
+-        word x = UnfoldTextFrame(2, 17, 30, "Hall of Fame", "any other key to exit.");
++        word x = UnfoldTextFrame(2, 17, 30, "Hall of Fame", TOUCH_MENU_TEXT("any other key to exit.", "Tap Back to exit."));
+ 
+         for (i = 0; i < 10; i++) {
+             /* _1. ___1234 NAME */
+@@ -1367,7 +1367,7 @@ void ShowHighScoreTable(void)
+             DrawNumberFlushRight(x + 11, i + 5, highScoreValues[i]);
+             DrawTextLine(x + 13, i + 5, highScoreNames[i]);
+         }
+-        DrawTextLine(x + 3, 16, "Press 'F10' to erase or");
++        DrawTextLine(x + 3, 16, TOUCH_MENU_TEXT("Press 'F10' to erase or", ""));
+ 
+         if (!isInGame) {
+             FadeIn();
+@@ -1399,6 +1399,36 @@ Check if the player's current score qualifies for insertion into the high score
+ table, and if so, prompt for a name to go along with it. Display the high score
+ table at the end whether the prompt was displayed or not.
+ */
++#ifdef __ANDROID__
++void PlatformSetNameInput(int enabled);
++int PlatformReadNameInput(void);
++
++static void ReadHighScoreName(word x, word y, char *dest, word max_length)
++{
++    word length = 0;
++    PlatformSetNameInput(1);
++    for (;;) {
++        StepWaitSpinner(x + length + 1, y);
++        int character = PlatformReadNameInput();
++        if (character == '\r' || character == 0x1b) {
++            EraseWaitSpinner(x + length + 1, y);
++            dest[character == 0x1b ? 0 : length] = '\0';
++            PlatformSetNameInput(0);
++            return;
++        }
++        if (character == '\b') {
++            EraseWaitSpinner(x + length + 1, y);
++            if (length) EraseWaitSpinner(x + length--, y);
++        } else if (character && length < max_length) {
++            char glyph[] = {(char)character, '\0'};
++            dest[length++] = (char)character;
++            DrawTextLine(x + length, y, glyph);
++        }
++        WaitHard(1);
++    }
++}
++#endif
++
+ void CheckHighScoreAndShow(void)
+ {
+     int i;
+@@ -1423,7 +1453,11 @@ void CheckHighScoreAndShow(void)
+         highScoreNames[i][0] = '\0';
+         highScoreValues[i] = gameScore;
+ 
++#ifdef __ANDROID__
++        x = UnfoldTextFrame(5, 7, 36, "You made it into the hall of fame!", "Enter to save. Back to cancel.");
++#else
+         x = UnfoldTextFrame(5, 7, 36, "You made it into the hall of fame!", "Press ESC to quit.");
++#endif
+         DrawTextLine(x, 8, "Enter your name:");
+         FadeIn();
+         StartSound(SND_HIGH_SCORE_SET);
+@@ -1432,7 +1466,11 @@ void CheckHighScoreAndShow(void)
+         Name length is likely constrained to prevent hitting the frame edge when
+         viewing the table.
+         */
++#ifdef __ANDROID__
++        ReadHighScoreName(x + 16, 8, highScoreNames[i], sizeof(HighScoreName) - 2);
++#else
+         ReadAndEchoText(x + 16, 8, highScoreNames[i], sizeof(HighScoreName) - 2);
++#endif
+ 
+         break;
+     }
+@@ -1592,7 +1630,7 @@ void ShowOrderingInformation(void)
+     ClearScreen();
+ 
+ #ifdef SHAREWARE
+-    x = UnfoldTextFrame(0, 24, 38, "Ordering Information", "Press ANY key.");
++    x = UnfoldTextFrame(0, 24, 38, "Ordering Information", TOUCH_MENU_TEXT("Press ANY key.", "Tap Select."));
+     DrawTextLine(x, 2,  "  \xFE""223000                              \xFE""223000");
+     DrawTextLine(x, 4,  "      COSMO'S COSMIC ADVENTURE");
+     DrawTextLine(x, 5,  "    consists of three adventures.");
+@@ -1614,7 +1652,7 @@ void ShowOrderingInformation(void)
+     FadeOutCustom(1);
+     ClearScreen();
+ 
+-    x = UnfoldTextFrame(1, 22, 38, "Ordering Information", "Press ANY key.");
++    x = UnfoldTextFrame(1, 22, 38, "Ordering Information", TOUCH_MENU_TEXT("Press ANY key.", "Tap Select."));
+     DrawTextLine(x, 4,  "       Order now and receive:");
+     DrawTextLine(x, 6,  "   * All three exciting adventures");
+     DrawTextLine(x, 7,  "   * The hints and tricks sheet");
+@@ -1633,7 +1671,7 @@ void ShowOrderingInformation(void)
+     FadeOutCustom(1);
+     ClearScreen();
+ 
+-    x = UnfoldTextFrame(1, 22, 38, "Ordering Information", "Press ANY key.");
++    x = UnfoldTextFrame(1, 22, 38, "Ordering Information", TOUCH_MENU_TEXT("Press ANY key.", "Tap Select."));
+     DrawTextLine(x, 4,  "      Please specify disk size:");
+     DrawTextLine(x, 5,  "           5.25\"  or  3.5\"");
+     DrawTextLine(x, 7,  "     To order send $35, plus $4");
+@@ -1652,7 +1690,7 @@ void ShowOrderingInformation(void)
+     FadeOutCustom(1);
+     ClearScreen();
+ 
+-    x = UnfoldTextFrame(4, 15, 38, "USE YOUR FAX MACHINE TO ORDER!", "Press ANY key.");
++    x = UnfoldTextFrame(4, 15, 38, "USE YOUR FAX MACHINE TO ORDER!", TOUCH_MENU_TEXT("Press ANY key.", "Tap Select."));
+     DrawTextLine(x, 7,  "  You can now use your FAX machine");
+     DrawTextLine(x, 8,  "   to order your favorite Apogee");
+     DrawTextLine(x, 9,  "     games quickly and easily.");
+@@ -1666,7 +1704,7 @@ void ShowOrderingInformation(void)
+     FadeOutCustom(1);
+     ClearScreen();
+ 
+-    x = UnfoldTextFrame(1, 20, 38, "About Apogee Software", "Press ANY key.") + 2;
++    x = UnfoldTextFrame(1, 20, 38, "About Apogee Software", TOUCH_MENU_TEXT("Press ANY key.", "Tap Select.")) + 2;
+     DrawTextLine(x, 4,  "Our goal is to establish Apogee");
+     DrawTextLine(x, 5,  "  as the leader in commercial");
+     DrawTextLine(x, 6,  " quality shareware games. With");
+@@ -1681,7 +1719,7 @@ void ShowOrderingInformation(void)
+     FadeInCustom(1);
+     WaitSpinner(x + 33, 19);
+ #else
+-    x = UnfoldTextFrame(0, 24, 38, "Ordering Information", "Press ANY key.");
++    x = UnfoldTextFrame(0, 24, 38, "Ordering Information", TOUCH_MENU_TEXT("Press ANY key.", "Tap Select."));
+     DrawTextLine(x,  4, "      COSMO'S COSMIC ADVENTURE");
+     DrawTextLine(x,  6, "  This game IS commercial software.");
+     DrawTextLine(x,  8, "    This episode of Cosmo is NOT");
+@@ -1711,7 +1749,7 @@ void ShowCongratulations(void)
+     FadeOut();
+     ClearScreen();
+ 
+-    x = UnfoldTextFrame(0, 23, 38, "CONGRATULATIONS!", "Press ANY key.") + 2;
++    x = UnfoldTextFrame(0, 23, 38, "CONGRATULATIONS!", TOUCH_MENU_TEXT("Press ANY key.", "Tap Select.")) + 2;
+     DrawTextLine(x, 3,  "You saved Cosmo's parents and");
+     DrawTextLine(x, 4,  "landed at Disney World for the");
+     DrawTextLine(x, 5,  "best birthday of your life.");
+@@ -1748,7 +1786,7 @@ void ShowStory(void)
+     FadeOut();
+     ClearScreen();
+ 
+-    x = UnfoldTextFrame(1, 23, 38, "STORY", "Press ANY key.");
++    x = UnfoldTextFrame(1, 23, 38, "STORY", TOUCH_MENU_TEXT("Press ANY key.", "Tap Select."));
+     DrawTextLine(x + 1,  8,  "\xFB""000");
+     DrawTextLine(x + 1,  20, "\xFB""002");
+     DrawTextLine(x + 16, 5,  "Tomorrow is Cosmo's");
+@@ -1765,7 +1803,7 @@ void ShowStory(void)
+     FadeOut();
+     ClearScreen();
+ 
+-    x = UnfoldTextFrame(1, 23, 38, "STORY", "Press ANY key.");
++    x = UnfoldTextFrame(1, 23, 38, "STORY", TOUCH_MENU_TEXT("Press ANY key.", "Tap Select."));
+     DrawTextLine(x + 3,  12, "\xFB""003");
+     DrawTextLine(x + 25, 12, "\xFB""004");
+     DrawTextLine(x + 3,  5,  "Suddenly a blazing comet zooms");
+@@ -1779,7 +1817,7 @@ void ShowStory(void)
+     FadeOut();
+     ClearScreen();
+ 
+-    x = UnfoldTextFrame(1, 23, 38, "STORY", "Press ANY key.");
++    x = UnfoldTextFrame(1, 23, 38, "STORY", TOUCH_MENU_TEXT("Press ANY key.", "Tap Select."));
+     DrawTextLine(x + 2,  7,  "\xFB""005");
+     DrawTextLine(x + 25, 20, "\xFB""006");
+     DrawTextLine(x + 15, 7,  "The comet slams into");
+@@ -1794,7 +1832,7 @@ void ShowStory(void)
+     FadeOut();
+     ClearScreen();
+ 
+-    x = UnfoldTextFrame(1, 23, 38, "STORY", "Press ANY key.");
++    x = UnfoldTextFrame(1, 23, 38, "STORY", TOUCH_MENU_TEXT("Press ANY key.", "Tap Select."));
+     DrawTextLine(x + 17, 9,  "\xFB""007");
+     DrawTextLine(x + 1,  20, "\xFB""008");
+     DrawTextLine(x + 2,  5,  "While Cosmo's");
+@@ -1809,7 +1847,7 @@ void ShowStory(void)
+     FadeOut();
+     ClearScreen();
+ 
+-    x = UnfoldTextFrame(1, 23, 38, "STORY", "Press ANY key.");
++    x = UnfoldTextFrame(1, 23, 38, "STORY", TOUCH_MENU_TEXT("Press ANY key.", "Tap Select."));
+     DrawTextLine(x + 3,  15, "\xFB""009");
+     DrawTextLine(x + 6,  7,  "Returning an hour later,");
+     DrawTextLine(x + 17, 11, "Cosmo cannot find");
+@@ -1822,7 +1860,7 @@ void ShowStory(void)
+     FadeOut();
+     ClearScreen();
+ 
+-    x = UnfoldTextFrame(1, 23, 38, "STORY", "Press ANY key.");
++    x = UnfoldTextFrame(1, 23, 38, "STORY", TOUCH_MENU_TEXT("Press ANY key.", "Tap Select."));
+     DrawTextLine(x + 21, 19, "\xFB""010");
+     DrawTextLine(x + 2,  5,  "...oh no!  Has his");
+     DrawTextLine(x + 2,  7,  "family been taken");
+@@ -1943,7 +1981,7 @@ static void ShowKeyboardConfiguration(void)
+     };
+     byte selection = 0;
+     word x = DrawTextFrame(SETTINGS_LEFT, SETTINGS_TOP, SETTINGS_HEIGHT, SETTINGS_WIDTH,
+-                           "Keyboard Mapping", "Esc or B to go back", true);
++                           "Keyboard Mapping", TOUCH_MENU_TEXT("Esc or B to go back", "Tap Back to exit"), true);
+ 
+     for (;;) {
+         byte scancode;
+@@ -1956,7 +1994,7 @@ static void ShowKeyboardConfiguration(void)
+             DrawTextLine(x + 2, 6 + i, label);
+             DrawTextLine(x + 19, 6 + i, keyNames[*keys[i]]);
+         }
+-        DrawTextLine(x + 2, 15, "Enter, A or 1-6 to change");
++        DrawTextLine(x + 2, 15, TOUCH_MENU_TEXT("Enter, A or 1-6 to change", "Tap Select to change"));
+         scancode = WaitSpinner(x + 30, 14);
+         if (scancode == SCANCODE_ESC) return;
+ 
+@@ -1978,7 +2016,7 @@ static void ShowKeyboardConfiguration(void)
+             continue;
+         }
+         DrawTextFrame(SETTINGS_LEFT, SETTINGS_TOP, SETTINGS_HEIGHT, SETTINGS_WIDTH,
+-                      "Keyboard Mapping", "Esc or B to go back", true);
++                      "Keyboard Mapping", TOUCH_MENU_TEXT("Esc or B to go back", "Tap Back to exit"), true);
+     }
+ }
+ 
+@@ -2219,7 +2257,7 @@ void ShowHintsAndKeys(word top)
+     word x;
+     word y = top - 1;
+ 
+-    x = UnfoldTextFrame(top, 18, 38, "Cosmic Hints", "Press ANY key.");
++    x = UnfoldTextFrame(top, 18, 38, "Cosmic Hints", TOUCH_MENU_TEXT("Press ANY key.", "Tap Select."));
+     DrawTextLine(x, y + 4,  " * Usually jumping in the paths of");
+     DrawTextLine(x, y + 5,  "   bonus objects will lead you in");
+     DrawTextLine(x, y + 6,  "   the right direction.");
+@@ -2253,7 +2291,7 @@ void ShowHintsAndKeys(word top)
+     DrawTextLine(x + 8,  y + 15, keyNames[scancodeBomb]);
+     WaitSpinner(x + 35, y + 17);
+ 
+-    x = UnfoldTextFrame(4, 11, 34, "During the game, you can...", "Press ANY key.");
++    x = UnfoldTextFrame(4, 11, 34, "During the game, you can...", TOUCH_MENU_TEXT("Press ANY key.", "Tap Select."));
+     DrawTextLine(x, 7,  " Press 'P' to PAUSE GAME");
+     DrawTextLine(x, 8,  " Press 'ESC' or 'Q' to QUIT game");
+     DrawTextLine(x, 9,  " Press 'S' to toggle SOUND");
+@@ -2302,7 +2340,7 @@ page1:
+ page2:
+     FadeOutCustom(1);
+ 
+-    x = UnfoldTextFrame(0, 24, 38, "Instructions  Page Two of Five", "Press PgUp or PgDn.  Esc to Exit.");
++    x = UnfoldTextFrame(0, 24, 38, "Instructions  Page Two of Five", TOUCH_MENU_TEXT("Press PgUp or PgDn.  Esc to Exit.", "Up/Down to turn pages. Back."));
+     DrawTextLine(x, 4,  " Cosmo has a very special ability:");
+     DrawTextLine(x, 6,  " He can use his suction hands to");
+     DrawTextLine(x, 8,  " climb up walls.");
+@@ -2319,7 +2357,7 @@ page2:
+ page3:
+     FadeOutCustom(1);
+ 
+-    x = UnfoldTextFrame(0, 24, 38, "Instructions  Page Three of Five", "Press PgUp or PgDn.  Esc to Exit.");
++    x = UnfoldTextFrame(0, 24, 38, "Instructions  Page Three of Five", TOUCH_MENU_TEXT("Press PgUp or PgDn.  Esc to Exit.", "Up/Down to turn pages. Back."));
+     DrawTextLine(x,     4,  " Cosmo can jump onto attacking");
+     DrawTextLine(x,     6,  " creatures without being harmed.");
+     DrawTextLine(x,     8,  " This is also Cosmo's way of");
+@@ -2337,7 +2375,7 @@ page3:
+ page4:
+     FadeOutCustom(1);
+ 
+-    x = UnfoldTextFrame(0, 24, 38, "Instructions  Page Four of Five", "Press PgUp or PgDn.  Esc to Exit.");
++    x = UnfoldTextFrame(0, 24, 38, "Instructions  Page Four of Five", TOUCH_MENU_TEXT("Press PgUp or PgDn.  Esc to Exit.", "Up/Down to turn pages. Back."));
+     DrawTextLine(x,     5,  " Use the up and down arrow keys to");
+     DrawTextLine(x,     7,  " make Cosmo look up and down,");
+     DrawTextLine(x,     9,  " enabling him to see areas that");
+@@ -2352,7 +2390,7 @@ page4:
+ 
+     FadeOutCustom(1);
+ 
+-    x = UnfoldTextFrame(0, 24, 38, "Instructions  Page Five of Five", "Press PgUp.  Esc to Exit.");
++    x = UnfoldTextFrame(0, 24, 38, "Instructions  Page Five of Five", TOUCH_MENU_TEXT("Press PgUp.  Esc to Exit.", "Up for previous page. Back."));
+     DrawTextLine(x, 5,  " In Cosmo's Cosmic Adventure, it's");
+     DrawTextLine(x, 7,  " up to you to discover the use of");
+     DrawTextLine(x, 9,  " all the neat and strange objects");
+@@ -2384,7 +2422,7 @@ void ShowPublisherBBS(void)
+     FadeOut();
+     ClearScreen();
+ 
+-    x = UnfoldTextFrame(1, 22, 38, "THE OFFICIAL APOGEE BBS", "Press ANY key.") + 3;
++    x = UnfoldTextFrame(1, 22, 38, "THE OFFICIAL APOGEE BBS", TOUCH_MENU_TEXT("Press ANY key.", "Tap Select.")) + 3;
+     DrawTextLine(x, 3,  "    -----------------------");
+     DrawTextLine(x, 5,  "The SOFTWARE CREATIONS BBS is");
+     DrawTextLine(x, 6,  " the home BBS for the latest");
+@@ -2403,7 +2441,7 @@ void ShowPublisherBBS(void)
+     FadeOut();
+     ClearScreen();
+ 
+-    x = UnfoldTextFrame(0, 25, 40, "APOGEE ON AMERICA ONLINE! ", "Press ANY key.");
++    x = UnfoldTextFrame(0, 25, 40, "APOGEE ON AMERICA ONLINE! ", TOUCH_MENU_TEXT("Press ANY key.", "Tap Select."));
+     DrawTextLine(x, 2,  "      -------------------------");
+     DrawTextLine(x, 4,  "   America Online (AOL) is host of");
+     DrawTextLine(x, 5,  " the Apogee Forum, where you can get");
+@@ -2435,7 +2473,7 @@ void ShowForeignOrders(void)
+     FadeOut();
+     ClearScreen();
+ 
+-    x = UnfoldTextFrame(1, 19, 38, "FOREIGN CUSTOMERS", "Press ANY key.") + 2;
++    x = UnfoldTextFrame(1, 19, 38, "FOREIGN CUSTOMERS", TOUCH_MENU_TEXT("Press ANY key.", "Tap Select.")) + 2;
+     DrawTextLine(x, 3,  "        -----------------");
+     DrawTextLine(x, 5,  " The following screens list our");
+     DrawTextLine(x, 6,  "   dealers outside the United");
+@@ -2453,7 +2491,7 @@ void ShowForeignOrders(void)
+     FadeOutCustom(1);
+     ClearScreen();
+ 
+-    x = UnfoldTextFrame(1, 19, 38, "AUSTRALIAN CUSTOMERS", "Press ANY key.") + 3;
++    x = UnfoldTextFrame(1, 19, 38, "AUSTRALIAN CUSTOMERS", TOUCH_MENU_TEXT("Press ANY key.", "Tap Select.")) + 3;
+     DrawTextLine(x, 4,  "PRICE: $45 + $5 shipping.");
+     DrawTextLine(x, 6,  "BudgetWare");
+     DrawTextLine(x, 7,  "P.O. Box 496");
+@@ -2470,7 +2508,7 @@ void ShowForeignOrders(void)
+     FadeOutCustom(1);
+     ClearScreen();
+ 
+-    x = UnfoldTextFrame(1, 20, 38, "CANADIAN CUSTOMERS", "Press ANY key.") + 3;
++    x = UnfoldTextFrame(1, 20, 38, "CANADIAN CUSTOMERS", TOUCH_MENU_TEXT("Press ANY key.", "Tap Select.")) + 3;
+     DrawTextLine(x, 4,  "PRICE: $42 Canadian.       \xFE""146000");
+     DrawTextLine(x, 6,  "Distant Markets");
+     DrawTextLine(x, 7,  "Box 1149");
+@@ -2488,7 +2526,7 @@ void ShowForeignOrders(void)
+     FadeOutCustom(1);
+     ClearScreen();
+ 
+-    x = UnfoldTextFrame(1, 20, 38, "GERMAN CUSTOMERS", "Press ANY key.") + 3;
++    x = UnfoldTextFrame(1, 20, 38, "GERMAN CUSTOMERS", TOUCH_MENU_TEXT("Press ANY key.", "Tap Select.")) + 3;
+     DrawTextLine(x, 4,  "Price: 49,-- DM plus 10,-- DM");
+     DrawTextLine(x, 5,  "Total: 59,-- DM (Deutsche Mark)");
+     DrawTextLine(x, 7,  "CDV-Software");
+@@ -2506,7 +2544,7 @@ void ShowForeignOrders(void)
+     FadeOutCustom(1);
+     ClearScreen();
+ 
+-    x = UnfoldTextFrame(1, 20, 38, "UNITED KINGDOM CUSTOMERS", "Press ANY key.") + 3;
++    x = UnfoldTextFrame(1, 20, 38, "UNITED KINGDOM CUSTOMERS", TOUCH_MENU_TEXT("Press ANY key.", "Tap Select.")) + 3;
+     /* The game font renders the symbol for pound sterling instead of `/`. */
+     DrawTextLine(x, 4,  "Price: /29 + VAT + 2 P&P     \xFE""085000");
+     DrawTextLine(x, 6,  "Precision Software Applications");
+@@ -2571,7 +2609,7 @@ word UnfoldPlayerFrame(void)
+     register word x;
+ 
+ #ifdef HAS_ACT_FROZEN_DN
+-    x = UnfoldTextFrame(2, 8, 34, "", "Press a key to continue.");
++    x = UnfoldTextFrame(2, 8, 34, "", TOUCH_MENU_TEXT("Press a key to continue.", "Tap Select to continue."));
+     DrawTextLine(x + 29, 7, "\xFD""004");
+ 
+     return x + 1;
+@@ -2592,7 +2630,7 @@ word UnfoldDNFrame(void)
+     register word x;
+ 
+ #ifdef HAS_ACT_FROZEN_DN
+-    x = UnfoldTextFrame(2, 8, 34, "", "Press a key to continue.");
++    x = UnfoldTextFrame(2, 8, 34, "", TOUCH_MENU_TEXT("Press a key to continue.", "Tap Select to continue."));
+     DrawTextLine(x + 1, 7, "\xFE""221003");
+ 
+     return x + 4;
+@@ -2687,7 +2725,7 @@ void ShowE1CliffhangerMessage(word actor_type)
+ 
+     switch (actor_type) {
+     case ACT_EP1_END_1:
+-        x = UnfoldTextFrame(2, 8, 28, "", "Press any key to exit.");
++        x = UnfoldTextFrame(2, 8, 28, "", TOUCH_MENU_TEXT("Press any key to exit.", "Tap Back to exit."));
+         DrawTextLine(x, 4, "\xFC""003 What's happening?  Is ");
+         DrawTextLine(x, 5, "\xFC""003 Cosmo falling to his ");
+         DrawTextLine(x, 6, "\xFC""003 doom?");
+@@ -2695,7 +2733,7 @@ void ShowE1CliffhangerMessage(word actor_type)
+         break;
+ 
+     case ACT_EP1_END_2:
+-        x = UnfoldTextFrame(2, 8, 28, "", "Press any key to exit.");
++        x = UnfoldTextFrame(2, 8, 28, "", TOUCH_MENU_TEXT("Press any key to exit.", "Tap Back to exit."));
+         DrawTextLine(x, 4, "\xFC""003 Is there no end to this ");
+         DrawTextLine(x, 5, "\xFC""003 pit?  And what danger ");
+         DrawTextLine(x, 6, "\xFC""003 awaits below?! ");
+@@ -2721,7 +2759,8 @@ is confirmed by pressing Y, or false otherwise.
+ */
+ bbool PromptQuitConfirm(void)
+ {
+-    word x = UnfoldTextFrame(11, 4, 18, "Are you sure you", "want to quit? ");
+-    byte scancode = WaitSpinner(x + 14, 13);
++    bbool touch = PlatformTouchControlsEnabled();
++    word x = UnfoldTextFrame(11, 4, touch ? 22 : 18, touch ? "Quit the game?" : "Are you sure you", touch ? "Select or Back." : "want to quit? ");
++    byte scancode = WaitSpinner(x + (touch ? 19 : 14), 13);
+ 
+     if (scancode == SCANCODE_Y || scancode == SCANCODE_SPACE ||
+@@ -2842,7 +2880,7 @@ resume the game.
+ */
+ void ShowPauseMessage(void)
+ {
+-    word x = UnfoldTextFrame(2, 4, 18, "Game Paused.", "Press ANY key.");
++    word x = UnfoldTextFrame(2, 4, 18, "Game Paused.", TOUCH_MENU_TEXT("Press ANY key.", "Tap Select."));
+     WaitSpinner(x + 15, 4);
+ }
+ 
+@@ -2882,7 +2920,7 @@ Display memory statistics for the game.
+ */
+ void ShowMemoryUsage(void)
+ {
+-    word x = UnfoldTextFrame(2, 8, 30, "- Memory Usage -", "Press ANY key.");
++    word x = UnfoldTextFrame(2, 8, 30, "- Memory Usage -", TOUCH_MENU_TEXT("Press ANY key.", "Tap Select."));
+     DrawTextLine(x + 6,  4, "Memory free:");
+     DrawTextLine(x + 10, 5, "Take Up:");
+     DrawTextLine(x + 1,  6, "Total Map Memory:  65049");
+@@ -2910,7 +2948,7 @@ enum game_setting {
+ static void ShowGamepadControls(void)
+ {
+     word x = DrawTextFrame(SETTINGS_LEFT, SETTINGS_TOP, SETTINGS_HEIGHT, SETTINGS_WIDTH,
+-                           "Gamepad Controls", "Esc or B to go back", true);
++                           "Gamepad Controls", TOUCH_MENU_TEXT("Esc or B to go back", "Tap Back to exit"), true);
+ 
+     DrawTextLine(x + 1, 7,  "D-pad, Left stick  Move");
+     DrawTextLine(x + 1, 8,  "A                  Jump or select");
+@@ -2929,8 +2967,8 @@ static void DrawGameSettings(word x, byte selection, bbool save_failed)
+     };
+     char value[20];
+ 
+-    char *help = selection <= SETTING_GAMEPAD ? "Enter or A opens, Esc or B back"
+-                                                     : "Left and Right   Esc or B back";
++    char *help = selection <= SETTING_GAMEPAD ? TOUCH_MENU_TEXT("Enter or A opens, Esc or B back", "Tap Select to open or Back")
++                                                     : TOUCH_MENU_TEXT("Left and Right   Esc or B back", "Left/Right to change. Back");
+     DrawTextFrame(SETTINGS_LEFT, SETTINGS_TOP, SETTINGS_HEIGHT, SETTINGS_WIDTH,
+                   "Game Settings", save_failed ? "Could not save setting" : help, true);
+     DrawTextLine(x + 2, rows[SETTING_KEYBOARD], "Keyboard Mapping");
+@@ -3134,7 +3172,7 @@ void ShowEnding(void)
+     FadeWhiteCustom(4);
+     ClearScreen();
+ 
+-    x = UnfoldTextFrame(1, 24, 38, "", "Press ANY key.");
++    x = UnfoldTextFrame(1, 24, 38, "", TOUCH_MENU_TEXT("Press ANY key.", "Tap Select."));
+     DrawTextLine(x + 4,  13, "\xFB""016");
+     DrawTextLine(x + 28, 22, "\xFB""017");
+     FadeIn();
+@@ -3166,7 +3204,7 @@ void ShowEnding(void)
+     SelectActivePage(0);
+     ClearScreen();
+ 
+-    x = UnfoldTextFrame(1, 24, 38, "", "Press ANY key.");
++    x = UnfoldTextFrame(1, 24, 38, "", TOUCH_MENU_TEXT("Press ANY key.", "Tap Select."));
+     DrawTextLine(x + 25, 15, "\xFB""021");
+     FadeIn();
+     DrawTextLine(x + 1,  7,  "\xFC""003 Young Cosmo leaps ");
+@@ -3205,7 +3243,7 @@ void ShowEnding(void)
+     SelectActivePage(0);
+     ClearScreen();
+ 
+-    x = UnfoldTextFrame(1, 22, 38, "", "Press ANY key.");
++    x = UnfoldTextFrame(1, 22, 38, "", TOUCH_MENU_TEXT("Press ANY key.", "Tap Select."));
+     DrawTextLine(x + 1, 17, "\xFB""018");
+     DrawTextLine(x + 17, 6,  "The creature is");
+     DrawTextLine(x + 17, 7,  "finally defeated");
+@@ -3222,7 +3260,7 @@ void ShowEnding(void)
+ 
+     FadeOut();
+ 
+-    x = UnfoldTextFrame(1, 22, 38, "", "Press ANY key.");
++    x = UnfoldTextFrame(1, 22, 38, "", TOUCH_MENU_TEXT("Press ANY key.", "Tap Select."));
+     DrawTextLine(x + 1, 16, "\xFB""019");
+     /* Unbalanced dialog quotes preserved faithfully */
+     DrawTextLine(x + 10, 3,  "\"Hi Cosmo,\" says the blue");
+@@ -3244,7 +3282,7 @@ void ShowEnding(void)
+ 
+     FadeOut();
+ 
+-    x = UnfoldTextFrame(1, 22, 38, "", "Press ANY key.");
++    x = UnfoldTextFrame(1, 22, 38, "", TOUCH_MENU_TEXT("Press ANY key.", "Tap Select."));
+     DrawTextLine(x + 27, 14, "\xFB""020");
+     DrawTextLine(x + 2, 7,  "\"Mommy!  Daddy!\"");
+     DrawTextLine(x + 2, 8,  "Cosmo and his parents");
+@@ -3261,7 +3299,7 @@ void ShowEnding(void)
+ 
+     FadeOut();
+ 
+-    x = UnfoldTextFrame(1, 22, 38, "", "Press ANY key.");
++    x = UnfoldTextFrame(1, 22, 38, "", TOUCH_MENU_TEXT("Press ANY key.", "Tap Select."));
+     DrawTextLine(x + 27, 19, "\xFB""003");
+     DrawTextLine(x + 1,  10, "\xFB""011");
+     DrawTextLine(x + 12, 6, "After saying goodbye");
+@@ -3273,7 +3311,7 @@ void ShowEnding(void)
+ 
+     FadeOut();
+ 
+-    x = UnfoldTextFrame(1, 22, 38, "", "Press ANY key.");
++    x = UnfoldTextFrame(1, 22, 38, "", TOUCH_MENU_TEXT("Press ANY key.", "Tap Select."));
+     DrawTextLine(x + 13, 19, "\xFB""012");
+     DrawTextLine(x + 2, 5, "    ...and arrive just four");
+     DrawTextLine(x + 2, 6, "     galactic hours later!!");
+@@ -3285,7 +3323,7 @@ void ShowEnding(void)
+ 
+     FadeOut();
+ 
+-    x = UnfoldTextFrame(1, 22, 38, "", "Press ANY key.");
++    x = UnfoldTextFrame(1, 22, 38, "", TOUCH_MENU_TEXT("Press ANY key.", "Tap Select."));
+     DrawTextLine(x + 12, 12, "\xFB""013");
+     DrawTextLine(x + 2, 15, "  Disney World has always been");
+     DrawTextLine(x + 2, 16, "    a great place for aliens");
+@@ -3331,14 +3369,14 @@ void ShowHintGlobeMessage(word hint_num)
+ #if EPISODE == 1
+     /* Ep 1 has some considerably longer hints that need a bigger frame */
+     if (hint_num != 0 && hint_num < 15) {
+-        x = UnfoldTextFrame(2, 9, 28, "COSMIC HINT!", "Press any key to exit.");
+-        DrawTextLine(x, 8, " Press SPACE to hurry or");
++        x = UnfoldTextFrame(2, 9, 28, "COSMIC HINT!", TOUCH_MENU_TEXT("Press any key to exit.", "Tap Back to exit."));
++        DrawTextLine(x, 8, TOUCH_MENU_TEXT(" Press SPACE to hurry or", " Tap Select to hurry or"));
+     }
+ 
+     switch (hint_num) {
+     case 0:
+-        x = UnfoldTextFrame(2, 11, 28, "COSMIC HINT!", "Press any key to exit.");
+-        DrawTextLine(x, 10, " Press SPACE to hurry or");
++        x = UnfoldTextFrame(2, 11, 28, "COSMIC HINT!", TOUCH_MENU_TEXT("Press any key to exit.", "Tap Back to exit."));
++        DrawTextLine(x, 10, TOUCH_MENU_TEXT(" Press SPACE to hurry or", " Tap Select to hurry or"));
+         DrawTextLine(x, 5, "\xFC""003 These hint globes will");
+         DrawTextLine(x, 6, "\xFC""003 help you along your");
+         DrawTextLine(x, 7, "\xFC""003 journey.  Press the up");
+@@ -3410,9 +3448,9 @@ void ShowHintGlobeMessage(word hint_num)
+         break;
+ 
+     case 15:
+-        x = UnfoldTextFrame(2, 11, 28, "COSMIC HINT!", "Press any key to exit.");
++        x = UnfoldTextFrame(2, 11, 28, "COSMIC HINT!", TOUCH_MENU_TEXT("Press any key to exit.", "Tap Back to exit."));
+         DrawTextLine(x + 22, 8, "\xFE""083000");
+-        DrawTextLine(x, 10, " Press SPACE to hurry or");
++        DrawTextLine(x, 10, TOUCH_MENU_TEXT(" Press SPACE to hurry or", " Tap Select to hurry or"));
+         DrawTextLine(x, 5, "\xFC""003  The Clam Plants won't");
+         DrawTextLine(x, 6, "\xFC""003  hurt you if their");
+         DrawTextLine(x, 7, "\xFC""003  mouths are closed.");
+@@ -3420,8 +3458,8 @@ void ShowHintGlobeMessage(word hint_num)
+         break;
+ 
+     case 16:
+-        x = UnfoldTextFrame(2, 10, 28, "COSMIC HINT!", "Press any key to exit.");
+-        DrawTextLine(x, 9, " Press SPACE to hurry or");
++        x = UnfoldTextFrame(2, 10, 28, "COSMIC HINT!", TOUCH_MENU_TEXT("Press any key to exit.", "Tap Back to exit."));
++        DrawTextLine(x, 9, TOUCH_MENU_TEXT(" Press SPACE to hurry or", " Tap Select to hurry or"));
+         DrawTextLine(x + 23, 7, "\xFE""001002");
+         DrawTextLine(x, 5, "\xFC""003  Collect the STARS to");
+         DrawTextLine(x, 6, "\xFC""003  advance to BONUS");
+@@ -3430,8 +3468,8 @@ void ShowHintGlobeMessage(word hint_num)
+         break;
+ 
+     case 17:
+-        x = UnfoldTextFrame(2, 10, 28, "COSMIC HINT!", "Press any key to exit.");
+-        DrawTextLine(x, 9, " Press SPACE to hurry or");
++        x = UnfoldTextFrame(2, 10, 28, "COSMIC HINT!", TOUCH_MENU_TEXT("Press any key to exit.", "Tap Back to exit."));
++        DrawTextLine(x, 9, TOUCH_MENU_TEXT(" Press SPACE to hurry or", " Tap Select to hurry or"));
+         DrawTextLine(x, 5, "\xFC""003  Some creatures require");
+         DrawTextLine(x, 6, "\xFC""003  more than one pounce");
+         DrawTextLine(x, 7, "\xFC""003  to defeat!");
+@@ -3439,9 +3477,9 @@ void ShowHintGlobeMessage(word hint_num)
+         break;
+ 
+     case 18:
+-        x = UnfoldTextFrame(2, 9, 30, "COSMIC HINT!", "Press any key to exit.");
++        x = UnfoldTextFrame(2, 9, 30, "COSMIC HINT!", TOUCH_MENU_TEXT("Press any key to exit.", "Tap Back to exit."));
+         DrawTextLine(x + 25, 8, "\xFD""032");
+-        DrawTextLine(x, 8, "  Press SPACE to hurry or");
++        DrawTextLine(x, 8, TOUCH_MENU_TEXT("  Press SPACE to hurry or", "  Tap Select to hurry or"));
+         /* Incorrect possessive form preserved faithfully */
+         DrawTextLine(x, 5, "\xFC""003 Cosmo can climb wall's");
+         DrawTextLine(x, 6, "\xFC""003 with his suction hands.");
+@@ -3453,8 +3491,8 @@ void ShowHintGlobeMessage(word hint_num)
+         WaitSpinner(x + 25, 9);
+     }
+ #elif EPISODE == 2
+-    x = UnfoldTextFrame(2, 9, 28, "COSMIC HINT!", "Press any key to exit.");
+-    DrawTextLine(x, 8, " Press SPACE to hurry or");
++    x = UnfoldTextFrame(2, 9, 28, "COSMIC HINT!", TOUCH_MENU_TEXT("Press any key to exit.", "Tap Back to exit."));
++    DrawTextLine(x, 8, TOUCH_MENU_TEXT(" Press SPACE to hurry or", " Tap Select to hurry or"));
+ 
+     switch (hint_num) {
+     case 0:
+@@ -3495,8 +3533,8 @@ void ShowHintGlobeMessage(word hint_num)
+ 
+     WaitSpinner(x + 25, 9);
+ #elif EPISODE == 3
+-    x = UnfoldTextFrame(2, 9, 28, "COSMIC HINT!", "Press any key to exit.");
+-    DrawTextLine(x, 8, " Press SPACE to hurry or");
++    x = UnfoldTextFrame(2, 9, 28, "COSMIC HINT!", TOUCH_MENU_TEXT("Press any key to exit.", "Tap Back to exit."));
++    DrawTextLine(x, 8, TOUCH_MENU_TEXT(" Press SPACE to hurry or", " Tap Select to hurry or"));
+ 
+     switch (hint_num) {
+     case 0:
+@@ -3541,7 +3579,7 @@ Display a text frame informing the player that they have cheated.
+ */
+ void ShowCheatMessage(void)
+ {
+-    word x = UnfoldTextFrame(3, 9, 32, "You are now cheating!", "Press ANY key.");
++    word x = UnfoldTextFrame(3, 9, 32, "You are now cheating!", TOUCH_MENU_TEXT("Press ANY key.", "Tap Select."));
+     DrawTextLine(x, 6, "  You have been awarded full");
+     DrawTextLine(x, 7, " health and maximum amount of");
+     DrawTextLine(x, 8, "            bombs!");
+@@ -3691,21 +3729,21 @@ void DrawMainMenu(byte selected_option)
+ #endif
+     };
+     word x = UnfoldTextFrame(2, 20 + YSHIFT, 20, "MAIN MENU", "");
+-    DrawTextLine(x, 5,           " B)egin New Game");
+-    DrawTextLine(x, 6,           " R)estore A Game");
+-    DrawTextLine(x, 7,           " S)tory");
+-    DrawTextLine(x, 8,           " I)nstructions");
+-    DrawTextLine(x, 9,           " H)igh Scores");
+-    DrawTextLine(x, 10,          " G)ame Redefine");
+-    DrawTextLine(x, 12,          " O)rdering Info.");
++    DrawTextLine(x, 5,           " Begin New Game");
++    DrawTextLine(x, 6,           " Restore A Game");
++    DrawTextLine(x, 7,           " Story");
++    DrawTextLine(x, 8,           " Instructions");
++    DrawTextLine(x, 9,           " High Scores");
++    DrawTextLine(x, 10,          " Game Settings");
++    DrawTextLine(x, 12,          " Ordering Info.");
+ #ifdef FOREIGN_ORDERS
+-    DrawTextLine(x, 14,          " F)oreign Orders");
++    DrawTextLine(x, 14,          " Foreign Orders");
+ #endif  /* FOREIGN_ORDERS */
+-    DrawTextLine(x, 14 + YSHIFT, " A)pogee's BBS");
+-    DrawTextLine(x, 15 + YSHIFT, " D)emo");
+-    DrawTextLine(x, 16 + YSHIFT, " C)redits");
+-    DrawTextLine(x, 17 + YSHIFT, " T)itle Screen");
+-    DrawTextLine(x, 19 + YSHIFT, " Q)uit Game");
++    DrawTextLine(x, 14 + YSHIFT, " Apogee's BBS");
++    DrawTextLine(x, 15 + YSHIFT, " Demo");
++    DrawTextLine(x, 16 + YSHIFT, " Credits");
++    DrawTextLine(x, 17 + YSHIFT, " Title Screen");
++    DrawTextLine(x, 19 + YSHIFT, " Quit Game");
+ 
+     if (selected_option < sizeof menu_rows / sizeof menu_rows[0])
+         DrawTextLine(x, menu_rows[selected_option], ">");
+@@ -3777,7 +3815,7 @@ void ShowPounceHint(void)
+     WaitHard(60);
+     WaitSpinner(x + 19, 5);
+ 
+-    x = UnfoldTextFrame(2, 13, 20, "Like this...", "Press ANY key.");
++    x = UnfoldTextFrame(2, 13, 20, "Like this...", TOUCH_MENU_TEXT("Press ANY key.", "Tap Select."));
+     DrawTextLine(x + 5, 9,  "   \xFD""036");
+     DrawTextLine(x + 5, 11, "   \xFE""118000");
+     WaitHard(60);

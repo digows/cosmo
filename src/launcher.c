@@ -179,6 +179,25 @@ static void launcher_menu_haptic(bool confirm)
     else launcher_rumble(14000, 9500, 40);
 }
 
+static bool launcher_poll_event(SDL_Event *event)
+{
+    if (!video_poll_event(event)) return false;
+#ifdef COSMO_TOUCH_PREVIEW
+    if (event->type == SDL_EVENT_FINGER_DOWN) {
+        static const SDL_Keycode keys[TOUCH_BUTTON_COUNT] = {
+            SDLK_LEFT, SDLK_RIGHT, SDLK_UP, SDLK_DOWN, SDLK_RETURN, SDLK_ESCAPE, SDLK_ESCAPE
+        };
+        int button = video_touch_button(event);
+        if (button >= 0) {
+            SDL_zero(*event);
+            event->type = SDL_EVENT_KEY_DOWN;
+            event->key.key = keys[button];
+        }
+    }
+#endif
+    return true;
+}
+
 static void push_menu_key(SDL_Keycode key)
 {
     SDL_Event event;
@@ -347,7 +366,11 @@ static void draw_menu(int selected)
      */
     for (int i = 0; i < EPISODE_COUNT; i++) {
         const struct episode *episode = &episodes[i];
+#ifdef COSMO_TOUCH_PREVIEW
+        snprintf(line, sizeof line, "%s", episode->title);
+#else
         snprintf(line, sizeof line, "%d) %s", episode->number, episode->title);
+#endif
         if (i == selected) font_draw(cursor_x, row, ">");
         if (episode->present) {
             font_draw(title_x, row, line);
@@ -359,10 +382,14 @@ static void draw_menu(int selected)
     }
 
     row = MENU_TOP + MENU_HEIGHT - 3;
-    snprintf(line, sizeof line, "%d)", MODS_MENU_NUMBER);
     if (selected == EPISODE_COUNT) font_draw_colored(cursor_x, row, ">", TEXT_RED);
+#ifdef COSMO_TOUCH_PREVIEW
+    int customise_x = title_x;
+#else
+    snprintf(line, sizeof line, "%d)", MODS_MENU_NUMBER);
     font_draw_colored(title_x, row, line, TEXT_RED);
     int customise_x = title_x + (int)strlen(line) + 1;
+#endif
     font_draw_colored(customise_x, row, "Customise", TEXT_GREEN);
 }
 
@@ -388,7 +415,14 @@ struct mods_row {
     const struct mods_selector *selector;
     size_t primary, secondary;
     bool rumble;
+    bool touch;
 };
+
+#ifdef COSMO_TOUCH_PREVIEW
+void PlatformLoadTouchControls(void);
+int PlatformTouchControlsEnabled(void);
+int PlatformToggleTouchControls(void);
+#endif
 
 static size_t collect_mods_rows(struct mods_row *rows)
 {
@@ -396,10 +430,13 @@ static size_t collect_mods_rows(struct mods_row *rows)
     size_t used = 0;
     bool grouped[COSMO_MOD_LIMIT] = {false};
     rows[used++] = (struct mods_row){0};
+#ifdef COSMO_TOUCH_PREVIEW
+    rows[used++] = (struct mods_row){.touch = true};
+#endif
 
     for (size_t i = 0; i < SDL_arraysize(mods_selectors); ++i) {
         const struct mods_selector *selector = &mods_selectors[i];
-        struct mods_row row = {selector, SIZE_MAX, SIZE_MAX, false};
+        struct mods_row row = {.selector = selector, .primary = SIZE_MAX, .secondary = SIZE_MAX};
         for (size_t j = 0; j < count; ++j) {
             const char *id = mods_get(j)->id;
             if (!SDL_strcasecmp(id, selector->primary_id)) {
@@ -463,6 +500,12 @@ static void draw_mods_menu(const struct mods_row *rows, size_t count,
             font_draw(37 - (int)strlen(label), y, label);
         } else if (i == 0) {
             font_draw(4, y, "Character Colour");
+#ifdef COSMO_TOUCH_PREVIEW
+        } else if (row->touch) {
+            bool enabled = PlatformTouchControlsEnabled();
+            font_draw(4, y, "Touch Controls");
+            font_draw_colored(34, y, enabled ? "ON" : "OFF", enabled ? TEXT_GREEN : TEXT_RED);
+#endif
         } else {
             char name[29];
             const cosmo_mod *mod = row->rumble ? NULL : mods_get(row->primary);
@@ -480,6 +523,10 @@ static void draw_mods_menu(const struct mods_row *rows, size_t count,
         draw_mod_description(row->selector->description);
     } else if (selected == 0) {
         draw_mod_description("Change Cosmo's body and accents");
+#ifdef COSMO_TOUCH_PREVIEW
+    } else if (row->touch) {
+        draw_mod_description("Show touch buttons during gameplay. Tap Select to toggle.");
+#endif
     } else {
         draw_mod_description(row->rumble ? "Controller vibration in menus and gameplay."
                                         : mods_get(row->primary)->description);
@@ -491,7 +538,7 @@ static bool run_colour_menu(int episode);
 
 static bool run_mods_menu(int episode)
 {
-    struct mods_row rows[COSMO_MOD_LIMIT + 2];
+    struct mods_row rows[COSMO_MOD_LIMIT + 3];
     size_t count = collect_mods_rows(rows);
     size_t selected = 0, first = 0;
     bool redraw = true, save_failed = false;
@@ -503,7 +550,7 @@ static bool run_mods_menu(int episode)
         }
         launcher_poll_music_worker();
         launcher_poll_gamepad();
-        while (video_poll_event(&event)) {
+        while (launcher_poll_event(&event)) {
             if (event.type == SDL_EVENT_QUIT) return true;
             if (event.type == SDL_EVENT_KEY_DOWN &&
                 (event.key.key == SDLK_ESCAPE || event.key.key == SDLK_AC_BACK)) {
@@ -540,6 +587,11 @@ static bool run_mods_menu(int episode)
                     if (!save_failed && !enabled && launcher_gamepad)
                         SDL_RumbleGamepad(launcher_gamepad, 0, 0, 0);
                     launcher_menu_haptic(!save_failed);
+#ifdef COSMO_TOUCH_PREVIEW
+                } else if (rows[selected].touch) {
+                    save_failed = !PlatformToggleTouchControls();
+                    launcher_menu_haptic(!save_failed);
+#endif
                 } else {
                     size_t index = rows[selected].primary;
                     save_failed = !mods_set_enabled(index, !mods_get(index)->enabled);
@@ -671,7 +723,7 @@ static bool run_colour_menu(int episode)
         SDL_Event event;
         launcher_poll_music_worker();
         launcher_poll_gamepad();
-        while (video_poll_event(&event)) {
+        while (launcher_poll_event(&event)) {
             if (event.type == SDL_EVENT_QUIT) return true;
             if (event.type != SDL_EVENT_KEY_DOWN) continue;
             switch (event.key.key) {
@@ -789,7 +841,7 @@ static bool offer_import(int episode)
     while (import_state == 0) {
         SDL_Event event;
         launcher_poll_music_worker();
-        while (video_poll_event(&event)) {
+        while (launcher_poll_event(&event)) {
             if (event.type == SDL_EVENT_QUIT) return false;
         }
         SDL_Delay(16);
@@ -844,7 +896,7 @@ static int run_menu(void)
 
         launcher_poll_music_worker();
         launcher_poll_gamepad();
-        while (video_poll_event(&event)) {
+        while (launcher_poll_event(&event)) {
             if (event.type == SDL_EVENT_QUIT) return 0;
 
             if (event.type != SDL_EVENT_KEY_DOWN) continue;
@@ -1118,7 +1170,17 @@ int main(int argc, char *argv[])
         ega_init();
         ega_set_video_mode(0x0D);
 
+#ifdef COSMO_TOUCH_PREVIEW
+        PlatformLoadTouchControls();
+        SDL_SetHint(SDL_HINT_ORIENTATIONS, "LandscapeLeft LandscapeRight");
+        SDL_SetHint(SDL_HINT_TOUCH_MOUSE_EVENTS, "0");
+#endif
         if (!video_init("Cosmo's Cosmic Adventure", 3, false)) return 1;
+#ifdef COSMO_TOUCH_PREVIEW
+        SDL_SetWindowFullscreen(video_get_window(), true);
+        video_set_touch_controls(true);
+        video_load_launcher_touch_texture();
+#endif
 
         if (!font_load(paths_data_dir(), background) || !draw_background(background)) {
             fprintf(stderr, "cosmo: episode data is present but unreadable\n");
@@ -1129,6 +1191,9 @@ int main(int argc, char *argv[])
         install_palette();
         ega_select_active_page(0);
         unfold_launch_frame();
+#ifdef COSMO_TOUCH_PREVIEW
+        video_set_touch_context(TOUCH_MENU);
+#endif
         launcher_audio_ready = audio_init();
         launcher_sync_music();
 

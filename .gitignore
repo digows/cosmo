@@ -12,6 +12,7 @@ gamedata/*
 # Stray captures from running the game are noise; images that are part of the
 # documentation are not.
 *.png
+!android/touch-preview/launcher-touch-panel.png
 !docs/*.png
 !assets/*.png
 !docs/screenshots/*.png
