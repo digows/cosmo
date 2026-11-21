@@ -1,6 +1,8 @@
 # Cosmo Enhanced
 
-Play *Cosmo's Cosmic Adventure* on Windows and Android with optional widescreen, smoother scrolling and animations, and modern controls.
+Cosmo Enhanced is an independently maintained fork focused on playing *Cosmo's Cosmic Adventure* on modern devices.
+
+Play on Windows and Android with optional widescreen, smoother scrolling and animations, and modern controls.
 
 **[Download the latest release](https://github.com/GITitdoneboi/enhanced-cosmo/releases/latest)**
 
