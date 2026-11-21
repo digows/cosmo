@@ -41,6 +41,7 @@ void audio_set_music_paused(bool paused);
 
 /* Play a one-shot WAV or MP3 effect. False means use the original effect. */
 bool audio_sound_play_asset(const char *path);
+bool audio_sound_preload_asset(const char *path);
 void audio_sound_stop_mp3(void);
 void audio_set_volumes(int sound_percent, int music_percent);
 

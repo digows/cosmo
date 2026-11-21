@@ -62,7 +62,7 @@ typedef struct {
 } blast_ring;
 
 typedef struct {
-    bool visible, tracked, spin, expand;
+    bool visible, tracked, spin, expand, in_front, edge_padding;
     uint32_t identity;
     int x, y;
     int left, right, top, bottom;
@@ -134,7 +134,7 @@ static void identify_blast_rings(preview_player *sprite)
         }
     }
 }
-static bool motion_interpolation_paused;
+static unsigned motion_interpolation_pause_depth;
 static bool motion_vectors_valid;
 static uint8_t motion_capture[MOTION_FRAME_BYTES];
 static uint8_t motion_previous[MOTION_FRAME_BYTES];
@@ -601,8 +601,10 @@ void video_pause_motion_interpolation(bool paused)
 {
     if (!motion_mutex) return;
     SDL_LockMutex(motion_mutex);
-    if (motion_interpolation_paused != paused) {
-        motion_interpolation_paused = paused;
+    bool was_paused = motion_interpolation_pause_depth != 0;
+    if (paused) ++motion_interpolation_pause_depth;
+    else if (motion_interpolation_pause_depth) --motion_interpolation_pause_depth;
+    if (was_paused != (motion_interpolation_pause_depth != 0)) {
         /* Drop stale frames so an old gameplay frame cannot be mixed with a
          * hint popup, or used immediately after it closes. */
         motion_frame_count = 0;
@@ -634,10 +636,14 @@ static bool preview_sprite_available(unsigned page)
          (!mods_crt_shader_enabled() && !mods_crt_scanlines_enabled()));
 }
 
-bool video_preview_player_begin(unsigned page, int x, int y)
+bool video_preview_player_begin(unsigned page, int x, int y, bool in_front)
 {
     if (!preview_player_enabled || !preview_sprite_available(page)) return false;
     preview_player_pages[page].visible = true;
+    preview_player_pages[page].in_front = in_front;
+    preview_player_pages[page].edge_padding = in_front;
+    if (in_front)
+        memset(preview_player_pages[page].occlusion, 0, sizeof preview_player_pages[page].occlusion);
     video_preview_player_track(page, x, y);
     return true;
 }
@@ -688,7 +694,7 @@ void video_preview_player_occlude(unsigned page, unsigned x, unsigned y, uint8_t
 }
 
 bool video_preview_star_begin(unsigned page, uint32_t identity, int x, int y,
-                              bool spin, bool in_front, bool expand)
+                              bool spin, bool in_front, bool expand, bool edge_padding)
 {
     if (!preview_star_enabled || (!spin && !smooth_gameplay_enabled) ||
         !preview_sprite_available(page)) return false;
@@ -701,6 +707,7 @@ bool video_preview_star_begin(unsigned page, uint32_t identity, int x, int y,
     star->visible = true;
     star->spin = spin;
     star->expand = expand;
+    star->edge_padding = edge_padding;
     star->identity = identity;
     star->x = x;
     star->y = y;
@@ -773,7 +780,7 @@ void video_capture_motion_frame(uint16_t scroll_x, uint16_t scroll_y,
     if (!motion_mutex) return;
     bytes = (size_t)present_width * EGA_SCREEN_H * 3;
     SDL_LockMutex(motion_mutex);
-    if (!motion_interpolation_enabled || motion_interpolation_paused) {
+    if (!motion_interpolation_enabled || motion_interpolation_pause_depth) {
         SDL_UnlockMutex(motion_mutex);
         return;
     }
@@ -788,7 +795,8 @@ void video_capture_motion_frame(uint16_t scroll_x, uint16_t scroll_y,
             preview_backdrop_y = backdrop_y;
             capture_preview_backdrop();
             if (preview_player_enabled) {
-                preview_previous_player_tracked = motion_frame_count && preview_current_player.tracked;
+                preview_previous_player_tracked = motion_frame_count && preview_current_player.tracked &&
+                    preview_current_player.in_front == preview_player_pages[page].in_front;
                 preview_previous_player_x = preview_current_player.x;
                 preview_previous_player_y = preview_current_player.y;
                 preview_current_player = preview_player_pages[page];
@@ -933,7 +941,8 @@ static void render_blast_rings(uint8_t *out, const preview_player *sprite,
 static void render_preview_sprite(uint8_t *out, const preview_player *sprite,
                                   bool previous_visible, int previous_x, int previous_y,
                                   const preview_player *previous,
-                                  int dx, int dy, double alpha, double angle)
+                                  int dx, int dy, double alpha, double angle,
+                                  int max_rise)
 {
     if (!sprite->visible) return;
     int world_dx = dx + sprite->x - previous_x;
@@ -941,7 +950,12 @@ static void render_preview_sprite(uint8_t *out, const preview_player *sprite,
     int camera_x = (int)lround((1.0 - alpha) * dx * 8);
     int camera_y = (int)lround((1.0 - alpha) * dy * 8);
     int player_x = camera_x, player_y = camera_y;
-    if (previous_visible && abs(world_dx) <= 2 && abs(world_dy) <= 2) {
+    /* A cropped pose has missing rows. Do not drag those partial pixels
+     * backward into the playfield as a sprite leaves through the top. */
+    bool cropped_on_ascent = !sprite->edge_padding && world_dy < 0 &&
+        sprite->top < MOTION_WORLD_TOP + 8;
+    if (previous_visible && !cropped_on_ascent && abs(world_dx) <= 2 &&
+        world_dy >= -max_rise && world_dy <= 2) {
         player_x -= (int)lround((1.0 - alpha) * world_dx * 8);
         player_y -= (int)lround((1.0 - alpha) * world_dy * 8);
     }
@@ -997,9 +1011,10 @@ static void render_preview_sprite(uint8_t *out, const preview_player *sprite,
 
 static void render_preview_sprites(uint8_t *out, int dx, int dy, double alpha)
 {
+    /* The first jump tick can combine a one-tile uphill step and a two-tile lift. */
     render_preview_sprite(out, &preview_current_player, preview_previous_player_tracked,
                           preview_previous_player_x, preview_previous_player_y, NULL,
-                          dx, dy, alpha, 0);
+                          dx, dy, alpha, 0, 3);
     /* Four original poses cover one 72-degree interval of a five-point star.
      * Approach each original pose on the game clock. */
     const double pose_step = 0.3141592653589793; /* 18 degrees */
@@ -1016,7 +1031,7 @@ static void render_preview_sprites(uint8_t *out, int dx, int dy, double alpha)
         double angle = star->spin && previous && alpha < 0.5 ? pose_step * 0.5 : 0;
         render_preview_sprite(out, star, previous != NULL,
                               previous ? previous->x : star->x,
-                              previous ? previous->y : star->y, previous, dx, dy, alpha, angle);
+                              previous ? previous->y : star->y, previous, dx, dy, alpha, angle, 2);
     }
 }
 
@@ -1029,7 +1044,7 @@ static bool render_motion_frame(uint8_t *out)
 
     if (!motion_mutex) return false;
     SDL_LockMutex(motion_mutex);
-    if (!motion_interpolation_enabled || motion_interpolation_paused) {
+    if (!motion_interpolation_enabled || motion_interpolation_pause_depth) {
         SDL_UnlockMutex(motion_mutex);
         return false;
     }
@@ -1241,7 +1256,7 @@ bool video_init(const char *title, int scale, bool widescreen)
         return false;
     }
     motion_interpolation_enabled = false;
-    motion_interpolation_paused = false;
+    motion_interpolation_pause_depth = 0;
     motion_vectors_valid = false;
     motion_frame_count = 0;
     present_width = width;

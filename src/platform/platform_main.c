@@ -878,7 +878,14 @@ int main(int argc, char *argv[])
         video_set_fullscreen(true);
 
     /* Silence is survivable; a missing audio device must not stop the game. */
-    audio_init();
+    if (audio_init()) {
+        /* Decode enabled sound replacements before the first gameplay cue. */
+        for (unsigned sound = 1; sound <= COSMO_SOUND_ASSET_COUNT; ++sound) {
+            char path[1024];
+            if (mods_sound_override(sound, path, sizeof path))
+                (void)audio_sound_preload_asset(path);
+        }
+    }
 
     SDL_SetAtomicInt(&game_running, 1);
 

@@ -33,13 +33,13 @@ void video_capture_motion_frame(uint16_t scroll_x, uint16_t scroll_y,
                                 bool backdrop_x, bool backdrop_y, unsigned frame_ticks);
 uint8_t *video_preview_mask_row(unsigned page, unsigned y);
 void video_preview_begin_player(unsigned page);
-bool video_preview_player_begin(unsigned page, int x, int y);
+bool video_preview_player_begin(unsigned page, int x, int y, bool in_front);
 void video_preview_player_track(unsigned page, int x, int y);
 void video_preview_player_tile(unsigned page, const uint8_t *pixels,
                                unsigned x, unsigned y, bool white);
 void video_preview_player_occlude(unsigned page, unsigned x, unsigned y, uint8_t bits);
 bool video_preview_star_begin(unsigned page, uint32_t identity, int x, int y,
-                              bool spin, bool in_front, bool expand);
+                              bool spin, bool in_front, bool expand, bool edge_padding);
 void video_preview_star_tile(unsigned page, const uint8_t *pixels,
                              unsigned x, unsigned y, bool white);
 void video_preview_star_occlude(unsigned page, unsigned x, unsigned y, uint8_t bits);

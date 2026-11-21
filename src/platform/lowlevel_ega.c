@@ -35,7 +35,13 @@ void BeginPreviewPlayerFrame(void)
 
 int BeginPreviewPlayer(int x, int y)
 {
-    preview_player_drawn = video_preview_player_begin(draw_page_number, x, y);
+    preview_player_drawn = video_preview_player_begin(draw_page_number, x, y, false);
+    return preview_player_drawn;
+}
+
+int BeginPreviewAngel(int x, int y)
+{
+    preview_player_drawn = video_preview_player_begin(draw_page_number, x, y, true);
     return preview_player_drawn;
 }
 
@@ -60,7 +66,7 @@ void OccludePreviewPlayerTile(word x, word y)
 int BeginPreviewStar(dword identity, int x, int y, int spin)
 {
     bool captured = video_preview_star_begin(draw_page_number, identity, x, y,
-                                             spin != 0, false, false);
+                                             spin != 0, false, false, false);
     preview_star_drawn |= captured;
     return captured;
 }
@@ -70,10 +76,11 @@ void DrawPreviewStarTile(const byte *pixels, word x, word y)
     video_preview_star_tile(draw_page_number, pixels, x, y, false);
 }
 
-int BeginPreviewEffect(dword identity, int x, int y, word mode, int expand)
+int BeginPreviewEffect(dword identity, int x, int y, word mode, int expand, int edge_padding)
 {
     bool captured = video_preview_star_begin(draw_page_number, identity, x, y,
-                                            false, mode == DRAW_MODE_IN_FRONT, expand != 0);
+                                            false, mode == DRAW_MODE_IN_FRONT, expand != 0,
+                                            edge_padding != 0);
     preview_star_drawn |= captured;
     return captured;
 }

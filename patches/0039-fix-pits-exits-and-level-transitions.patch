@@ -1,0 +1,109 @@
+diff --git a/game1.c b/game1.c
+index be4ece7..f26f349 100644
+--- a/game1.c
++++ b/game1.c
+@@ -1111,6 +1111,7 @@ static word TestPlayerMove(word dir, word x_origin, word y_origin)
+-#else
+-        if (maxScrollY + SCROLLH == playerY) return MOVE_FREE;
+ #endif  /* SAFETY_NET */
++        /* The collision probe is for the proposed position. The first
++         * row below the last visible map row cannot catch a falling player. */
++        if ((unsigned)y_origin >= maxScrollY + SCROLLH) return MOVE_FREE;
+ 
+         mapcell = MAP_CELL_ADDR(x_origin, y_origin);
+ 
+@@ -3268,6 +3270,9 @@ Handle one frame of parachute ball movement.
+ 
+ NOTE: This uses a direction system that is incompatible with DIR2_*.
+ */
++static void DrawSmoothEffect(dword identity, word sprite, word frame,
++                             word x, word y, word mode);
++
+ static void ActParachuteBall(word index)
+ {
+     Actor *act = actors + index;
+@@ -3279,10 +3284,12 @@ static void ActParachuteBall(word index)
+         if (act->falltime < 2) {
+             act->frame = 1;  /* no purpose */
+         } else if (act->falltime >= 2 && act->falltime <= 4) {
+-            DrawSprite(SPR_PARACHUTE_BALL, 8, act->x, act->y - 2, DRAW_MODE_NORMAL);
++            DrawSmoothEffect((previewStarIdentity[index] << 16) | (0x0800u | index),
++                             SPR_PARACHUTE_BALL, 8, act->x, act->y - 2, DRAW_MODE_NORMAL);
+         } else {
+             act->y--;
+-            DrawSprite(SPR_PARACHUTE_BALL, 9, act->x, act->y - 2, DRAW_MODE_NORMAL);
++            DrawSmoothEffect((previewStarIdentity[index] << 16) | (0x0800u | index),
++                             SPR_PARACHUTE_BALL, 9, act->x, act->y - 2, DRAW_MODE_NORMAL);
+         }
+ 
+         act->frame = 10;
+@@ -8073,9 +8080,14 @@ static void ProcessActor(word index)
+         if (InteractPlayer(index, act->sprite, act->frame, act->x, act->y)) return;
+ 
+     if (nextDrawMode != DRAW_MODE_HIDDEN) {
++        if (act->sprite == SPR_EXIT_SIGN) {
++            DrawSprite(act->sprite, act->frame, act->x, act->y, DRAW_MODE_IN_FRONT);
++            return;
++        }
+         if (nextDrawMode == DRAW_MODE_NORMAL &&
+             demoState == DEMO_STATE_NONE &&
+             act->sprite != SPR_RED_CHOMPER &&
++            !(act->sprite == SPR_PARACHUTE_BALL && act->falltime >= 2) &&
+             act->sprite != SPR_HAMBURGER &&
+             BeginPreviewStar((previewStarIdentity[index] << 16) | index,
+                              (int)act->x - scrollX, (int)act->y - scrollY, act->sprite == SPR_STAR)) {
+@@ -10202,11 +10214,11 @@ void ShowStarBonus(void)
+     DrawSprite(SPR_STAR, 2, 8, 8, DRAW_MODE_ABSOLUTE);
+     DrawTextLine(14, 7, "X 1000 =");
+     DrawNumberFlushRight(27, 7, gameStars * 1000);
+-    WaitHard(50);  /* nothing is visible during this delay! */
++    /* Present the completed bonus screen before waiting. */
+     DrawTextLine(10, 12, "YOUR SCORE =  ");
+     DrawNumberFlushRight(29, 12, gameScore);
+     FadeIn();
+-    WaitHard(100);
++    WaitHard(150);
+ 
+     for (stars = (word)gameStars; stars > 0; stars--) {
+         register word x;
+@@ -10489,15 +10501,24 @@ static void GameLoop(byte demo_state)
+ 
+         if (winLevel) {
+             winLevel = false;
++            PlatformSetMotionInterpolationPaused(1);
++#ifdef COSMO_WIDESCREEN
++            ClearWideTerrain();
++#endif
++            StopMusic();
+             StartSound(SND_WIN_LEVEL);
+             NextLevel();
+             InitializeLevel(levelNum);
++            PlatformSetMotionInterpolationPaused(0);
+         } else if (winGame) {
+             break;
+         }
+     }
+ 
++    PlatformSetMotionInterpolationPaused(1);
++    StopMusic();
+     ShowEnding();
++    PlatformSetMotionInterpolationPaused(0);
+ }
+ 
+ /*
+@@ -10807,6 +10828,7 @@ initialization tasks.
+ */
+ void InitializeLevel(word level_num)
+ {
++    PlatformSetMotionInterpolationPaused(1);
+     static word mapVariables, musicNum;
+     FILE *fp;
+     word bdnum;
+@@ -10898,6 +10920,7 @@ void InitializeLevel(word level_num)
+         SetPaletteRegister(PALETTE_KEY_INDEX, MODE1_BLACK);
+     }
+ #endif  /* EXPLOSION_PALETTE */
++    PlatformSetMotionInterpolationPaused(0);
+ }
+ 
+ /*

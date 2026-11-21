@@ -430,21 +430,14 @@ void audio_music_stop_mp3(void)
     if (old_imf) opl_reset();
 }
 
-bool audio_sound_play_asset(const char *path)
-{
 #if defined(_WIN32) || defined(__ANDROID__)
-    if (!path) return false;
+static int cache_sound_asset(const char *path)
+{
+    if (!path) return -1;
     for (size_t i = 0; i < mp3_sound_cache_count; ++i) {
-        if (!SDL_strcmp(mp3_sound_cache[i].path,path)) {
-            if (stream) SDL_LockAudioStream(stream);
-            mp3_sound_samples = mp3_sound_cache[i].samples;
-            mp3_sound_frames = mp3_sound_cache[i].frames;
-            mp3_sound_cursor = 0;
-            if (stream) SDL_UnlockAudioStream(stream);
-            return true;
-        }
+        if (!SDL_strcmp(mp3_sound_cache[i].path,path)) return (int)i;
     }
-    if (mp3_sound_cache_count >= SFX_CACHE_LIMIT) return false;
+    if (mp3_sound_cache_count >= SFX_CACHE_LIMIT) return -1;
     int16_t *decoded = NULL;
     uint64_t frames = 0;
     const char *extension = strrchr(path, '.');
@@ -453,17 +446,35 @@ bool audio_sound_play_asset(const char *path)
                              : cosmo_mp3_decode(path, &decoded, &frames);
     if (!decoded_ok || !decoded || !frames) {
         free(decoded);
-        return false;
+        return -1;
     }
-    SDL_strlcpy(mp3_sound_cache[mp3_sound_cache_count].path,path,
-                sizeof mp3_sound_cache[mp3_sound_cache_count].path);
-    mp3_sound_cache[mp3_sound_cache_count].samples = decoded;
-    mp3_sound_cache[mp3_sound_cache_count].frames = frames;
+    size_t i = mp3_sound_cache_count++;
+    SDL_strlcpy(mp3_sound_cache[i].path,path,sizeof mp3_sound_cache[i].path);
+    mp3_sound_cache[i].samples = decoded;
+    mp3_sound_cache[i].frames = frames;
+    return (int)i;
+}
+#endif
+
+bool audio_sound_preload_asset(const char *path)
+{
+#if defined(_WIN32) || defined(__ANDROID__)
+    return cache_sound_asset(path) >= 0;
+#else
+    (void)path;
+    return false;
+#endif
+}
+
+bool audio_sound_play_asset(const char *path)
+{
+#if defined(_WIN32) || defined(__ANDROID__)
+    int asset = cache_sound_asset(path);
+    if (asset < 0) return false;
     if (stream) SDL_LockAudioStream(stream);
-    mp3_sound_samples = decoded;
-    mp3_sound_frames = frames;
+    mp3_sound_samples = mp3_sound_cache[asset].samples;
+    mp3_sound_frames = mp3_sound_cache[asset].frames;
     mp3_sound_cursor = 0;
-    ++mp3_sound_cache_count;
     if (stream) SDL_UnlockAudioStream(stream);
     return true;
 #else

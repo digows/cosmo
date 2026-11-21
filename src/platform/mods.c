@@ -46,7 +46,7 @@ static const struct {
     {"smoothGameplay", MOD_SMOOTH_GAMEPLAY},
 };
 
-static const char *const sound_asset_names[65] = {
+static const char *const sound_asset_names[COSMO_SOUND_ASSET_COUNT] = {
     "big_prize", "player_jump", "player_land", "player_cling",
     "player_hit_head", "player_pounce", "player_death", "door_unlock",
     "spikes_move", "explosion", "win_level", "barrel_destroy_1", "prize",

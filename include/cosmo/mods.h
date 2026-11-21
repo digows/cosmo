@@ -8,6 +8,7 @@
 #include <stdio.h>
 
 #define COSMO_MOD_LIMIT 128
+#define COSMO_SOUND_ASSET_COUNT 65
 #define COSMO_MOD_TEXT  256
 #define COSMO_CRT_MOD_ID "crt-shader"
 #define COSMO_SCANLINES_MOD_ID "crt-scanlines"
