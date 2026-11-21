@@ -33,6 +33,9 @@
 #if defined(__ANDROID__) || defined(COSMO_IOS_APP)
 #include <SDL3/SDL_main.h>
 #endif
+#ifdef __ANDROID__
+#include <jni.h>
+#endif
 
 #include "cosmo/ega.h"
 #include "cosmo/audio.h"
@@ -790,6 +793,43 @@ static int step_selection(int selected, int direction)
 /* Installing an episode this port does not ship                             */
 /* ------------------------------------------------------------------------ */
 
+#ifdef __ANDROID__
+static bool offer_import(int episode)
+{
+    JNIEnv *env = SDL_GetAndroidJNIEnv();
+    if (!env) return false;
+    jobject activity = SDL_GetAndroidActivity();
+    if (!activity) return false;
+
+    jclass activity_class = (*env)->GetObjectClass(env, activity);
+    jmethodID start = (*env)->GetMethodID(env, activity_class, "startEpisodeImport", "(I)V");
+    jmethodID result = (*env)->GetMethodID(env, activity_class, "getEpisodeImportResult", "()I");
+    int state = -1;
+    if (start && result) {
+        (*env)->CallVoidMethod(env, activity, start, (jint)episode);
+        while (!(*env)->ExceptionCheck(env)) {
+            state = (*env)->CallIntMethod(env, activity, result);
+            if (state != 0) break;
+
+            SDL_Event event;
+            launcher_poll_music_worker();
+            while (launcher_poll_event(&event)) {
+                if (event.type == SDL_EVENT_QUIT) goto done;
+            }
+            SDL_Delay(16);
+        }
+    }
+
+done:
+    if ((*env)->ExceptionCheck(env)) {
+        (*env)->ExceptionClear(env);
+        state = -1;
+    }
+    (*env)->DeleteLocalRef(env, activity_class);
+    (*env)->DeleteLocalRef(env, activity);
+    return state == 1;
+}
+#else
 static int  import_state;    /* 0 while the dialog is open, 1 done, -1 failed */
 static int  import_episode;
 
@@ -855,6 +895,7 @@ static bool offer_import(int episode)
                              video_get_window());
     return true;
 }
+#endif
 
 /* Act on a menu choice, installing the episode first if it is not there. */
 static int choose_episode(int selected)
@@ -1003,11 +1044,30 @@ static int run_episode(int number)
 #if defined(__ANDROID__) || defined(COSMO_IOS_APP)
     extern int cosmo_episode_main(int argc, char *argv[]);
     char *episode_argv[] = {"cosmo", NULL};
+    int (*episode_main)(int, char **) = cosmo_episode_main;
+#ifdef __ANDROID__
+    SDL_SharedObject *module = NULL;
+    if (number == 2 || number == 3) {
+        module = SDL_LoadObject(number == 2 ? "libcosmo2.so" : "libcosmo3.so");
+        if (module)
+            episode_main = (int (*)(int, char **))SDL_LoadFunction(module, "cosmo_episode_main");
+        if (!module || !episode_main) {
+            SDL_Log("Cosmo: could not load episode %d: %s", number, SDL_GetError());
+            if (module) SDL_UnloadObject(module);
+            return 1;
+        }
+    } else
+#endif
+    if (number != 1) return 1;
     /* Release the launcher's SDL window before the embedded episode creates
      * its own. Mobile platforms host both entry points in one process. */
     launcher_audio_shutdown();
     video_shutdown();
-    return number == 1 ? cosmo_episode_main(1, episode_argv) : 1;
+    int result = episode_main(1, episode_argv);
+#ifdef __ANDROID__
+    if (module) SDL_UnloadObject(module);
+#endif
+    return result;
 #elif defined(_WIN32)
     static const char *const WHERE[] = {"episodes/", ""};
     char module_path[1024];
@@ -1157,12 +1217,10 @@ int main(int argc, char *argv[])
         if (episodes[i].present) found++;
     }
 
-    /*
-     * The menu is shown even with a single episode installed. It is the only
-     * place that explains how to add the two this port cannot ship, so
-     * skipping it would hide them entirely.
-     */
-    (void)found;
+    if (!found) {
+        report_missing_data();
+        return 1;
+    }
 
     if (number == 0) {
         int background = episodes[first_present()].number;

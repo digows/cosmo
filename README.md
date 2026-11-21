@@ -11,7 +11,7 @@ Play on Windows and Android with optional widescreen, smoother scrolling and ani
 ## Download and play
 
 - **Windows x64** — Extract the ZIP and launch `cosmo.exe`. If you own Episodes 2 and 3, select each episode in the launcher and locate its game files when prompted.
-- **Android** — Install the APK on an ARM64 or x86-64 device. Touch controls are enabled by default and built into the launcher and gameplay HUD. Keyboards and gamepads also work.
+- **Android** — Install the APK on an ARM64 or x86-64 device. Touch controls are enabled by default and built into the launcher and gameplay HUD. Keyboards and gamepads also work. The launcher can [import Episodes 2 and 3](android/README.md#import-episodes-2-and-3) from your own game files.
 
 Both downloads include the shareware first episode, *Forbidden Planet*.
 

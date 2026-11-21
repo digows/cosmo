@@ -8,6 +8,14 @@ The Android system Back button sends Escape to the game.
 Smooth Gameplay is enabled by default on fresh Android installs. Change it in
 the Mods menu. Existing installs keep their saved mod setting.
 
+## Import Episodes 2 and 3
+
+If you own the game data, select **Mad Scientist** or **Secret Lab** in the
+episode launcher and choose **Choose files**. In Android's file picker, touch
+and hold the matching `COSMO2.STN` or `COSMO3.STN`, tap the matching `.VOL`,
+then tap **Select**. The game copies both files to app storage and starts the
+episode. The imported episode stays available in the launcher.
+
 ## Build a debug APK
 
 Install JDK 17 and the Android SDK with platform 36, NDK `30.0.16248370`, and

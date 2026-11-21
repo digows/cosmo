@@ -16,6 +16,8 @@ Windows x64
 Android ARM64 and x86-64
   Install the APK and select Forbidden Planet. Touch controls are enabled
   by default. Keyboards and gamepads are also supported.
+  To import Episode 2 or 3, select it in the launcher and tap Choose files.
+  Touch and hold the matching STN file, tap its VOL partner, then tap Select.
 
 Both downloads include the shareware Episode 1, Forbidden Planet.
 

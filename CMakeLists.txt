@@ -361,6 +361,21 @@ if(COSMO_BUILD_GAME)
         endif()
         target_link_libraries(main PRIVATE cosmo_lowlevel1 cosmo_platform cosmo_video)
         add_dependencies(main cosmore_game1)
+        foreach(episode RANGE 2 3)
+            cosmo_add_episode(${episode})
+            add_library(cosmo${episode} SHARED
+                $<TARGET_OBJECTS:cosmore_game${episode}>
+                src/platform/platform_main.c)
+            target_compile_definitions(cosmo${episode} PRIVATE COSMO_EPISODE_MODULE)
+            if(COSMO_TOUCH_PREVIEW)
+                target_compile_definitions(cosmo${episode} PRIVATE COSMO_TOUCH_PREVIEW)
+                target_compile_definitions(cosmore_game${episode} PRIVATE COSMO_TOUCH_PREVIEW)
+            endif()
+            # Each episode has its own game and platform state.
+            target_link_options(cosmo${episode} PRIVATE -Wl,-Bsymbolic)
+            target_link_libraries(cosmo${episode}
+                PRIVATE cosmo_lowlevel${episode} cosmo_platform cosmo_video)
+        endforeach()
         return()
     endif()
 

@@ -15,7 +15,7 @@ Apogee Software, Ltd.
 
 The Windows and Android downloads include the shareware release of Episode 1,
 *Forbidden Planet*. Episodes 2 and 3 use game files supplied by the player on
-Windows. The [MIT license](LICENSE) covers the project's code.
+Windows and Android. The [MIT license](LICENSE) covers the project's code.
 
 ## Cosmo Enhanced and upstream projects
 
