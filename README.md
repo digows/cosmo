@@ -36,14 +36,12 @@ Android Back button acts as Escape. See [Android build instructions](android/REA
 
 - **Smooth Gameplay** smooths scrolling, character movement, and animations.
   It works with CRT filters and is enabled by default on fresh Android installs.
-- **Gameplay fixes** improve level transitions, pit behaviour, and how menus and
-  hints appear while smoothing is active.
 
 ### Preview improvements
 
 - **Widescreen** uses the full visible playfield for enemy activity, projectiles,
   and pickups.
-- **Visual fixes** address flickering backgrounds and smooth more animations.
+- **Animation smoothing** covers more movement and effects.
 - **Android controls** improve system Back handling and let controller B go back
   in Game Settings.
 
