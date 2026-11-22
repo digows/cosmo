@@ -1482,6 +1482,7 @@ bool video_write_png(const char *path, int scale)
     return ok;
 }
 
+#ifndef COSMO_VITA_APP
 /*
  * The largest whole-number scale that leaves the window on the screen.
  *
@@ -1521,6 +1522,7 @@ static int fitting_scale(int wanted, int width, int height)
 
     return scale;
 }
+#endif
 
 bool video_init(const char *title, int scale, bool widescreen)
 {
@@ -1539,7 +1541,11 @@ bool video_init(const char *title, int scale, bool widescreen)
         return false;
     }
 
+#ifdef COSMO_VITA_APP
+    scale = SDL_min(scale, 2);
+#else
     scale = fitting_scale(scale, width, height);
+#endif
 
     int w = width * scale;
     int h = height * scale;

@@ -38,3 +38,6 @@ Open **Customise** in the episode launcher to choose how the game looks and soun
 Cosmo Enhanced builds on Scott Smitelli's [Cosmore](https://github.com/smitelli/cosmore). The original game was released by Apogee Software in 1992. See [full credits](ATTRIBUTION.md) and the [source code license](LICENSE).
 
 [Release notes](https://github.com/GITitdoneboi/enhanced-cosmo/releases) · [Android build guide](android/README.md) · [Modding guide](docs/modding.md) · [Porting notes](docs/porting-notes.md)
+
+The experimental PlayStation Vita homebrew target is documented in
+[vita/README.md](vita/README.md).

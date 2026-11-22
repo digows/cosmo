@@ -44,6 +44,9 @@
 #define IMF_TICK_RATE 560.0
 
 static SDL_AudioStream *stream;
+#ifdef COSMO_VITA_APP
+static SDL_AudioDeviceID audio_device;
+#endif
 static double phase;          /* 0..1 across one square wave cycle */
 
 static FILE *wav_file;
@@ -107,7 +110,7 @@ static void render_imf(int16_t *out, int frames)
     }
 }
 
-#if defined(_WIN32) || defined(__ANDROID__)
+#if defined(_WIN32) || defined(__ANDROID__) || defined(COSMO_VITA_APP)
 extern bool cosmo_mp3_decode(const char *path, int16_t **samples, uint64_t *frames);
 #endif
 
@@ -350,7 +353,7 @@ void audio_set_volumes(int sound_percent, int music_percent)
 
 bool audio_music_play_mp3(const char *path)
 {
-#if defined(_WIN32) || defined(__ANDROID__)
+#if defined(_WIN32) || defined(__ANDROID__) || defined(COSMO_VITA_APP)
     int16_t *decoded = NULL;
     uint64_t frames = 0;
     int16_t *old;
@@ -430,7 +433,7 @@ void audio_music_stop_mp3(void)
     if (old_imf) opl_reset();
 }
 
-#if defined(_WIN32) || defined(__ANDROID__)
+#if defined(_WIN32) || defined(__ANDROID__) || defined(COSMO_VITA_APP)
 static int cache_sound_asset(const char *path)
 {
     if (!path) return -1;
@@ -442,8 +445,16 @@ static int cache_sound_asset(const char *path)
     uint64_t frames = 0;
     const char *extension = strrchr(path, '.');
     bool is_wav = extension && SDL_strcasecmp(extension, ".wav") == 0;
-    bool decoded_ok = is_wav ? decode_sfx_wav(path, &decoded, &frames)
-                             : cosmo_mp3_decode(path, &decoded, &frames);
+    bool decoded_ok;
+    if (is_wav) {
+        decoded_ok = decode_sfx_wav(path, &decoded, &frames);
+    } else {
+#if defined(_WIN32) || defined(__ANDROID__) || defined(COSMO_VITA_APP)
+        decoded_ok = cosmo_mp3_decode(path, &decoded, &frames);
+#else
+        decoded_ok = false;
+#endif
+    }
     if (!decoded_ok || !decoded || !frames) {
         free(decoded);
         return -1;
@@ -458,7 +469,7 @@ static int cache_sound_asset(const char *path)
 
 bool audio_sound_preload_asset(const char *path)
 {
-#if defined(_WIN32) || defined(__ANDROID__)
+#if defined(_WIN32) || defined(__ANDROID__) || defined(COSMO_VITA_APP)
     return cache_sound_asset(path) >= 0;
 #else
     (void)path;
@@ -468,7 +479,7 @@ bool audio_sound_preload_asset(const char *path)
 
 bool audio_sound_play_asset(const char *path)
 {
-#if defined(_WIN32) || defined(__ANDROID__)
+#if defined(_WIN32) || defined(__ANDROID__) || defined(COSMO_VITA_APP)
     int asset = cache_sound_asset(path);
     if (asset < 0) return false;
     if (stream) SDL_LockAudioStream(stream);
@@ -523,6 +534,41 @@ static void SDLCALL audio_callback(void *userdata, SDL_AudioStream *audio_stream
 /* Lifecycle                                                                */
 /* ------------------------------------------------------------------------ */
 
+#ifdef COSMO_VITA_APP
+static bool audio_open_vita_stream(const SDL_AudioSpec *source_spec)
+{
+    SDL_AudioSpec device_request;
+    SDL_AudioSpec device_spec;
+
+    device_request.format = SDL_AUDIO_S16;
+    device_request.channels = 1;
+    device_request.freq = 48000;
+    audio_device = SDL_OpenAudioDevice(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK,
+                                       &device_request);
+    if (!audio_device) return false;
+
+    if (!SDL_GetAudioDeviceFormat(audio_device, &device_spec, NULL)) goto fail;
+    stream = SDL_CreateAudioStream(source_spec, &device_spec);
+    if (!stream) goto fail;
+    if (!SDL_BindAudioStream(audio_device, stream)) goto fail;
+    if (!SDL_SetAudioStreamGetCallback(stream, audio_callback, NULL)) goto fail;
+
+    SDL_Log("Cosmo audio: Vita output %d Hz, %d channel(s)",
+            device_spec.freq, device_spec.channels);
+    if (!SDL_ResumeAudioDevice(audio_device)) goto fail;
+    return true;
+
+fail:
+    if (stream) {
+        SDL_DestroyAudioStream(stream);
+        stream = NULL;
+    }
+    SDL_CloseAudioDevice(audio_device);
+    audio_device = 0;
+    return false;
+}
+#endif
+
 bool audio_init(void)
 {
     SDL_AudioSpec spec;
@@ -550,15 +596,21 @@ bool audio_init(void)
 
     if (wav_path) wav_open(wav_path);
 
+#ifdef COSMO_VITA_APP
+    if (!audio_open_vita_stream(&spec)) {
+#else
     stream = SDL_OpenAudioDeviceStream(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK,
                                        &spec, audio_callback, NULL);
     if (!stream) {
+#endif
         fprintf(stderr, "cosmo: no audio device (%s); running silently\n",
                 SDL_GetError());
         return false;
     }
 
+#ifndef COSMO_VITA_APP
     SDL_ResumeAudioStreamDevice(stream);
+#endif
     return true;
 }
 
@@ -570,6 +622,12 @@ void audio_shutdown(void)
         SDL_DestroyAudioStream(stream);
         stream = NULL;
     }
+#ifdef COSMO_VITA_APP
+    if (audio_device) {
+        SDL_CloseAudioDevice(audio_device);
+        audio_device = 0;
+    }
+#endif
     wav_close();
     for (size_t i = 0; i < mp3_sound_cache_count; ++i)
         free(mp3_sound_cache[i].samples);

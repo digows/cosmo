@@ -1032,7 +1032,8 @@ static void report_missing_data(void)
  * The two spellings differ in more than name: Windows takes the argument
  * vector as const, POSIX does not.
  */
-#if !defined(_WIN32) && !defined(__ANDROID__) && !defined(COSMO_IOS_APP)
+#if !defined(_WIN32) && !defined(__ANDROID__) && !defined(COSMO_IOS_APP) && \
+    !defined(COSMO_VITA_APP)
 static int replace_process(const char *program, char *argv[])
 {
     return execv(program, argv);
@@ -1041,7 +1042,7 @@ static int replace_process(const char *program, char *argv[])
 
 static int run_episode(int number)
 {
-#if defined(__ANDROID__) || defined(COSMO_IOS_APP)
+#if defined(__ANDROID__) || defined(COSMO_IOS_APP) || defined(COSMO_VITA_APP)
     extern int cosmo_episode_main(int argc, char *argv[]);
     char *episode_argv[] = {"cosmo", NULL};
     int (*episode_main)(int, char **) = cosmo_episode_main;

@@ -17,6 +17,7 @@ gamedata/*
 !assets/*.png
 !docs/screenshots/*.png
 !android/app/src/main/res/**/*.png
+!vita/sce_sys/icon0.png
 .DS_Store
 .cache/
 

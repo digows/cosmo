@@ -40,6 +40,18 @@ option(COSMO_ANDROID_APP "Build Episode 1 as an SDL Android shared library" OFF)
 option(COSMO_DEV_LEVEL_SHORTCUTS "Enable developer level shortcuts" OFF)
 option(COSMO_TOUCH_PREVIEW "Enable the Android touch-control preview" OFF)
 option(COSMO_IOS_APP "Build Episode 1 as an SDL iOS application bundle" OFF)
+option(COSMO_VITA_APP "Build a PlayStation Vita homebrew VPK" OFF)
+
+if(COSMO_VITA_APP)
+    if(NOT VITA)
+        message(FATAL_ERROR "COSMO_VITA_APP requires the VitaSDK toolchain")
+    endif()
+
+    include("$ENV{VITASDK}/share/vita.cmake")
+    set(VITA_APP_NAME "Cosmo Enhanced")
+    set(VITA_TITLEID "CSMO00001")
+    set(VITA_VERSION "01.00")
+endif()
 
 # --------------------------------------------------------------------------
 # Warnings
@@ -203,6 +215,9 @@ endif()
 if(COSMO_IOS_APP)
     target_compile_definitions(cosmo_video PRIVATE COSMO_IOS_APP=1)
 endif()
+if(COSMO_VITA_APP)
+    target_compile_definitions(cosmo_video PRIVATE COSMO_VITA_APP=1)
+endif()
 
 # --------------------------------------------------------------------------
 # Cosmore game sources
@@ -240,6 +255,9 @@ if(COSMO_BUILD_GAME)
         src/platform/audio.c
         src/platform/opl.cpp
         src/platform/input.c)
+    if(COSMO_VITA_APP)
+        target_compile_definitions(cosmo_platform PRIVATE COSMO_VITA_APP=1)
+    endif()
     if(WIN32)
         target_sources(cosmo_platform PRIVATE src/platform/mp3_decoder.cpp)
         target_link_libraries(cosmo_platform PRIVATE mfplat mfreadwrite mfuuid ole32)
@@ -247,6 +265,11 @@ if(COSMO_BUILD_GAME)
     elseif(ANDROID)
         target_sources(cosmo_platform PRIVATE src/platform/mp3_decoder_android.cpp)
         target_link_libraries(cosmo_platform PRIVATE mediandk)
+        target_compile_definitions(cosmo_platform PRIVATE COSMO_MP3_MUSIC=1)
+    elseif(COSMO_VITA_APP)
+        target_sources(cosmo_platform PRIVATE src/platform/mp3_decoder_vita.cpp)
+        target_link_libraries(cosmo_platform PRIVATE
+            SceAudiodec_stub SceSysmodule_stub)
         target_compile_definitions(cosmo_platform PRIVATE COSMO_MP3_MUSIC=1)
     elseif(IOS)
         target_sources(cosmo_platform PRIVATE src/platform/mp3_decoder_apple.mm)
@@ -278,9 +301,9 @@ if(COSMO_BUILD_GAME)
         if(COSMO_DEV_LEVEL_SHORTCUTS)
             target_compile_definitions(cosmore_game${episode} PRIVATE COSMO_DEV_LEVEL_SHORTCUTS)
         endif()
-        if(UNIX)
-            # Strict C11 on newer glibc hides POSIX declarations such as
-            # fileno() unless a POSIX feature level is selected explicitly.
+        if(UNIX OR VITA)
+            # Strict C11 hides POSIX declarations such as fileno() unless a
+            # POSIX feature level is selected explicitly.
             target_compile_definitions(cosmore_game${episode}
                 PRIVATE _POSIX_C_SOURCE=200809L)
         endif()
@@ -308,7 +331,7 @@ if(COSMO_BUILD_GAME)
 
         # Mobile app targets host the selected episode in the launcher process
         # instead of starting a sibling episode executable.
-        if(COSMO_ANDROID_APP OR COSMO_IOS_APP)
+        if(COSMO_ANDROID_APP OR COSMO_IOS_APP OR COSMO_VITA_APP)
             return()
         endif()
 
@@ -417,6 +440,89 @@ if(COSMO_BUILD_GAME)
         return()
     endif()
 
+    if(COSMO_VITA_APP)
+        cosmo_add_episode(1)
+
+        add_executable(cosmo_vita
+            $<TARGET_OBJECTS:cosmore_game1>
+            src/platform/platform_main.c
+            src/launcher.c)
+        target_compile_definitions(cosmo_vita PRIVATE
+            COSMO_EPISODE_MODULE=1 COSMO_VITA_APP=1)
+        target_link_libraries(cosmo_vita PRIVATE
+            cosmo_lowlevel1 cosmo_platform cosmo_video cosmo_warnings)
+        add_dependencies(cosmo_vita cosmore_game1)
+
+        vita_create_self(eboot.bin cosmo_vita)
+        set(VITA_MKSFOEX_FLAGS "${VITA_MKSFOEX_FLAGS}" CACHE STRING "vita-mksfoex flags")
+        set(VITA_PACK_VPK_FLAGS "${VITA_PACK_VPK_FLAGS}" CACHE STRING "vita-pack-vpk flags")
+        separate_arguments(COSMO_VITA_MKSFOEX_ARGS NATIVE_COMMAND
+            "${VITA_MKSFOEX_FLAGS}")
+        separate_arguments(COSMO_VITA_PACK_VPK_ARGS NATIVE_COMMAND
+            "${VITA_PACK_VPK_FLAGS}")
+
+        set(COSMO_VITA_PARAM_SFO "${CMAKE_CURRENT_BINARY_DIR}/cosmo-vita_param.sfo")
+        add_custom_command(OUTPUT "${COSMO_VITA_PARAM_SFO}"
+            COMMAND "${VITA_MKSFOEX}" ${COSMO_VITA_MKSFOEX_ARGS}
+                -s "APP_VER=${VITA_VERSION}" -s "TITLE_ID=${VITA_TITLEID}"
+                "${VITA_APP_NAME}" "${COSMO_VITA_PARAM_SFO}"
+            DEPENDS eboot.bin-self
+            COMMENT "Generating param.sfo for Cosmo Enhanced"
+            VERBATIM)
+
+        set(COSMO_VITA_VPK "${CMAKE_CURRENT_BINARY_DIR}/cosmo-vita.vpk")
+        set(COSMO_VITA_VPK_RESOURCES
+            "${CMAKE_CURRENT_SOURCE_DIR}/vita/sce_sys/icon0.png=sce_sys/icon0.png")
+        set(COSMO_VITA_VPK_DEPENDS
+            "${CMAKE_CURRENT_SOURCE_DIR}/vita/sce_sys/icon0.png")
+        if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/gamedata/COSMO1.STN" AND
+           EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/gamedata/COSMO1.VOL")
+            list(APPEND COSMO_VITA_VPK_RESOURCES
+                "${CMAKE_CURRENT_SOURCE_DIR}/gamedata/COSMO1.STN=COSMO1.STN"
+                "${CMAKE_CURRENT_SOURCE_DIR}/gamedata/COSMO1.VOL=COSMO1.VOL")
+            list(APPEND COSMO_VITA_VPK_DEPENDS
+                "${CMAKE_CURRENT_SOURCE_DIR}/gamedata/COSMO1.STN"
+                "${CMAKE_CURRENT_SOURCE_DIR}/gamedata/COSMO1.VOL")
+        else()
+            message(STATUS "Episode 1 game data not found; the VPK will need COSMO1.STN and COSMO1.VOL copied to ux0:/data/digows/Cosmo/")
+        endif()
+        set(COSMO_VITA_SUPPORTED_MODS
+            crt-scanlines
+            crt-shader
+            mp3-music
+            smooth-gameplay
+            soft-sound-effects
+            widescreen)
+        foreach(COSMO_VITA_MOD IN LISTS COSMO_VITA_SUPPORTED_MODS)
+            set(COSMO_VITA_MOD_DIR
+                "${CMAKE_CURRENT_SOURCE_DIR}/Mods/${COSMO_VITA_MOD}")
+            if(EXISTS "${COSMO_VITA_MOD_DIR}/mod.json")
+                list(APPEND COSMO_VITA_VPK_RESOURCES
+                    "${COSMO_VITA_MOD_DIR}=Mods/${COSMO_VITA_MOD}")
+                file(GLOB_RECURSE COSMO_VITA_MOD_FILES CONFIGURE_DEPENDS
+                    LIST_DIRECTORIES false "${COSMO_VITA_MOD_DIR}/*")
+                list(APPEND COSMO_VITA_VPK_DEPENDS ${COSMO_VITA_MOD_FILES})
+            endif()
+        endforeach()
+        set(COSMO_VITA_VPK_ARGS)
+        foreach(COSMO_VITA_VPK_RESOURCE IN LISTS COSMO_VITA_VPK_RESOURCES)
+            list(APPEND COSMO_VITA_VPK_ARGS -a "${COSMO_VITA_VPK_RESOURCE}")
+        endforeach()
+        add_custom_command(OUTPUT "${COSMO_VITA_VPK}"
+            COMMAND "${VITA_PACK_VPK}" ${COSMO_VITA_PACK_VPK_ARGS}
+                ${COSMO_VITA_VPK_ARGS}
+                -s "${COSMO_VITA_PARAM_SFO}" -b "${CMAKE_CURRENT_BINARY_DIR}/eboot.bin"
+                "${COSMO_VITA_VPK}"
+            DEPENDS "${COSMO_VITA_PARAM_SFO}"
+                "${CMAKE_CURRENT_BINARY_DIR}/eboot.bin" eboot.bin-self
+                ${COSMO_VITA_VPK_DEPENDS}
+            COMMENT "Building VPK cosmo-vita.vpk"
+            VERBATIM)
+        add_custom_target(cosmo_vita_package ALL DEPENDS "${COSMO_VITA_VPK}")
+        add_dependencies(cosmo_vita_package eboot.bin-self)
+        return()
+    endif()
+
     cosmo_add_episode(1)
     cosmo_add_episode(2)
     cosmo_add_episode(3)
@@ -501,8 +607,10 @@ endif()
 # Tools
 # --------------------------------------------------------------------------
 
-add_executable(imgview tools/imgview.c)
-target_link_libraries(imgview PRIVATE cosmo_video cosmo_warnings)
+if(NOT COSMO_VITA_APP)
+    add_executable(imgview tools/imgview.c)
+    target_link_libraries(imgview PRIVATE cosmo_video cosmo_warnings)
+endif()
 
 # --------------------------------------------------------------------------
 # Tests
