@@ -2,7 +2,7 @@
 
 Cosmo Enhanced is an independently maintained fork focused on playing *Cosmo's Cosmic Adventure* on modern devices.
 
-Play on Windows and Android with optional widescreen, smoother scrolling and animations, and modern controls.
+Play on Windows and Android with optional widescreen, smoother scrolling and animations, and modern controls. An experimental PlayStation Vita homebrew build is also available.
 
 **[Download the latest release](https://github.com/GITitdoneboi/enhanced-cosmo/releases/latest)**
 
@@ -12,8 +12,9 @@ Play on Windows and Android with optional widescreen, smoother scrolling and ani
 
 - **Windows x64** — Extract the ZIP and launch `cosmo.exe`. If you own Episodes 2 and 3, select each episode in the launcher and locate its game files when prompted.
 - **Android** — Install the APK on an ARM64 or x86-64 device. Touch controls are enabled by default and built into the launcher and gameplay HUD. Keyboards and gamepads also work. The launcher can [import Episodes 2 and 3](android/README.md#import-episodes-2-and-3) from your own game files.
+- **PlayStation Vita / Vita3K** — Install the [Vita VPK](https://github.com/GITitdoneboi/enhanced-cosmo/releases/download/v0.5.0/cosmo-v0.5.0-vita.vpk). This experimental port supports Episode 1; see the [Vita guide](vita/README.md).
 
-Both downloads include the shareware first episode, *Forbidden Planet*.
+The downloads include the shareware first episode, *Forbidden Planet*.
 
 ## Controls and settings
 
@@ -35,9 +36,15 @@ Open **Customise** in the episode launcher to choose how the game looks and soun
 
 ## Credits and project links
 
-Cosmo Enhanced builds on Scott Smitelli's [Cosmore](https://github.com/smitelli/cosmore). The original game was released by Apogee Software in 1992. See [full credits](ATTRIBUTION.md) and the [source code license](LICENSE).
+*Cosmo's Cosmic Adventure* was released by Apogee Software, Ltd. in 1992.
+Todd J. Replogle programmed the game and designed its levels; Stephen A.
+Hornback created the graphics; Scott Miller produced the game; Allen H. Blum
+III created the level editor; Bobby Prince composed the AdLib music, and
+id Software provided the music routines.
+
+Cosmo Enhanced builds on the SDL port maintained by digows and
+Scott Smitelli's [Cosmore](https://github.com/smitelli/cosmore), a
+reconstruction of the original source code. See [full credits](ATTRIBUTION.md)
+and the [source code license](LICENSE).
 
 [Release notes](https://github.com/GITitdoneboi/enhanced-cosmo/releases) · [Android build guide](android/README.md) · [Modding guide](docs/modding.md) · [Porting notes](docs/porting-notes.md)
-
-The experimental PlayStation Vita homebrew target is documented in
-[vita/README.md](vita/README.md).
