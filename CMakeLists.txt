@@ -271,13 +271,14 @@ if(COSMO_BUILD_GAME)
         target_link_libraries(cosmo_platform PRIVATE
             SceAudiodec_stub SceSysmodule_stub)
         target_compile_definitions(cosmo_platform PRIVATE COSMO_MP3_MUSIC=1)
-    elseif(IOS)
-        target_sources(cosmo_platform PRIVATE src/platform/mp3_decoder_apple.mm)
-        find_library(COSMO_AVFOUNDATION_FRAMEWORK AVFoundation REQUIRED)
-        target_link_libraries(cosmo_platform PRIVATE ${COSMO_AVFOUNDATION_FRAMEWORK})
+    elseif(APPLE)
+        target_sources(cosmo_platform PRIVATE src/platform/mp3_decoder_apple.cpp)
+        find_library(COSMO_AUDIOTOOLBOX_FRAMEWORK AudioToolbox REQUIRED)
+        find_library(COSMO_COREFOUNDATION_FRAMEWORK CoreFoundation REQUIRED)
+        target_link_libraries(cosmo_platform PRIVATE
+            ${COSMO_AUDIOTOOLBOX_FRAMEWORK}
+            ${COSMO_COREFOUNDATION_FRAMEWORK})
         target_compile_definitions(cosmo_platform PRIVATE COSMO_MP3_MUSIC=1)
-        set_target_properties(cosmo_platform PROPERTIES
-            XCODE_ATTRIBUTE_CLANG_ENABLE_OBJC_ARC YES)
     endif()
     target_link_libraries(cosmo_platform
         PUBLIC cosmo_video
@@ -587,6 +588,12 @@ if(COSMO_BUILD_GAME)
             COMMAND "${CMAKE_COMMAND}" -E copy_if_different
                     "${COSMO_ICON_DIR}/icon.icns" "${_bundle}/Resources/icon.icns"
             COMMENT "Adding the icon to Cosmo.app")
+
+        add_custom_command(TARGET cosmo POST_BUILD
+            COMMAND "${CMAKE_COMMAND}" -E rm -rf "${_bundle}/MacOS/Mods"
+            COMMAND "${CMAKE_COMMAND}" -E copy_directory
+                    "${CMAKE_CURRENT_SOURCE_DIR}/Mods" "${_bundle}/MacOS/Mods"
+            COMMENT "Adding bundled mods to Cosmo.app")
 
         foreach(_ep 1 2 3)
             add_custom_command(TARGET cosmo POST_BUILD
