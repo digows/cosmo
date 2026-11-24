@@ -3,6 +3,6 @@
   "name": "Smooth Gameplay",
   "version": "0.1.0",
   "description": "Smooths camera movement, Cosmo, standard world sprites, and collectible star spins.",
-  "enabled": false,
+  "enabled": true,
   "smoothGameplay": true
 }

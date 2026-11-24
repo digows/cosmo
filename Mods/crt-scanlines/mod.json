@@ -4,6 +4,6 @@
   "version": "1.0.0",
   "author": "Cosmo mod example",
   "description": "Adds subtle alternating scanlines.",
-  "enabled": true,
+  "enabled": false,
   "crtScanlines": true
 }

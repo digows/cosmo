@@ -1072,14 +1072,12 @@ static int run_episode(int number)
 #elif defined(_WIN32)
     static const char *const WHERE[] = {"episodes/", ""};
     char module_path[1024];
-    char fullscreen_arg[] = "--fullscreen";
-    char *module_argv[] = {module_path, NULL, NULL};
+    char *module_argv[] = {module_path, NULL};
     SDL_PathInfo info;
     SDL_SharedObject *module;
     int (*episode_main)(int, char **) = NULL;
     size_t i;
     bool found = false;
-    int argc = 1;
     int result;
 
     for (i = 0; i < SDL_arraysize(WHERE) && !found; i++) {
@@ -1117,13 +1115,8 @@ static int run_episode(int number)
         return 1;
     }
 
-    if (video_is_fullscreen()) {
-        module_argv[1] = fullscreen_arg;
-        argc = 2;
-    }
-
     launcher_audio_shutdown();
-    result = episode_main(argc, module_argv);
+    result = episode_main(1, module_argv);
     SDL_UnloadObject(module);
     return result;
 #else

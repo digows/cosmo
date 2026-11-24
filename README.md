@@ -29,10 +29,10 @@ Use **Game Settings** to adjust music and sound effects volumes separately or ch
 
 Open **Customise** in the episode launcher to choose how the game looks and sounds.
 
-- On Windows and macOS, choose the original view or enable **Widescreen** for a wider playfield. Android uses widescreen gameplay by default.
-- Enable **Smooth Gameplay** for smoother scrolling, character movement, and animations. It starts enabled on fresh Android installs.
+- New installs use **Widescreen** for a wider playfield. On Windows and macOS, turn it off to use the original view.
+- **Smooth Gameplay** smooths scrolling, character movement, and animations. It starts enabled on new installs.
 - Switch between the original and remixed Episode 1 soundtrack, or between original and softened sound effects.
-- Choose CRT effects, scanlines, both, or neither.
+- Choose CRT effects, scanlines, both, or neither. Both effects start disabled.
 - Preview and change Cosmo's body and accent colours under **Character Colour**.
 
 ## Credits and project links

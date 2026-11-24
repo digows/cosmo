@@ -48,10 +48,10 @@ Customise
 Choose Customise in the episode launcher to change the soundtrack, sound
 effects, display filter, character colours, or gamepad rumble. Smooth Gameplay
 smooths scrolling, character movement, and animations. It starts enabled on
-fresh Android installs.
+new installs.
 
-On Windows, turn on Widescreen to see more of the level. Android uses
-widescreen gameplay. To hide the touch HUD on Android, turn off Touch Controls
+Widescreen is enabled on new installs. On Windows, turn it off to return to
+the original view. To hide the touch HUD on Android, turn off Touch Controls
 in Customise.
 
 Credits and downloads

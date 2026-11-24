@@ -1536,7 +1536,8 @@ bool video_init(const char *title, int scale, bool widescreen)
 
     if (scale < 1) scale = 3;
 
-    if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_GAMEPAD)) {
+    bool reuse_window = window != NULL;
+    if (!reuse_window && !SDL_Init(SDL_INIT_VIDEO | SDL_INIT_GAMEPAD)) {
         fprintf(stderr, "SDL_Init: %s\n", SDL_GetError());
         return false;
     }
@@ -1550,7 +1551,8 @@ bool video_init(const char *title, int scale, bool widescreen)
     int w = width * scale;
     int h = height * scale;
 
-    if (!SDL_CreateWindowAndRenderer(title, w, h, SDL_WINDOW_RESIZABLE,
+    if (!reuse_window &&
+        !SDL_CreateWindowAndRenderer(title, w, h, SDL_WINDOW_RESIZABLE,
                                      &window, &renderer)) {
         fprintf(stderr, "SDL_CreateWindowAndRenderer: %s\n", SDL_GetError());
         return false;
@@ -1574,18 +1576,23 @@ bool video_init(const char *title, int scale, bool widescreen)
     SDL_SetRenderLogicalPresentation(renderer, w, h,
                                      SDL_LOGICAL_PRESENTATION_LETTERBOX);
 
-    texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGB24,
-                                SDL_TEXTUREACCESS_STREAMING,
-                                width, EGA_SCREEN_H);
-    if (!texture) {
+    SDL_Texture *new_texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGB24,
+                                               SDL_TEXTUREACCESS_STREAMING,
+                                               width, EGA_SCREEN_H);
+    if (!new_texture) {
         fprintf(stderr, "SDL_CreateTexture: %s\n", SDL_GetError());
+        if (!reuse_window) video_shutdown();
         return false;
     }
-    motion_mutex = SDL_CreateMutex();
+    if (!motion_mutex) motion_mutex = SDL_CreateMutex();
     if (!motion_mutex) {
         fprintf(stderr, "SDL_CreateMutex: %s\n", SDL_GetError());
+        SDL_DestroyTexture(new_texture);
+        if (!reuse_window) video_shutdown();
         return false;
     }
+    if (texture) SDL_DestroyTexture(texture);
+    texture = new_texture;
     motion_interpolation_enabled = false;
     motion_interpolation_pause_depth = 0;
     motion_vectors_valid = false;
@@ -1600,11 +1607,12 @@ bool video_init(const char *title, int scale, bool widescreen)
     /* Chunky pixels, not a blurry upscale. */
     SDL_SetTextureScaleMode(texture, SDL_SCALEMODE_NEAREST);
 
-    /* A launcher-to-episode handoff creates a fresh SDL window in the same
-     * process. Restore and raise it explicitly so it does not stay minimized
-     * or behind other windows after that handoff. */
-    SDL_RestoreWindow(window);
-    SDL_RaiseWindow(window);
+    if (reuse_window) {
+        SDL_SetWindowTitle(window, title);
+    } else {
+        SDL_RestoreWindow(window);
+        SDL_RaiseWindow(window);
+    }
 
     return true;
 }
@@ -1864,6 +1872,9 @@ void video_shutdown(void)
     if (texture) SDL_DestroyTexture(texture);
     if (renderer) SDL_DestroyRenderer(renderer);
     if (window) SDL_DestroyWindow(window);
+    texture = NULL;
+    renderer = NULL;
+    window = NULL;
     if (motion_mutex) SDL_DestroyMutex(motion_mutex);
     motion_mutex = NULL;
     motion_interpolation_enabled = false;

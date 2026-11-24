@@ -1,8 +1,8 @@
 # Widescreen
 
-On Windows, open **Customise** in the episode launcher, turn **Widescreen**
-on, then start an episode. The setting is saved with your other mod
-preferences. Turn it off to return to the original view.
+Widescreen starts enabled on new Windows installs. To return to the original
+view, open **Customise** in the episode launcher, turn **Widescreen** off, then
+start an episode. The setting is saved with your other mod preferences.
 
 The Android release uses widescreen gameplay and shows the touch buttons in
 the HUD when touch controls are enabled. Find **Touch Controls** under
