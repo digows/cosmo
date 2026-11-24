@@ -80,7 +80,7 @@ A palette effect such as Aurora can still tint the final picture.
 
 ## MP3 music replacements
 
-On Windows and Android, an enabled mod can replace a track with an MP3. Put the file in
+On Windows, macOS, and Android, an enabled mod can replace a track with an MP3. Put the file in
 the mod's `music/` folder and use the original IMF track's basename with an
 `.mp3` extension. For example, `music/mzztop.mp3` replaces `mzztop.mni`:
 
@@ -97,8 +97,8 @@ The manifest needs the usual required fields, such as `id`, `name`, and
 The game decodes the replacement when that track starts and loops it until the
 game switches tracks. The in-game Music toggle also stops and resumes it. If
 the MP3 is missing or cannot be decoded, the original synthesized IMF track
-plays instead. Windows uses Media Foundation for MP3 decoding. Android uses
-MediaCodec.
+plays instead. Windows uses Media Foundation for MP3 decoding, macOS uses
+AudioToolbox, and Android uses MediaCodec.
 
 ## Sound effect replacements
 
@@ -143,7 +143,7 @@ field shown below.
 
 | Mod | Manifest field | Effect |
 |---|---|---|
-| Widescreen | `widescreen` | Enables a wider playfield and HUD on Windows. The Android release already uses widescreen gameplay. |
+| Widescreen | `widescreen` | Enables a wider playfield and HUD on Windows and macOS. The Android release already uses widescreen gameplay. |
 | Smooth Gameplay | `smoothGameplay` | Smooths scrolling, character movement, and animations. |
 
 ## CRT shader example
@@ -189,6 +189,17 @@ root in the UCRT64 shell.
 
 ```text
 cmake -S . -B build -G Ninja -DCOSMO_FETCH_SDL=ON -DCOSMO_BUNDLE=ON
+cmake --build build
+ctest --test-dir build --output-on-failure
+```
+
+## macOS build
+
+Install CMake and SDL3 (or pass `-DCOSMO_FETCH_SDL=ON` to build SDL3 from source),
+then build the application bundle from the source root:
+
+```text
+cmake -S . -B build -DCOSMO_BUNDLE=ON
 cmake --build build
 ctest --test-dir build --output-on-failure
 ```

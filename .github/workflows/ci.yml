@@ -85,3 +85,27 @@ jobs:
             build/cosmo2.exe
             build/cosmo3.exe
             build/imgview.exe
+
+  macos:
+    name: macOS
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: recursive
+
+      - name: Configure
+        run: cmake -S . -B build $CMAKE_FLAGS
+
+      - name: Build
+        run: cmake --build build -j4
+
+      - name: Test
+        run: ctest --test-dir build --output-on-failure
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: cosmo-macos
+          path: |
+            build/Cosmo.app
+            build/imgview

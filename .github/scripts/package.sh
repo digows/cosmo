@@ -40,6 +40,7 @@ macos)
     cp -R "$build/Cosmo.app" "$root/"
     cp "$repo/gamedata/COSMO1.STN" "$repo/gamedata/COSMO1.VOL" \
        "$root/Cosmo.app/Contents/Resources/"
+    rm -rf "$root/Cosmo.app/Contents/MacOS/Mods"
     cp -R "$repo/Mods" "$root/Cosmo.app/Contents/MacOS/"
     docs "$root"
 

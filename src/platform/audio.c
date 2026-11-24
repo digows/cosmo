@@ -110,7 +110,7 @@ static void render_imf(int16_t *out, int frames)
     }
 }
 
-#if defined(_WIN32) || defined(__ANDROID__) || defined(COSMO_VITA_APP)
+#ifdef COSMO_MP3_MUSIC
 extern bool cosmo_mp3_decode(const char *path, int16_t **samples, uint64_t *frames);
 #endif
 
@@ -353,7 +353,7 @@ void audio_set_volumes(int sound_percent, int music_percent)
 
 bool audio_music_play_mp3(const char *path)
 {
-#if defined(_WIN32) || defined(__ANDROID__) || defined(COSMO_VITA_APP)
+#ifdef COSMO_MP3_MUSIC
     int16_t *decoded = NULL;
     uint64_t frames = 0;
     int16_t *old;
@@ -433,7 +433,6 @@ void audio_music_stop_mp3(void)
     if (old_imf) opl_reset();
 }
 
-#if defined(_WIN32) || defined(__ANDROID__) || defined(COSMO_VITA_APP)
 static int cache_sound_asset(const char *path)
 {
     if (!path) return -1;
@@ -449,7 +448,7 @@ static int cache_sound_asset(const char *path)
     if (is_wav) {
         decoded_ok = decode_sfx_wav(path, &decoded, &frames);
     } else {
-#if defined(_WIN32) || defined(__ANDROID__) || defined(COSMO_VITA_APP)
+#ifdef COSMO_MP3_MUSIC
         decoded_ok = cosmo_mp3_decode(path, &decoded, &frames);
 #else
         decoded_ok = false;
@@ -465,21 +464,14 @@ static int cache_sound_asset(const char *path)
     mp3_sound_cache[i].frames = frames;
     return (int)i;
 }
-#endif
 
 bool audio_sound_preload_asset(const char *path)
 {
-#if defined(_WIN32) || defined(__ANDROID__) || defined(COSMO_VITA_APP)
     return cache_sound_asset(path) >= 0;
-#else
-    (void)path;
-    return false;
-#endif
 }
 
 bool audio_sound_play_asset(const char *path)
 {
-#if defined(_WIN32) || defined(__ANDROID__) || defined(COSMO_VITA_APP)
     int asset = cache_sound_asset(path);
     if (asset < 0) return false;
     if (stream) SDL_LockAudioStream(stream);
@@ -488,10 +480,6 @@ bool audio_sound_play_asset(const char *path)
     mp3_sound_cursor = 0;
     if (stream) SDL_UnlockAudioStream(stream);
     return true;
-#else
-    (void)path;
-    return false;
-#endif
 }
 
 void audio_sound_stop_mp3(void)

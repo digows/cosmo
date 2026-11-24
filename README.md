@@ -2,7 +2,7 @@
 
 Cosmo Enhanced is an independently maintained fork focused on playing *Cosmo's Cosmic Adventure* on modern devices.
 
-Play on Windows and Android with optional widescreen, smoother scrolling and animations, and modern controls. An experimental PlayStation Vita homebrew build is also available.
+Play on Windows, macOS, and Android with optional widescreen, smoother scrolling and animations, and modern controls. An experimental PlayStation Vita homebrew build is also available.
 
 **[Download the latest release](https://github.com/GITitdoneboi/enhanced-cosmo/releases/latest)**
 
@@ -11,6 +11,7 @@ Play on Windows and Android with optional widescreen, smoother scrolling and ani
 ## Download and play
 
 - **Windows x64** — Extract the ZIP and launch `cosmo.exe`. If you own Episodes 2 and 3, select each episode in the launcher and locate its game files when prompted.
+- **macOS (Apple Silicon & Intel)** — Extract the ZIP and open `Cosmo.app`. Because the bundle is ad-hoc signed rather than notarised, macOS will ask for confirmation on first launch (open **System Settings → Privacy & Security** and click **Open Anyway**, or run `xattr -dr com.apple.quarantine Cosmo.app`). If you own Episodes 2 and 3, select each episode in the launcher and locate its game files when prompted.
 - **Android** — Install the APK on an ARM64 or x86-64 device. Touch controls are enabled by default and built into the launcher and gameplay HUD. Keyboards and gamepads also work. The launcher can [import Episodes 2 and 3](android/README.md#import-episodes-2-and-3) from your own game files.
 - **PlayStation Vita / Vita3K** — Install the [Vita VPK](https://github.com/GITitdoneboi/enhanced-cosmo/releases/download/v0.5.0/cosmo-v0.5.0-vita.vpk). This experimental port supports Episode 1; see the [Vita guide](vita/README.md).
 
@@ -28,7 +29,7 @@ Use **Game Settings** to adjust music and sound effects volumes separately or ch
 
 Open **Customise** in the episode launcher to choose how the game looks and sounds.
 
-- On Windows, choose the original view or enable **Widescreen** for a wider playfield. Android uses widescreen gameplay by default.
+- On Windows and macOS, choose the original view or enable **Widescreen** for a wider playfield. Android uses widescreen gameplay by default.
 - Enable **Smooth Gameplay** for smoother scrolling, character movement, and animations. It starts enabled on fresh Android installs.
 - Switch between the original and remixed Episode 1 soundtrack, or between original and softened sound effects.
 - Choose CRT effects, scanlines, both, or neither.
