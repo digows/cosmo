@@ -19,6 +19,9 @@
 #include "cosmo/png.h"
 #include "cosmo/video.h"
 #include "cosmo/font.h"
+#ifdef COSMO_VITA_AUDIO_DEBUG
+#include "cosmo/audio.h"
+#endif
 
 #define FB_PIXELS (EGA_SCREEN_W * EGA_SCREEN_H)
 #define FB_BYTES  (FB_PIXELS * 3)
@@ -226,10 +229,76 @@ static void apply_crt_scanlines(uint8_t *rgb, int width)
     }
 }
 
+#ifdef COSMO_VITA_AUDIO_DEBUG
+static uint64_t vita_filter_ns;
+static bool vita_measure_filters;
+
+enum { VITA_GAP_BINS = 64 };
+static struct {
+    uint64_t start_ns, last_present_ns, worst_gap_ns, worst_work_ns, worst_present_ns;
+    uint64_t motion_ns, ega_ns, filter_ns, texture_ns, draw_ns, overlay_ns, present_ns;
+    unsigned frames, interpolated, gaps, long_gaps, histogram[VITA_GAP_BINS];
+} vita_graphics;
+static bool vita_show_overlay;
+
+static void log_vita_graphics(uint64_t now, uint64_t work, uint64_t present, bool vsync)
+{
+    if (!vita_graphics.start_ns) vita_graphics.start_ns = now;
+    if (vita_graphics.last_present_ns) {
+        const uint64_t gap = now - vita_graphics.last_present_ns;
+        const uint64_t bin = SDL_min(gap / SDL_NS_PER_MS, VITA_GAP_BINS - 1);
+        ++vita_graphics.histogram[bin];
+        ++vita_graphics.gaps;
+        if (gap >= 25 * SDL_NS_PER_MS) ++vita_graphics.long_gaps;
+        if (gap > vita_graphics.worst_gap_ns) {
+            vita_graphics.worst_gap_ns = gap;
+            vita_graphics.worst_work_ns = work;
+            vita_graphics.worst_present_ns = present;
+        }
+    }
+    vita_graphics.last_present_ns = now;
+    const uint64_t elapsed = now - vita_graphics.start_ns;
+    if (elapsed < 3 * SDL_NS_PER_SECOND) return;
+
+    unsigned p95 = 0, count = 0;
+    const unsigned rank = (vita_graphics.gaps * 95 + 99) / 100;
+    for (; p95 + 1 < VITA_GAP_BINS; ++p95) {
+        count += vita_graphics.histogram[p95];
+        if (count >= rank) break;
+    }
+    const double frames = vita_graphics.frames;
+    SDL_Log("Cosmo GFX: %.1f FPS p95 gap >=%ums max %.1fms gaps>=25ms %u smooth %d interp %u/%u wide %d CRT %d scanlines %d overlay %d",
+            frames * SDL_NS_PER_SECOND / elapsed, p95,
+            (double)vita_graphics.worst_gap_ns / SDL_NS_PER_MS, vita_graphics.long_gaps,
+            smooth_gameplay_enabled, vita_graphics.interpolated, vita_graphics.frames,
+            video_is_widescreen(), mods_crt_shader_enabled(), mods_crt_scanlines_enabled(), vita_show_overlay);
+    const double scale = frames * 1000.0;
+    SDL_Log("Cosmo GFX average us/frame: motion %.0f EGA %.0f filters %.0f texture %.0f draw %.0f overlay %.0f present %.0f",
+            vita_graphics.motion_ns / scale, vita_graphics.ega_ns / scale,
+            vita_graphics.filter_ns / scale, vita_graphics.texture_ns / scale,
+            vita_graphics.draw_ns / scale, vita_graphics.overlay_ns / scale,
+            vita_graphics.present_ns / scale);
+    if (vita_graphics.long_gaps) {
+        SDL_Log("Cosmo GFX worst gap: %.2f ms, CPU render %.2f ms, present %.2f ms, vsync %d",
+                (double)vita_graphics.worst_gap_ns / SDL_NS_PER_MS,
+                (double)vita_graphics.worst_work_ns / SDL_NS_PER_MS,
+                (double)vita_graphics.worst_present_ns / SDL_NS_PER_MS, vsync);
+    }
+    SDL_memset(&vita_graphics, 0, sizeof vita_graphics);
+    vita_graphics.start_ns = vita_graphics.last_present_ns = now;
+}
+#endif
+
 static void apply_display_filters(uint8_t *rgb, int width)
 {
+#ifdef COSMO_VITA_AUDIO_DEBUG
+    const uint64_t start = vita_measure_filters ? SDL_GetTicksNS() : 0;
+#endif
     if (mods_crt_shader_enabled()) apply_crt_shader(rgb, width);
     if (mods_crt_scanlines_enabled()) apply_crt_scanlines(rgb, width);
+#ifdef COSMO_VITA_AUDIO_DEBUG
+    if (vita_measure_filters) vita_filter_ns += SDL_GetTicksNS() - start;
+#endif
 }
 
 static SDL_Window   *window;
@@ -1618,6 +1687,58 @@ bool video_init(const char *title, int scale, bool widescreen)
 }
 
 enum { FRAME_CAPTURE_COUNT = 120 };
+#ifdef COSMO_VITA_AUDIO_DEBUG
+static void draw_vita_audio_debug(void)
+{
+    static char lines[6][96];
+    static uint64_t window_start, previous, worst_ns, next_log;
+    static unsigned frames;
+    const uint64_t now = SDL_GetTicksNS();
+    if (!window_start) {
+        SDL_PathInfo marker;
+        const char *env = SDL_getenv("COSMO_VITA_OVERLAY");
+        vita_show_overlay = (env && SDL_strcmp(env, "1") == 0) ||
+            SDL_GetPathInfo("ux0:data/digows/Cosmo/graphics-overlay", &marker);
+        window_start = now;
+        next_log = now + 5 * SDL_NS_PER_SECOND;
+        audio_vita_debug_text(lines, 0);
+    }
+    if (previous && now - previous > worst_ns) worst_ns = now - previous;
+    previous = now;
+    ++frames;
+    if (now - window_start >= SDL_NS_PER_SECOND) {
+        audio_vita_debug_text(lines, frames);
+        SDL_snprintf(lines[5], sizeof lines[5], "render %.1f fps  max gap %.1fms  vsync %s",
+                     (double)frames * SDL_NS_PER_SECOND / (double)(now - window_start),
+                     (double)worst_ns / SDL_NS_PER_MS, renderer_vsync ? "on" : "off");
+        if (now >= next_log) {
+            SDL_Log("Cosmo Vita audio debug: %s | %s | %s | %s | %s | %s",
+                    lines[0], lines[1], lines[2], lines[3], lines[4], lines[5]);
+            next_log = now + 5 * SDL_NS_PER_SECOND;
+        }
+        window_start = now;
+        worst_ns = frames = 0;
+    }
+
+    if (!vita_show_overlay) return;
+    float old_x, old_y;
+    int width, height;
+    SDL_RendererLogicalPresentation presentation;
+    if (!SDL_GetRenderLogicalPresentation(renderer, &width, &height, &presentation)) return;
+    if (!SDL_GetRenderScale(renderer, &old_x, &old_y)) return;
+    SDL_SetRenderLogicalPresentation(renderer, 0, 0, SDL_LOGICAL_PRESENTATION_DISABLED);
+    SDL_SetRenderScale(renderer, 1.0f, 1.0f);
+    SDL_FRect background = {6, 6, 580, 68};
+    SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
+    SDL_RenderFillRect(renderer, &background);
+    SDL_SetRenderDrawColor(renderer, 170, 255, 190, 255);
+    for (int i = 0; i < 6; ++i)
+        SDL_RenderDebugText(renderer, 12, (float)(10 + i * 10), lines[i]);
+    SDL_SetRenderLogicalPresentation(renderer, width, height, presentation);
+    SDL_SetRenderScale(renderer, old_x, old_y);
+}
+#endif
+
 static uint8_t *frame_capture;
 static uint64_t frame_capture_times[FRAME_CAPTURE_COUNT];
 static unsigned frame_capture_count;
@@ -1669,23 +1790,51 @@ void video_present(void)
     uint8_t *pixels;
     int pitch;
     int row_bytes = present_width * 3;
+#ifdef COSMO_VITA_AUDIO_DEBUG
+    const uint64_t frame_start = SDL_GetTicksNS();
+    vita_filter_ns = 0;
+    vita_measure_filters = true;
+#endif
     bool interpolated = render_motion_frame(motion_output);
+#ifdef COSMO_VITA_AUDIO_DEBUG
+    const uint64_t motion_end = SDL_GetTicksNS();
+    const uint64_t motion_filters = vita_filter_ns;
+#endif
     if (interpolated && smooth_gameplay_enabled)
         apply_display_filters(motion_output, present_width);
 
-    if (!SDL_LockTexture(texture, NULL, (void **)&pixels, &pitch)) return;
+    if (!SDL_LockTexture(texture, NULL, (void **)&pixels, &pitch)) {
+#ifdef COSMO_VITA_AUDIO_DEBUG
+        vita_measure_filters = false;
+#endif
+        return;
+    }
 
-    if (pitch == row_bytes) {
-        if (interpolated) memcpy(pixels, motion_output, (size_t)row_bytes * EGA_SCREEN_H);
-        else render_presentation(pixels, true);
-    } else {
-        if (!interpolated) render_presentation(motion_output, true);
+#ifdef COSMO_VITA_AUDIO_DEBUG
+    uint64_t ega_time = 0;
+    const uint64_t filters_before_ega = vita_filter_ns;
+    const uint64_t ega_start = SDL_GetTicksNS();
+#endif
+
+    if (!interpolated) {
+        render_presentation(pitch == row_bytes ? pixels : motion_output, true);
+#ifdef COSMO_VITA_AUDIO_DEBUG
+        ega_time = SDL_GetTicksNS() - ega_start;
+#endif
+    }
+    if (pitch != row_bytes) {
         for (int y = 0; y < EGA_SCREEN_H; y++) {
             memcpy(pixels + (size_t)y * (size_t)pitch,
                    motion_output + (size_t)y * (size_t)row_bytes,
                    (size_t)row_bytes);
         }
+    } else if (interpolated) {
+        memcpy(pixels, motion_output, (size_t)row_bytes * EGA_SCREEN_H);
     }
+#ifdef COSMO_VITA_AUDIO_DEBUG
+    const uint64_t ega_filters = vita_filter_ns - filters_before_ega;
+    vita_measure_filters = false;
+#endif
 
     bool touch_hud = touch_controls && video_is_widescreen();
 
@@ -1698,6 +1847,9 @@ void video_present(void)
         }
     }
     SDL_UnlockTexture(texture);
+#ifdef COSMO_VITA_AUDIO_DEBUG
+    const uint64_t draw_start = SDL_GetTicksNS();
+#endif
     SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
     SDL_RenderClear(renderer);
     SDL_FRect touch_playfield = {TOUCH_GUTTER, 0, EGA_SCREEN_W, CORRECTED_EGA_H};
@@ -1706,7 +1858,31 @@ void video_present(void)
                       touch_hud ? &touch_wide : touch_controls ? &touch_playfield :
                       video_is_widescreen() ? &wide_destination : NULL);
     if (touch_controls && touch_context != TOUCH_HIDDEN) render_touch_controls(touch_hud);
-    if (SDL_RenderPresent(renderer) && frame_capture) {
+#ifdef COSMO_VITA_AUDIO_DEBUG
+    const uint64_t overlay_start = SDL_GetTicksNS();
+    draw_vita_audio_debug();
+    const uint64_t present_start = SDL_GetTicksNS();
+#endif
+    const bool presented = SDL_RenderPresent(renderer);
+#ifdef COSMO_VITA_AUDIO_DEBUG
+    if (presented && !frame_capture) {
+        const uint64_t end = SDL_GetTicksNS();
+        ++vita_graphics.frames;
+        vita_graphics.interpolated += interpolated;
+        vita_graphics.motion_ns += motion_end - frame_start - motion_filters;
+        const uint64_t ega = ega_time - ega_filters;
+        vita_graphics.ega_ns += ega;
+        vita_graphics.filter_ns += vita_filter_ns;
+        vita_graphics.texture_ns += draw_start - motion_end - ega - (vita_filter_ns - motion_filters);
+        vita_graphics.draw_ns += overlay_start - draw_start;
+        vita_graphics.overlay_ns += present_start - overlay_start;
+        vita_graphics.present_ns += end - present_start;
+        log_vita_graphics(end, present_start - frame_start, end - present_start, renderer_vsync);
+    } else {
+        SDL_memset(&vita_graphics, 0, sizeof vita_graphics);
+    }
+#endif
+    if (presented && frame_capture) {
         frame_capture_times[frame_capture_count++] = SDL_GetTicksNS();
         if (frame_capture_count == FRAME_CAPTURE_COUNT) save_frame_capture();
     }

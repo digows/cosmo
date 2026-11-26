@@ -140,6 +140,55 @@ int PlatformPlayMP3Sound(unsigned sound_number)
            audio_sound_play_asset(path);
 }
 
+#ifdef COSMO_VITA_APP
+static int vita_wav_handles[COSMO_SOUND_ASSET_COUNT + 1];
+static SDL_Thread *vita_wav_preload_thread;
+static SDL_AtomicInt vita_wav_preload_cancelled;
+static bool vita_wav_preload_ready;
+
+static int SDLCALL preload_vita_sound_effects(void *unused)
+{
+    (void)unused;
+    SDL_memset(vita_wav_handles, 0, sizeof vita_wav_handles);
+    for (unsigned sound = 1; sound <= COSMO_SOUND_ASSET_COUNT; ++sound) {
+        if (SDL_GetAtomicInt(&vita_wav_preload_cancelled)) return 0;
+        char path[1024];
+        if (!mods_sound_override(sound, path, sizeof path)) continue;
+        vita_wav_handles[sound] = audio_vita_preload_wav(path);
+        if (!vita_wav_handles[sound]) (void)audio_sound_preload_asset(path);
+    }
+    return 1;
+}
+
+void PlatformStartVitaSoundPreload(void)
+{
+    if (vita_wav_preload_thread || vita_wav_preload_ready) return;
+    SDL_SetAtomicInt(&vita_wav_preload_cancelled, 0);
+    vita_wav_preload_thread = SDL_CreateThread(preload_vita_sound_effects, "cosmo-sfx-preload", NULL);
+}
+
+void PlatformFinishVitaSoundPreload(bool cancel)
+{
+    if (cancel) SDL_SetAtomicInt(&vita_wav_preload_cancelled, 1);
+    if (vita_wav_preload_thread) {
+        int complete = 0;
+        SDL_WaitThread(vita_wav_preload_thread, &complete);
+        vita_wav_preload_thread = NULL;
+        vita_wav_preload_ready = complete != 0;
+    }
+    if (cancel) vita_wav_preload_ready = false;
+}
+
+int PlatformTryVitaWav(unsigned sound_number, unsigned priority)
+{
+    if (sound_number > COSMO_SOUND_ASSET_COUNT) return 0;
+    const bool critical = sound_number == SND_PLAYER_HURT ||
+                          sound_number == SND_PLAYER_DEATH ||
+                          sound_number == SND_DOOR_UNLOCK;
+    return audio_vita_play_wav(vita_wav_handles[sound_number], priority, critical);
+}
+#endif
+
 void PlatformHapticSound(unsigned sound_number)
 {
     int cue = HAPTIC_NONE;
@@ -217,6 +266,9 @@ void PlatformHapticMenuInput(uint8_t scancode)
 void PlatformStopMP3Sound(void)
 {
     audio_sound_stop_mp3();
+#ifdef COSMO_VITA_APP
+    audio_vita_stop_wavs();
+#endif
 }
 
 void PlatformSetAudioVolumes(int sound_percent, int music_percent)
@@ -491,7 +543,7 @@ static void release_gamepad_actions(void)
         gamepad_action(i, gamepad_action_code[i], false);
 }
 
-#ifdef __ANDROID__
+#if defined(__ANDROID__) || defined(COSMO_VITA_APP)
 static SDL_AtomicInt name_input_requested;
 static SDL_SpinLock name_input_lock;
 static uint8_t name_input_queue[64];
@@ -541,13 +593,29 @@ static void update_name_keyboard(void)
     SDL_PropertiesID props = SDL_CreateProperties();
     SDL_SetNumberProperty(props, SDL_PROP_TEXTINPUT_TYPE_NUMBER, SDL_TEXTINPUT_TYPE_TEXT_NAME);
     SDL_SetBooleanProperty(props, SDL_PROP_TEXTINPUT_AUTOCORRECT_BOOLEAN, false);
-    SDL_StartTextInputWithProperties(video_get_window(), props);
+    bool started = SDL_StartTextInputWithProperties(video_get_window(), props);
     SDL_DestroyProperties(props);
+#ifdef COSMO_VITA_APP
+    if (!started || !SDL_ScreenKeyboardShown(video_get_window())) {
+        SDL_Log("Cosmo input: Vita keyboard did not open: %s", SDL_GetError());
+        queue_name_input(0x1b);
+    }
+#else
+    (void)started;
+#endif
 }
 
 static bool handle_name_input(const SDL_Event *event)
 {
     if (!SDL_GetAtomicInt(&name_input_requested)) return false;
+#ifdef COSMO_VITA_APP
+    /* SDL's Vita backend sends Return before Hidden on Enter, and Hidden
+       alone after the text on Cancel. The name reader consumes the first. */
+    if (event->type == SDL_EVENT_SCREEN_KEYBOARD_HIDDEN) {
+        queue_name_input(0x1b);
+        return true;
+    }
+#endif
     if (event->type == SDL_EVENT_TEXT_INPUT) {
         for (const unsigned char *p = (const unsigned char *)event->text.text; *p; ++p) {
             if ((*p >= 'A' && *p <= 'Z') || (*p >= 'a' && *p <= 'z') ||
@@ -730,6 +798,19 @@ static void update_gamepad(bool focused)
         return;
     }
 
+#ifdef COSMO_VITA_APP
+    static bool dismissing_keyboard;
+    if (SDL_GetAtomicInt(&name_input_requested)) dismissing_keyboard = true;
+    if (dismissing_keyboard) {
+        release_gamepad_actions();
+        if (!SDL_GetAtomicInt(&name_input_requested) &&
+            !gamepad_button(SDL_GAMEPAD_BUTTON_SOUTH) &&
+            !gamepad_button(SDL_GAMEPAD_BUTTON_EAST))
+            dismissing_keyboard = false;
+        return;
+    }
+#endif
+
     Sint16 x = SDL_GetGamepadAxis(gamepad, SDL_GAMEPAD_AXIS_LEFTX);
     Sint16 y = SDL_GetGamepadAxis(gamepad, SDL_GAMEPAD_AXIS_LEFTY);
     const Sint16 deadzone = 10000;
@@ -754,7 +835,11 @@ static void update_gamepad(bool focused)
     /* Start opens the same in-game menu as F1. */
     gamepad_action(7, 0x3B, gamepad_button(SDL_GAMEPAD_BUTTON_START));
     /* Left shoulder acts as Escape in menus. */
-    gamepad_action(8, 0x01, !in_settings && gamepad_button(SDL_GAMEPAD_BUTTON_LEFT_SHOULDER));
+    bool back = !in_settings && gamepad_button(SDL_GAMEPAD_BUTTON_LEFT_SHOULDER);
+#ifdef COSMO_VITA_APP
+    back = back || gamepad_button(SDL_GAMEPAD_BUTTON_BACK);
+#endif
+    gamepad_action(8, 0x01, back);
 }
 
 static Uint16 boost_rumble(Uint16 strength)
@@ -1099,11 +1184,19 @@ int main(int argc, char *argv[])
     /* Silence is survivable; a missing audio device must not stop the game. */
     if (audio_init()) {
         /* Decode enabled sound replacements before the first gameplay cue. */
+#ifdef COSMO_VITA_APP
+        if (!vita_wav_preload_ready) {
+            SDL_SetAtomicInt(&vita_wav_preload_cancelled, 0);
+            (void)preload_vita_sound_effects(NULL);
+        }
+        vita_wav_preload_ready = false;
+#else
         for (unsigned sound = 1; sound <= COSMO_SOUND_ASSET_COUNT; ++sound) {
             char path[1024];
-            if (mods_sound_override(sound, path, sizeof path))
-                (void)audio_sound_preload_asset(path);
+            if (!mods_sound_override(sound, path, sizeof path)) continue;
+            (void)audio_sound_preload_asset(path);
         }
+#endif
     }
 
     SDL_SetAtomicInt(&game_running, 1);
@@ -1128,11 +1221,11 @@ int main(int argc, char *argv[])
     while (SDL_GetAtomicInt(&game_running)) {
         SDL_Event event;
 
-#ifdef __ANDROID__
+#if defined(__ANDROID__) || defined(COSMO_VITA_APP)
         update_name_keyboard();
 #endif
         while (video_poll_event(&event)) {
-#ifdef __ANDROID__
+#if defined(__ANDROID__) || defined(COSMO_VITA_APP)
             if (handle_name_input(&event)) continue;
 #endif
             if (event.type == SDL_EVENT_QUIT) {

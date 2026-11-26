@@ -1,8 +1,7 @@
-# PlayStation Vita homebrew prototype
+# PlayStation Vita port
 
-This experimental target builds an Episode 1-only VPK with SDL3's Vita
-backend. It requires VitaSDK and a PS Vita capable of running homebrew. SDL3
-is built from source for the Vita toolchain.
+The Vita port runs Episode 1 using SDL3 and GXM. Install the VPK through
+VitaShell on a homebrew-enabled Vita. Building from source requires VitaSDK.
 
 ## Build
 
@@ -29,10 +28,15 @@ source. Otherwise copy your own Episode 1 files to
 
 The VPK includes the bundled CRT, MP3 soundtrack, smooth-gameplay,
 soft-sound-effects, and widescreen mods. MP3 tracks are decoded with the Vita
-SDK's audio decoder; original IMF music and bundled WAV sound-effect
-replacements are also supported.
+SDK's native MP3 decoder on a background thread. Original IMF music remains
+available. The launcher preloads the WAV sound effects, which can play on up
+to four voices.
 
-The prototype starts with the existing episode launcher and can play Episode
-1. Use the Vita D-pad or left stick to move, Cross to jump, Circle to throw a
-bomb or go back, and Start to open the in-game menu. Episode import and
-Episodes 2/3 are not part of this first target.
+Use the D-pad or left stick to move, Cross to jump or confirm, Circle to throw
+a bomb, and Start to open the in-game menu. SELECT or L goes back or opens the
+quit prompt in gameplay. Qualifying high scores use the Vita's on-screen
+keyboard. Episode import and Episodes 2 and 3 are unavailable on Vita.
+
+Set `COSMO_VITA_AUDIO_DEBUG=ON` for an instrumented build with a separate
+LiveArea bubble. It logs renderer and audio timings. To show its overlay,
+create `ux0:data/digows/Cosmo/graphics-overlay` before launching it.

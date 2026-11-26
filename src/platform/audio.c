@@ -45,7 +45,9 @@
 
 static SDL_AudioStream *stream;
 #ifdef COSMO_VITA_APP
+#include "mp3_stream_vita.h"
 static SDL_AudioDeviceID audio_device;
+static VitaMusicStream *vita_music;
 #endif
 static double phase;          /* 0..1 across one square wave cycle */
 
@@ -70,10 +72,54 @@ static struct {
     uint64_t frames;
 } mp3_sound_cache[SFX_CACHE_LIMIT];
 static size_t mp3_sound_cache_count;
+#ifdef COSMO_VITA_APP
+#define VITA_WAV_VOICES 4
+static struct {
+    int asset;
+    uint64_t cursor;
+    unsigned priority;
+    uint32_t sequence;
+} wav_voices[VITA_WAV_VOICES];
+static uint32_t wav_sequence;
+#ifdef COSMO_VITA_AUDIO_DEBUG
+static unsigned wav_coalesced, wav_dropped, wav_stolen;
+#endif
+#endif
 static SDL_AtomicInt sound_volume_percent = { 100 };
 static SDL_AtomicInt music_volume_percent = { 100 };
 static SDL_AtomicInt music_paused;
 static int music_fade_frames = MUSIC_FADE_FRAMES; /* Audio callback only. */
+
+#ifdef COSMO_VITA_AUDIO_DEBUG
+static int debug_device_rate, debug_device_channels, debug_device_frames;
+static int debug_callback_max_us, debug_callback_total_us, debug_callback_calls;
+
+void audio_vita_debug_text(char lines[5][96], unsigned rendered_frames)
+{
+    if (stream) SDL_LockAudioStream(stream);
+    const VitaMusicStats m = vita_music_stats(vita_music);
+    const char *mode = vita_music ? (m.failed ? "MP3 error" : "MP3 stream") :
+        imf_music_data ? "IMF" : "idle";
+    SDL_snprintf(lines[0], 96, "%s %d Hz/%dch  PCM %dms  underruns %d", mode,
+                 m.source_rate, m.source_channels, m.buffered_ms, m.underruns);
+    SDL_snprintf(lines[1], 96, "prebuffer %dms  first mix %dms  target 150ms",
+                 m.prebuffer_ms, m.first_mix_ms);
+    SDL_snprintf(lines[2], 96, "us: read %d init %d decode %d resample %d alloc %d",
+                 m.read_us, m.setup_us, m.decode_us, m.convert_us, m.allocation_us);
+    SDL_snprintf(lines[3], 96, "mix %d>%dHz/%dch q%d cb %d/%dus avg/max  %uus/frame",
+                 SAMPLE_RATE, debug_device_rate, debug_device_channels, debug_device_frames,
+                 debug_callback_calls ? debug_callback_total_us / debug_callback_calls : 0,
+                 debug_callback_max_us,
+                 rendered_frames ? (unsigned)debug_callback_total_us / rendered_frames : 0);
+    unsigned voices = 0;
+    for (int i = 0; i < VITA_WAV_VOICES; ++i) voices += wav_voices[i].asset != 0;
+    SDL_snprintf(lines[4], 96, "WAV %u/%d  coalesced %u  dropped %u  stolen %u  paused %d",
+                 voices, VITA_WAV_VOICES, wav_coalesced, wav_dropped, wav_stolen,
+                 SDL_GetAtomicInt(&music_paused));
+    debug_callback_max_us = debug_callback_total_us = debug_callback_calls = 0;
+    if (stream) SDL_UnlockAudioStream(stream);
+}
+#endif
 
 static void render_imf(int16_t *out, int frames)
 {
@@ -300,6 +346,15 @@ static void render(int16_t *out, int frames)
     bool playing_imf = imf_music_data && imf_music_size >= 4;
     float music_gain = music_volume / 100.0f;
 
+#ifdef COSMO_VITA_APP
+    if (vita_music) {
+        music_gain *= MP3_MUSIC_GAIN;
+        if (paused && music_fade_frames == 0)
+            SDL_memset(out, 0, (size_t)frames * sizeof(*out));
+        else
+            vita_music_render(vita_music, out, frames);
+    } else
+#endif
     if (playing_mp3) {
         music_gain *= MP3_MUSIC_GAIN;
         for (int i = 0; i < frames; ++i) {
@@ -329,6 +384,17 @@ static void render(int16_t *out, int frames)
         if (mp3_sound_samples && mp3_sound_cursor < mp3_sound_frames)
             mixed += (int32_t)((float)mp3_sound_samples[mp3_sound_cursor++] * MP3_MUSIC_GAIN * sound_volume / 100.0f);
 
+#ifdef COSMO_VITA_APP
+        for (int voice = 0; voice < VITA_WAV_VOICES; ++voice) {
+            const int asset = wav_voices[voice].asset - 1;
+            if (asset < 0) continue;
+            const uint64_t cursor = wav_voices[voice].cursor++;
+            mixed += mp3_sound_cache[asset].samples[cursor] * sound_volume / 200;
+            if (wav_voices[voice].cursor == mp3_sound_cache[asset].frames)
+                wav_voices[voice].asset = 0;
+        }
+#endif
+
         if (mixed > 32767) mixed = 32767;
         if (mixed < -32768) mixed = -32768;
 
@@ -353,7 +419,22 @@ void audio_set_volumes(int sound_percent, int music_percent)
 
 bool audio_music_play_mp3(const char *path)
 {
-#ifdef COSMO_MP3_MUSIC
+#ifdef COSMO_VITA_APP
+    VitaMusicStream *next = vita_music_start(path);
+    if (!next) return false;
+    if (stream) SDL_LockAudioStream(stream);
+    VitaMusicStream *old = vita_music;
+    uint8_t *old_imf = imf_music_data;
+    vita_music = next;
+    imf_music_data = NULL;
+    imf_music_size = imf_music_cursor = 0;
+    imf_music_tick = imf_music_next_due = 0;
+    imf_frames_to_tick = 0.0;
+    if (stream) SDL_UnlockAudioStream(stream);
+    vita_music_stop(old);
+    free(old_imf);
+    return true;
+#elif defined(COSMO_MP3_MUSIC)
     int16_t *decoded = NULL;
     uint64_t frames = 0;
     int16_t *old;
@@ -397,6 +478,10 @@ bool audio_music_play_imf(const void *data, size_t size)
     memcpy(copy, data, size);
 
     if (stream) SDL_LockAudioStream(stream);
+#ifdef COSMO_VITA_APP
+    VitaMusicStream *old_vita = vita_music;
+    vita_music = NULL;
+#endif
     old_mp3 = mp3_samples;
     old_imf = imf_music_data;
     mp3_samples = NULL;
@@ -408,6 +493,9 @@ bool audio_music_play_imf(const void *data, size_t size)
     imf_music_next_due = 0;
     imf_frames_to_tick = 0.0;
     if (stream) SDL_UnlockAudioStream(stream);
+#ifdef COSMO_VITA_APP
+    vita_music_stop(old_vita);
+#endif
     free(old_mp3);
     free(old_imf);
     opl_reset();
@@ -419,6 +507,10 @@ void audio_music_stop_mp3(void)
     int16_t *old;
     uint8_t *old_imf;
     if (stream) SDL_LockAudioStream(stream);
+#ifdef COSMO_VITA_APP
+    VitaMusicStream *old_vita = vita_music;
+    vita_music = NULL;
+#endif
     old = mp3_samples;
     old_imf = imf_music_data;
     mp3_samples = NULL;
@@ -428,6 +520,9 @@ void audio_music_stop_mp3(void)
     imf_music_tick = imf_music_next_due = 0;
     imf_frames_to_tick = 0.0;
     if (stream) SDL_UnlockAudioStream(stream);
+#ifdef COSMO_VITA_APP
+    vita_music_stop(old_vita);
+#endif
     free(old);
     free(old_imf);
     if (old_imf) opl_reset();
@@ -470,6 +565,62 @@ bool audio_sound_preload_asset(const char *path)
     return cache_sound_asset(path) >= 0;
 }
 
+#ifdef COSMO_VITA_APP
+int audio_vita_preload_wav(const char *path)
+{
+    const char *extension = strrchr(path, '.');
+    if (!extension || SDL_strcasecmp(extension, ".wav")) return 0;
+    return cache_sound_asset(path) + 1;
+}
+
+bool audio_vita_play_wav(int handle, unsigned priority, bool critical)
+{
+    if (!handle || !stream) return false;
+    SDL_LockAudioStream(stream);
+    const int limit = critical ? VITA_WAV_VOICES : VITA_WAV_VOICES - 1;
+    int chosen = -1, victim = -1;
+    for (int i = 0; i < limit; ++i) {
+        if (wav_voices[i].asset == handle && wav_voices[i].cursor < SAMPLE_RATE / 50) {
+#ifdef COSMO_VITA_AUDIO_DEBUG
+            ++wav_coalesced;
+#endif
+            SDL_UnlockAudioStream(stream);
+            return true;
+        }
+        if (!wav_voices[i].asset) {
+            chosen = i; /* Critical cues prefer the reserved slot. */
+        } else if (wav_voices[i].priority <= priority &&
+                   (victim < 0 || wav_voices[i].priority < wav_voices[victim].priority ||
+                    (wav_voices[i].priority == wav_voices[victim].priority &&
+                     (int32_t)(wav_voices[i].sequence - wav_voices[victim].sequence) < 0))) {
+            victim = i;
+        }
+    }
+    if (chosen < 0) {
+        chosen = victim;
+#ifdef COSMO_VITA_AUDIO_DEBUG
+        if (chosen < 0) ++wav_dropped;
+        else ++wav_stolen;
+#endif
+    }
+    if (chosen >= 0) {
+        wav_voices[chosen].asset = handle;
+        wav_voices[chosen].cursor = 0;
+        wav_voices[chosen].priority = priority;
+        wav_voices[chosen].sequence = ++wav_sequence;
+    }
+    SDL_UnlockAudioStream(stream);
+    return true;
+}
+
+void audio_vita_stop_wavs(void)
+{
+    if (stream) SDL_LockAudioStream(stream);
+    SDL_memset(wav_voices, 0, sizeof wav_voices);
+    if (stream) SDL_UnlockAudioStream(stream);
+}
+#endif
+
 bool audio_sound_play_asset(const char *path)
 {
     int asset = cache_sound_asset(path);
@@ -494,6 +645,9 @@ static void SDLCALL audio_callback(void *userdata, SDL_AudioStream *audio_stream
                                    int additional_amount, int total_amount)
 {
     int16_t buffer[BUFFER_FRAMES];
+#ifdef COSMO_VITA_AUDIO_DEBUG
+    const uint64_t callback_start = SDL_GetTicksNS();
+#endif
 
     (void)userdata;
     (void)total_amount;
@@ -516,6 +670,14 @@ static void SDLCALL audio_callback(void *userdata, SDL_AudioStream *audio_stream
 
         additional_amount -= frames * (int)sizeof(int16_t);
     }
+#ifdef COSMO_VITA_AUDIO_DEBUG
+    const int elapsed = (int)((SDL_GetTicksNS() - callback_start) / 1000);
+    if (elapsed > debug_callback_max_us) debug_callback_max_us = elapsed;
+    if (debug_callback_calls < 100000) {
+        debug_callback_total_us += elapsed;
+        ++debug_callback_calls;
+    }
+#endif
 }
 
 /* ------------------------------------------------------------------------ */
@@ -535,7 +697,13 @@ static bool audio_open_vita_stream(const SDL_AudioSpec *source_spec)
                                        &device_request);
     if (!audio_device) return false;
 
-    if (!SDL_GetAudioDeviceFormat(audio_device, &device_spec, NULL)) goto fail;
+    int device_frames;
+    if (!SDL_GetAudioDeviceFormat(audio_device, &device_spec, &device_frames)) goto fail;
+#ifdef COSMO_VITA_AUDIO_DEBUG
+    debug_device_rate = device_spec.freq;
+    debug_device_channels = device_spec.channels;
+    debug_device_frames = device_frames;
+#endif
     stream = SDL_CreateAudioStream(source_spec, &device_spec);
     if (!stream) goto fail;
     if (!SDL_BindAudioStream(audio_device, stream)) goto fail;
@@ -602,10 +770,13 @@ bool audio_init(void)
     return true;
 }
 
-void audio_shutdown(void)
+static void close_audio_device(void)
 {
     audio_music_stop_mp3();
     audio_sound_stop_mp3();
+#ifdef COSMO_VITA_APP
+    audio_vita_stop_wavs();
+#endif
     if (stream) {
         SDL_DestroyAudioStream(stream);
         stream = NULL;
@@ -617,6 +788,18 @@ void audio_shutdown(void)
     }
 #endif
     wav_close();
+}
+
+#ifdef COSMO_VITA_APP
+void audio_vita_shutdown_keep_effects(void)
+{
+    close_audio_device();
+}
+#endif
+
+void audio_shutdown(void)
+{
+    close_audio_device();
     for (size_t i = 0; i < mp3_sound_cache_count; ++i)
         free(mp3_sound_cache[i].samples);
     memset(mp3_sound_cache,0,sizeof mp3_sound_cache);

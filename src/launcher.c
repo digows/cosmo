@@ -72,6 +72,11 @@ static Uint64 launcher_next_gamepad_scan;
 static bool launcher_gamepad_previous[6];
 static Uint64 launcher_gamepad_repeat_at[4];
 static bool launcher_audio_ready;
+#ifdef COSMO_VITA_APP
+void PlatformStartVitaSoundPreload(void);
+void PlatformFinishVitaSoundPreload(bool cancel);
+static bool launcher_handoff_audio;
+#endif
 static int launcher_music_mode = -1;
 static SDL_Thread *launcher_music_thread;
 static SDL_AtomicInt launcher_music_result;
@@ -155,7 +160,12 @@ static void launcher_audio_shutdown(void)
         SDL_WaitThread(launcher_music_thread, NULL);
         launcher_music_thread = NULL;
     }
-    audio_shutdown();
+#ifdef COSMO_VITA_APP
+    PlatformFinishVitaSoundPreload(!launcher_handoff_audio);
+    if (launcher_handoff_audio) audio_vita_shutdown_keep_effects();
+    else
+#endif
+        audio_shutdown();
     launcher_audio_ready = false;
     launcher_music_mode = -1;
 }
@@ -981,7 +991,13 @@ static int run_menu(void)
                 launcher_menu_haptic(true);
                 if (selected == EPISODE_COUNT) {
                     int preview_episode = episodes[first_present()].number;
+#ifdef COSMO_VITA_APP
+                    PlatformFinishVitaSoundPreload(true);
+#endif
                     if (run_mods_menu(preview_episode)) return 0;
+#ifdef COSMO_VITA_APP
+                    if (launcher_audio_ready) PlatformStartVitaSoundPreload();
+#endif
                     (void)draw_background(preview_episode);
                     install_palette();
                     ega_select_active_page(0);
@@ -1062,9 +1078,15 @@ static int run_episode(int number)
     if (number != 1) return 1;
     /* Release the launcher's SDL window before the embedded episode creates
      * its own. Mobile platforms host both entry points in one process. */
+#ifdef COSMO_VITA_APP
+    launcher_handoff_audio = true;
+#endif
     launcher_audio_shutdown();
     video_shutdown();
     int result = episode_main(1, episode_argv);
+#ifdef COSMO_VITA_APP
+    audio_shutdown();
+#endif
 #ifdef __ANDROID__
     if (module) SDL_UnloadObject(module);
 #endif
@@ -1248,6 +1270,9 @@ int main(int argc, char *argv[])
 #endif
         launcher_audio_ready = audio_init();
         launcher_sync_music();
+#ifdef COSMO_VITA_APP
+        if (launcher_audio_ready) PlatformStartVitaSoundPreload();
+#endif
 
         number = run_menu();
 

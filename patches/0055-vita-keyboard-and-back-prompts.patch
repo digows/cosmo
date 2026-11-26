@@ -1,0 +1,157 @@
+diff --git a/glue.h b/glue.h
+--- a/glue.h
++++ b/glue.h
+@@ -225,6 +225,11 @@
+ #define TOUCH_MENU_TEXT(keyboard, touch) (PlatformTouchControlsEnabled() ? (touch) : (keyboard))
+ #else
+ #define TOUCH_MENU_TEXT(keyboard, touch) (keyboard)
++#endif
++#ifdef COSMO_VITA_APP
++#define VITA_PAD_TEXT(other, vita) (vita)
++#else
++#define VITA_PAD_TEXT(other, vita) (other)
+ #endif
+ void PlatformSetMusicPaused(int paused);
+ int PlatformLowGravity(void);
+diff --git a/game1.c b/game1.c
+--- a/game1.c
++++ b/game1.c
+@@ -9657,7 +9657,7 @@
+ static byte PromptRestoreGame(void)
+ {
+     byte scancode;
+-    word x = UnfoldTextFrame(11, 7, 28, "Restore a game.", TOUCH_MENU_TEXT("Press ESC to quit.", "Select or Back."));
++    word x = UnfoldTextFrame(11, 7, 28, "Restore a game.", VITA_PAD_TEXT(TOUCH_MENU_TEXT("Press ESC to quit.", "Select or Back."), "L / SELECT: Back."));
+ 
+     DrawTextLine(x, 14, " What game number (1-9)?");
+     scancode = PromptGameSlot(x + 24, 14);
+@@ -9692,7 +9692,7 @@
+     word tmphealth, tmpbombs, tmplevel, tmpstars, tmpbars;
+     dword tmpscore;
+     bbool saved;
+-    word x = UnfoldTextFrame(8, 10, 28, "Save a game.", TOUCH_MENU_TEXT("Press ESC to quit.", "Select or Back."));
++    word x = UnfoldTextFrame(8, 10, 28, "Save a game.", VITA_PAD_TEXT(TOUCH_MENU_TEXT("Press ESC to quit.", "Select or Back."), "L / SELECT: Back."));
+ 
+     DrawTextLine(x, 11, " What game number (1-9)?");
+     DrawTextLine(x, 13, " NOTE: Game is saved at");
+@@ -9955,7 +9955,7 @@
+ */
+ static byte ShowHelpMenu(void)
+ {
+-    word x = UnfoldTextFrame(2, 12, 22, "HELP MENU", TOUCH_MENU_TEXT("Press ESC to quit.", "Select or Back."));
++    word x = UnfoldTextFrame(2, 12, 22, "HELP MENU", VITA_PAD_TEXT(TOUCH_MENU_TEXT("Press ESC to quit.", "Select or Back."), "L / SELECT: Back."));
+     static const byte menu_keys[] = {
+         SCANCODE_S, SCANCODE_R, SCANCODE_H, SCANCODE_G, SCANCODE_V, SCANCODE_Q
+     };
+diff --git a/game2.c b/game2.c
+--- a/game2.c
++++ b/game2.c
+@@ -1399,7 +1399,7 @@
+ table, and if so, prompt for a name to go along with it. Display the high score
+ table at the end whether the prompt was displayed or not.
+ */
+-#ifdef __ANDROID__
++#if defined(__ANDROID__) || defined(COSMO_VITA_APP)
+ void PlatformSetNameInput(int enabled);
+ int PlatformReadNameInput(void);
+ 
+@@ -1453,7 +1453,9 @@
+         highScoreNames[i][0] = '\0';
+         highScoreValues[i] = gameScore;
+ 
+-#ifdef __ANDROID__
++#ifdef COSMO_VITA_APP
++        x = UnfoldTextFrame(5, 7, 36, "You made it into the hall of fame!", "Use the Vita keyboard.");
++#elif defined(__ANDROID__)
+         x = UnfoldTextFrame(5, 7, 36, "You made it into the hall of fame!", "Enter to save. Back to cancel.");
+ #else
+         x = UnfoldTextFrame(5, 7, 36, "You made it into the hall of fame!", "Press ESC to quit.");
+@@ -1466,7 +1468,7 @@
+         Name length is likely constrained to prevent hitting the frame edge when
+         viewing the table.
+         */
+-#ifdef __ANDROID__
++#if defined(__ANDROID__) || defined(COSMO_VITA_APP)
+         ReadHighScoreName(x + 16, 8, highScoreNames[i], sizeof(HighScoreName) - 2);
+ #else
+         ReadAndEchoText(x + 16, 8, highScoreNames[i], sizeof(HighScoreName) - 2);
+@@ -2307,7 +2309,7 @@
+ 
+     x = UnfoldTextFrame(4, 11, 34, "During the game, you can...", TOUCH_MENU_TEXT("Press ANY key.", "Tap Select."));
+     DrawTextLine(x, 7,  " Press 'P' to PAUSE GAME");
+-    DrawTextLine(x, 8,  " Press 'ESC' or 'Q' to QUIT game");
++    DrawTextLine(x, 8,  VITA_PAD_TEXT(" Press 'ESC' or 'Q' to QUIT game", " Press L or SELECT to QUIT"));
+     DrawTextLine(x, 9,  " Press 'S' to toggle SOUND");
+     DrawTextLine(x, 10, " Press 'M' to toggle MUSIC");
+     DrawTextLine(x, 11, " Press 'F1' to show HELP");
+@@ -2334,7 +2336,7 @@
+ page1:
+     FadeOutCustom(1);
+ 
+-    x = UnfoldTextFrame(0, 24, 38, "Instructions  Page One of Five", "Press PgDn for next.  ESC to Exit.");
++    x = UnfoldTextFrame(0, 24, 38, "Instructions  Page One of Five", VITA_PAD_TEXT("Press PgDn for next.  ESC to Exit.", "Down: Next. L / SELECT: Back."));
+     DrawTextLine(x, 4,  " OBJECT OF GAME:");
+     DrawTextLine(x, 6,  " On a strange and dangerous planet,");
+     DrawTextLine(x, 8,  " Cosmo must find and rescue his");
+@@ -2354,7 +2356,7 @@
+ page2:
+     FadeOutCustom(1);
+ 
+-    x = UnfoldTextFrame(0, 24, 38, "Instructions  Page Two of Five", TOUCH_MENU_TEXT("Press PgUp or PgDn.  Esc to Exit.", "Up/Down to turn pages. Back."));
++    x = UnfoldTextFrame(0, 24, 38, "Instructions  Page Two of Five", VITA_PAD_TEXT(TOUCH_MENU_TEXT("Press PgUp or PgDn.  Esc to Exit.", "Up/Down to turn pages. Back."), "Up/Down: Pages. L / SELECT: Back."));
+     DrawTextLine(x, 4,  " Cosmo has a very special ability:");
+     DrawTextLine(x, 6,  " He can use his suction hands to");
+     DrawTextLine(x, 8,  " climb up walls.");
+@@ -2371,7 +2373,7 @@
+ page3:
+     FadeOutCustom(1);
+ 
+-    x = UnfoldTextFrame(0, 24, 38, "Instructions  Page Three of Five", TOUCH_MENU_TEXT("Press PgUp or PgDn.  Esc to Exit.", "Up/Down to turn pages. Back."));
++    x = UnfoldTextFrame(0, 24, 38, "Instructions  Page Three of Five", VITA_PAD_TEXT(TOUCH_MENU_TEXT("Press PgUp or PgDn.  Esc to Exit.", "Up/Down to turn pages. Back."), "Up/Down: Pages. L / SELECT: Back."));
+     DrawTextLine(x,     4,  " Cosmo can jump onto attacking");
+     DrawTextLine(x,     6,  " creatures without being harmed.");
+     DrawTextLine(x,     8,  " This is also Cosmo's way of");
+@@ -2389,7 +2391,7 @@
+ page4:
+     FadeOutCustom(1);
+ 
+-    x = UnfoldTextFrame(0, 24, 38, "Instructions  Page Four of Five", TOUCH_MENU_TEXT("Press PgUp or PgDn.  Esc to Exit.", "Up/Down to turn pages. Back."));
++    x = UnfoldTextFrame(0, 24, 38, "Instructions  Page Four of Five", VITA_PAD_TEXT(TOUCH_MENU_TEXT("Press PgUp or PgDn.  Esc to Exit.", "Up/Down to turn pages. Back."), "Up/Down: Pages. L / SELECT: Back."));
+     DrawTextLine(x,     5,  " Use the up and down arrow keys to");
+     DrawTextLine(x,     7,  " make Cosmo look up and down,");
+     DrawTextLine(x,     9,  " enabling him to see areas that");
+@@ -2404,7 +2406,7 @@
+ 
+     FadeOutCustom(1);
+ 
+-    x = UnfoldTextFrame(0, 24, 38, "Instructions  Page Five of Five", TOUCH_MENU_TEXT("Press PgUp.  Esc to Exit.", "Up for previous page. Back."));
++    x = UnfoldTextFrame(0, 24, 38, "Instructions  Page Five of Five", VITA_PAD_TEXT(TOUCH_MENU_TEXT("Press PgUp.  Esc to Exit.", "Up for previous page. Back."), "Up: Previous. L / SELECT: Back."));
+     DrawTextLine(x, 5,  " In Cosmo's Cosmic Adventure, it's");
+     DrawTextLine(x, 7,  " up to you to discover the use of");
+     DrawTextLine(x, 9,  " all the neat and strange objects");
+@@ -2773,9 +2775,16 @@
+ */
+ bbool PromptQuitConfirm(void)
+ {
++#ifdef COSMO_VITA_APP
++    word x = UnfoldTextFrame(11, 4, 29, "Quit the game?", "Cross: Yes. SELECT: No.");
++    byte scancode = WaitSpinner(x + 25, 13);
++    if (scancode == SCANCODE_ESC) return false;
++    if (scancode == scancodeJump) return true;
++#else
+     bbool touch = TOUCH_MENU_TEXT(false, true);
+     word x = UnfoldTextFrame(11, 4, touch ? 22 : 18, touch ? "Quit the game?" : "Are you sure you", touch ? "Select or Back." : "want to quit? ");
+     byte scancode = WaitSpinner(x + (touch ? 19 : 14), 13);
++#endif
+ 
+     if (scancode == SCANCODE_Y || scancode == SCANCODE_SPACE ||
+         scancode == SCANCODE_ENTER) return true;
+@@ -2855,7 +2864,7 @@
+ 
+     isSoundEnabled = true;
+ 
+-    x = UnfoldTextFrame(2, 7, 34, "Test Sound", "Press ESC to quit.");
++    x = UnfoldTextFrame(2, 7, 34, "Test Sound", VITA_PAD_TEXT("Press ESC to quit.", "L / SELECT: Back."));
+     DrawTextLine(x, 4, " Press \x18 or \x19 to change sound #.");
+     DrawTextLine(x, 5, "   Press Enter to hear sound.");
+ 

@@ -45,4 +45,15 @@ bool audio_sound_preload_asset(const char *path);
 void audio_sound_stop_mp3(void);
 void audio_set_volumes(int sound_percent, int music_percent);
 
+#ifdef COSMO_VITA_APP
+void audio_vita_shutdown_keep_effects(void);
+int audio_vita_preload_wav(const char *path);
+bool audio_vita_play_wav(int handle, unsigned priority, bool critical);
+void audio_vita_stop_wavs(void);
+#endif
+
+#ifdef COSMO_VITA_AUDIO_DEBUG
+void audio_vita_debug_text(char lines[5][96], unsigned rendered_frames);
+#endif
+
 #endif /* COSMO_AUDIO_H */

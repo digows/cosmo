@@ -3,6 +3,8 @@
 
 #include <SDL3/SDL.h>
 
+#include <algorithm>
+#include <atomic>
 #include <cstdint>
 #include <cstdlib>
 #include <limits>
@@ -12,6 +14,23 @@
 #include <vector>
 
 #include "cosmo/opl.h"
+#include "mp3_stream_vita.h"
+
+struct VitaMusicStream {
+    static constexpr unsigned capacity = 32768;
+    static constexpr unsigned prebuffer = OPL_SAMPLE_RATE * 150 / 1000;
+    std::atomic<unsigned> read{0}, written{0};
+    std::atomic<bool> cancelled{false}, failed{false};
+    std::atomic<int> ready_ms{-1}, first_mix_ms{-1}, underruns{0};
+    std::atomic<int> read_us{0}, setup_us{0}, decode_us{0}, convert_us{0};
+    std::atomic<int> source_rate{0}, source_channels{0};
+    int allocation_us = 0;
+    int16_t pcm[capacity];
+    SDL_Thread *worker = nullptr;
+    char *path = nullptr;
+    uint64_t started_ns = 0;
+    bool playing = false; // Audio callback only.
+};
 
 namespace {
 
@@ -118,7 +137,7 @@ bool init_decoder_library()
 
     SceAudiodecInitParam param = {};
     param.mp3.size = sizeof(SceAudiodecInitStreamParam);
-    param.mp3.totalStreams = 1;
+    param.mp3.totalStreams = 2;
 
     const SceInt32 result =
         sceAudiodecInitLibrary(SCE_AUDIODEC_TYPE_MP3, &param);
@@ -143,9 +162,12 @@ struct decoder_handle {
     }
 };
 
+template <typename Sink, typename Cancelled>
 bool decode_frames(const uint8_t *data, size_t size, size_t offset,
-                   const mp3_header &header, std::vector<int16_t> *decoded)
+                   const mp3_header &header, Sink sink, Cancelled cancelled,
+                   uint64_t *setup_ns = nullptr, uint64_t *decode_ns = nullptr)
 {
+    const uint64_t setup_start = setup_ns ? SDL_GetTicksNS() : 0;
     SceAudiodecInfo info = {};
     info.mp3.size = sizeof(SceAudiodecInfoMp3);
     info.mp3.ch = header.channels;
@@ -162,6 +184,7 @@ bool decode_frames(const uint8_t *data, size_t size, size_t offset,
 
     const SceInt32 create_result =
         sceAudiodecCreateDecoder(&decoder.control, SCE_AUDIODEC_TYPE_MP3);
+    if (setup_ns) *setup_ns += SDL_GetTicksNS() - setup_start;
     if (create_result < 0) {
         SDL_Log("Cosmo audio: could not create Vita MP3 decoder (0x%08x)",
                 static_cast<uint32_t>(create_result));
@@ -174,7 +197,7 @@ bool decode_frames(const uint8_t *data, size_t size, size_t offset,
     size_t consecutive_errors = 0;
     size_t decoded_frames = 0;
 
-    while (offset + 4 <= size) {
+    while (offset + 4 <= size && !cancelled()) {
         mp3_header current;
         if (!parse_header(data, size, offset, &current)) {
             if (++consecutive_errors >= 64) break;
@@ -193,7 +216,9 @@ bool decode_frames(const uint8_t *data, size_t size, size_t offset,
         decoder.control.outputPcmSize = 0;
         decoder.control.maxPcmSize = sizeof(pcm);
 
+        const uint64_t decode_start = decode_ns ? SDL_GetTicksNS() : 0;
         const SceInt32 result = sceAudiodecDecode(&decoder.control);
+        if (decode_ns) *decode_ns += SDL_GetTicksNS() - decode_start;
         const size_t consumed = decoder.control.inputEsSize;
         const size_t output_bytes = decoder.control.outputPcmSize;
         if (result < 0 || !consumed ||
@@ -208,19 +233,240 @@ bool decode_frames(const uint8_t *data, size_t size, size_t offset,
         consecutive_errors = 0;
         offset += consumed;
         const size_t sample_count = output_bytes / sizeof(int16_t);
-        if (sample_count > decoded->max_size() - decoded->size()) return false;
-        try {
-            decoded->insert(decoded->end(), pcm, pcm + sample_count);
-        } catch (const std::bad_alloc &) {
-            return false;
+        if (sample_count) {
+            if (!sink(pcm, sample_count)) return false;
+            ++decoded_frames;
         }
-        ++decoded_frames;
     }
 
-    return decoded_frames > 0 && !decoded->empty();
+    return decoded_frames > 0;
+}
+
+bool publish_pcm(VitaMusicStream &music, const int16_t *pcm, unsigned count)
+{
+    unsigned write = music.written.load(std::memory_order_relaxed);
+    while (count && !music.cancelled.load(std::memory_order_relaxed)) {
+        const unsigned used = write - music.read.load(std::memory_order_acquire);
+        const unsigned position = write % music.capacity;
+        const unsigned n = std::min({count, music.capacity - used,
+                                     music.capacity - position});
+        if (!n) {
+            SDL_Delay(2);
+            continue;
+        }
+        SDL_memcpy(music.pcm + position, pcm, n * sizeof(*pcm));
+        write += n;
+        music.written.store(write, std::memory_order_release);
+        pcm += n;
+        count -= n;
+    }
+    return count == 0;
+}
+
+// Resample while the MP3 frame is still in scratch storage. The fractional
+// position carries across decoder frames, so there is no per-frame rounding.
+struct PcmConverter {
+    static constexpr unsigned block_size = 512;
+    uint32_t input_rate;
+    uint32_t channels;
+    int16_t previous = 0;
+    unsigned position = 0;
+    bool have_previous = false;
+
+    bool push(VitaMusicStream &music, const int16_t *pcm, size_t samples,
+              uint64_t *convert_ns)
+    {
+        if (channels == 1 && input_rate == OPL_SAMPLE_RATE)
+            return publish_pcm(music, pcm, static_cast<unsigned>(samples));
+
+        int16_t block[block_size];
+        unsigned count = 0;
+        uint64_t start = SDL_GetTicksNS();
+        for (size_t i = 0; i < samples; i += channels) {
+            const int current = channels == 1 ? pcm[i] :
+                (static_cast<int>(pcm[i]) + pcm[i + 1]) / 2;
+            if (have_previous) {
+                while (position < OPL_SAMPLE_RATE) {
+                    // The weighted sum stays within signed 32-bit range at
+                    // this mixer rate, including opposite full-scale samples.
+                    const int value = previous * static_cast<int>(OPL_SAMPLE_RATE - position)
+                                    + current * static_cast<int>(position);
+                    block[count++] = static_cast<int16_t>(value / static_cast<int>(OPL_SAMPLE_RATE));
+                    position += input_rate;
+                    if (count == block_size) {
+                        *convert_ns += SDL_GetTicksNS() - start;
+                        if (!publish_pcm(music, block, count)) return false;
+                        count = 0;
+                        start = SDL_GetTicksNS();
+                    }
+                }
+                position -= OPL_SAMPLE_RATE;
+            }
+            previous = static_cast<int16_t>(current);
+            have_previous = true;
+        }
+        *convert_ns += SDL_GetTicksNS() - start;
+        return publish_pcm(music, block, count);
+    }
+};
+
+int SDLCALL stream_music(void *userdata)
+{
+    auto &music = *static_cast<VitaMusicStream *>(userdata);
+    const auto cancelled = [&music] {
+        return music.cancelled.load(std::memory_order_relaxed);
+    };
+    const auto fail = [&music, &cancelled] {
+        if (!cancelled()) {
+            music.failed.store(true, std::memory_order_release);
+            SDL_Log("Cosmo audio: Vita MP3 stream failed for %s", music.path);
+        }
+        return 0;
+    };
+
+    uint64_t start = SDL_GetTicksNS();
+    size_t size = 0;
+    std::unique_ptr<void, decltype(&SDL_free)> file(SDL_LoadFile(music.path, &size), SDL_free);
+    const uint64_t read_ns = SDL_GetTicksNS() - start;
+    music.read_us.store(static_cast<int>(read_ns / 1000));
+    if (!file || cancelled()) return fail();
+    const auto *data = static_cast<const uint8_t *>(file.get());
+    size_t offset;
+    mp3_header header;
+    if (!find_first_frame(data, size, &offset, &header)) return fail();
+    music.source_rate.store(static_cast<int>(header.sample_rate));
+    music.source_channels.store(static_cast<int>(header.channels));
+
+    start = SDL_GetTicksNS();
+    {
+        std::lock_guard<std::mutex> lock(decoder_mutex);
+        if (!init_decoder_library()) return fail();
+    }
+    uint64_t setup_ns = SDL_GetTicksNS() - start, decode_ns = 0, convert_ns = 0;
+#ifdef COSMO_VITA_AUDIO_DEBUG
+    bool first_pass = true;
+    bool reported_mix = false;
+#endif
+    PcmConverter converter{header.sample_rate, header.channels};
+    const auto sink = [&](const int16_t *pcm, size_t samples) {
+        if (!converter.push(music, pcm, samples, &convert_ns)) return false;
+#ifdef COSMO_VITA_AUDIO_DEBUG
+        if (!reported_mix) {
+            const int first_mix = music.first_mix_ms.load(std::memory_order_relaxed);
+            if (first_mix >= 0) {
+                SDL_Log("Cosmo audio: MP3 first audio mix %d ms (%s)", first_mix, music.path);
+                reported_mix = true;
+            }
+        }
+#endif
+        if (music.ready_ms.load(std::memory_order_relaxed) < 0 &&
+            music.written.load(std::memory_order_relaxed) >= music.prebuffer) {
+            const auto elapsed = (SDL_GetTicksNS() - music.started_ns) / SDL_NS_PER_MS;
+            music.setup_us.store(static_cast<int>(setup_ns / 1000));
+            music.decode_us.store(static_cast<int>(decode_ns / 1000));
+            music.convert_us.store(static_cast<int>(convert_ns / 1000));
+            music.ready_ms.store(static_cast<int>(elapsed), std::memory_order_relaxed);
+#ifdef COSMO_VITA_AUDIO_DEBUG
+            SDL_Log("Cosmo audio: MP3 prebuffer %llu ms (%s), read %llu us, setup %llu us, "
+                    "decode %llu us, downmix/resample %llu us, PCM ring %u bytes allocated in %d us",
+                    static_cast<unsigned long long>(elapsed), music.path,
+                    static_cast<unsigned long long>(read_ns / 1000),
+                    static_cast<unsigned long long>(setup_ns / 1000),
+                    static_cast<unsigned long long>(decode_ns / 1000),
+                    static_cast<unsigned long long>(convert_ns / 1000),
+                    static_cast<unsigned>(sizeof music.pcm), music.allocation_us);
+#endif
+        }
+        return true;
+    };
+    while (!cancelled()) {
+        if (!decode_frames(data, size, offset, header, sink, cancelled,
+                           &setup_ns, &decode_ns)) return fail();
+#ifdef COSMO_VITA_AUDIO_DEBUG
+        if (first_pass && !cancelled()) {
+            SDL_Log("Cosmo audio: MP3 first loop work: setup %llu us, decode %llu us, "
+                    "downmix/resample %llu us (excludes ring waits)",
+                    static_cast<unsigned long long>(setup_ns / 1000),
+                    static_cast<unsigned long long>(decode_ns / 1000),
+                    static_cast<unsigned long long>(convert_ns / 1000));
+            first_pass = false;
+        }
+#endif
+    }
+    return 0;
 }
 
 }  // namespace
+
+extern "C" VitaMusicStream *vita_music_start(const char *path)
+{
+    SDL_PathInfo info;
+    if (!path || !SDL_GetPathInfo(path, &info) || info.type != SDL_PATHTYPE_FILE)
+        return nullptr;
+    const uint64_t started = SDL_GetTicksNS();
+    auto *music = new (std::nothrow) VitaMusicStream;
+    if (!music) return nullptr;
+    music->started_ns = started;
+    music->allocation_us = static_cast<int>((SDL_GetTicksNS() - started) / 1000);
+    music->path = SDL_strdup(path);
+    if (music->path) music->worker = SDL_CreateThread(stream_music, "cosmo-vita-mp3", music);
+    if (!music->worker) {
+        vita_music_stop(music);
+        return nullptr;
+    }
+    return music;
+}
+
+extern "C" void vita_music_stop(VitaMusicStream *music)
+{
+    if (!music) return;
+    music->cancelled.store(true, std::memory_order_relaxed);
+    if (music->worker) SDL_WaitThread(music->worker, nullptr);
+    SDL_free(music->path);
+    delete music;
+}
+
+extern "C" void vita_music_render(VitaMusicStream *music, int16_t *out, int frames)
+{
+    unsigned read = music->read.load(std::memory_order_relaxed);
+    const unsigned available = music->written.load(std::memory_order_acquire) - read;
+    if (!music->playing && available >= music->prebuffer) {
+        music->playing = true;
+        if (music->first_mix_ms.load(std::memory_order_relaxed) < 0)
+            music->first_mix_ms.store(static_cast<int>((SDL_GetTicksNS() - music->started_ns) /
+                                                       SDL_NS_PER_MS), std::memory_order_relaxed);
+    }
+    unsigned n = 0;
+    if (music->playing) {
+        n = std::min(available, static_cast<unsigned>(frames));
+        const unsigned position = read % music->capacity;
+        const unsigned first = std::min(n, music->capacity - position);
+        SDL_memcpy(out, music->pcm + position, first * sizeof(*out));
+        SDL_memcpy(out + first, music->pcm, (n - first) * sizeof(*out));
+        read += n;
+        music->read.store(read, std::memory_order_release);
+        if (n < static_cast<unsigned>(frames)) {
+            music->playing = false;
+            music->underruns.fetch_add(1, std::memory_order_relaxed);
+        }
+    }
+    SDL_memset(out + n, 0, (static_cast<unsigned>(frames) - n) * sizeof(*out));
+}
+
+extern "C" VitaMusicStats vita_music_stats(const VitaMusicStream *music)
+{
+    if (!music) return {0, -1, -1, 0, 0, 0, 0, 0, 0, 0, 0, false};
+    const unsigned read = music->read.load(std::memory_order_relaxed);
+    const unsigned buffered = music->written.load(std::memory_order_acquire) - read;
+    return {static_cast<int>(buffered * 1000 / OPL_SAMPLE_RATE),
+            music->ready_ms.load(std::memory_order_relaxed),
+            music->first_mix_ms.load(std::memory_order_relaxed),
+            music->underruns.load(std::memory_order_relaxed),
+            music->read_us.load(), music->setup_us.load(), music->decode_us.load(),
+            music->convert_us.load(), music->allocation_us, music->source_rate.load(),
+            music->source_channels.load(),
+            music->failed.load(std::memory_order_acquire)};
+}
 
 extern "C" bool cosmo_mp3_decode(const char *path, int16_t **samples,
                                   uint64_t *frames)
@@ -250,7 +496,17 @@ extern "C" bool cosmo_mp3_decode(const char *path, int16_t **samples,
     }
 
     std::vector<int16_t> decoded;
-    if (!decode_frames(data, file_size, first_frame, header, &decoded)) {
+    const auto collect = [&decoded](const int16_t *pcm, size_t count) {
+        if (count > decoded.max_size() - decoded.size()) return false;
+        try {
+            decoded.insert(decoded.end(), pcm, pcm + count);
+            return true;
+        } catch (const std::bad_alloc &) {
+            return false;
+        }
+    };
+    if (!decode_frames(data, file_size, first_frame, header, collect,
+                       [] { return false; })) {
         SDL_Log("Cosmo audio: Vita MP3 decoding failed for %s", path);
         return false;
     }

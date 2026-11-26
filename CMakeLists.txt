@@ -41,6 +41,7 @@ option(COSMO_DEV_LEVEL_SHORTCUTS "Enable developer level shortcuts" OFF)
 option(COSMO_TOUCH_PREVIEW "Enable the Android touch-control preview" OFF)
 option(COSMO_IOS_APP "Build Episode 1 as an SDL iOS application bundle" OFF)
 option(COSMO_VITA_APP "Build a PlayStation Vita homebrew VPK" OFF)
+option(COSMO_VITA_AUDIO_DEBUG "Show Vita audio and frame diagnostics" OFF)
 
 if(COSMO_VITA_APP)
     if(NOT VITA)
@@ -51,6 +52,12 @@ if(COSMO_VITA_APP)
     set(VITA_APP_NAME "Cosmo Enhanced")
     set(VITA_TITLEID "CSMO00001")
     set(VITA_VERSION "01.00")
+    set(COSMO_VITA_ICON "${CMAKE_CURRENT_SOURCE_DIR}/vita/sce_sys/icon0.png"
+        CACHE FILEPATH "Indexed LiveArea icon to package")
+    if(COSMO_VITA_AUDIO_DEBUG)
+        set(VITA_APP_NAME "Cosmo Audio Debug")
+        set(VITA_TITLEID "CSMO00002")
+    endif()
 endif()
 
 # --------------------------------------------------------------------------
@@ -217,6 +224,9 @@ if(COSMO_IOS_APP)
 endif()
 if(COSMO_VITA_APP)
     target_compile_definitions(cosmo_video PRIVATE COSMO_VITA_APP=1)
+    if(COSMO_VITA_AUDIO_DEBUG AND COSMO_BUILD_GAME)
+        target_compile_definitions(cosmo_video PRIVATE COSMO_VITA_AUDIO_DEBUG=1)
+    endif()
 endif()
 
 # --------------------------------------------------------------------------
@@ -257,6 +267,9 @@ if(COSMO_BUILD_GAME)
         src/platform/input.c)
     if(COSMO_VITA_APP)
         target_compile_definitions(cosmo_platform PRIVATE COSMO_VITA_APP=1)
+        if(COSMO_VITA_AUDIO_DEBUG)
+            target_compile_definitions(cosmo_platform PRIVATE COSMO_VITA_AUDIO_DEBUG=1)
+        endif()
     endif()
     if(WIN32)
         target_sources(cosmo_platform PRIVATE src/platform/mp3_decoder.cpp)
@@ -299,6 +312,9 @@ if(COSMO_BUILD_GAME)
         # Compile the extended renderer into every episode for the runtime mod.
         target_compile_definitions(cosmore_game${episode}
             PRIVATE EPISODE=${episode} COSMO_WIDESCREEN)
+        if(COSMO_VITA_APP)
+            target_compile_definitions(cosmore_game${episode} PRIVATE COSMO_VITA_APP=1)
+        endif()
         if(COSMO_DEV_LEVEL_SHORTCUTS)
             target_compile_definitions(cosmore_game${episode} PRIVATE COSMO_DEV_LEVEL_SHORTCUTS)
         endif()
@@ -450,6 +466,9 @@ if(COSMO_BUILD_GAME)
             src/launcher.c)
         target_compile_definitions(cosmo_vita PRIVATE
             COSMO_EPISODE_MODULE=1 COSMO_VITA_APP=1)
+        if(COSMO_VITA_AUDIO_DEBUG)
+            target_compile_definitions(cosmo_vita PRIVATE COSMO_VITA_AUDIO_DEBUG=1)
+        endif()
         target_link_libraries(cosmo_vita PRIVATE
             cosmo_lowlevel1 cosmo_platform cosmo_video cosmo_warnings)
         add_dependencies(cosmo_vita cosmore_game1)
@@ -471,11 +490,12 @@ if(COSMO_BUILD_GAME)
             COMMENT "Generating param.sfo for Cosmo Enhanced"
             VERBATIM)
 
-        set(COSMO_VITA_VPK "${CMAKE_CURRENT_BINARY_DIR}/cosmo-vita.vpk")
+        set(COSMO_VITA_PACKAGE_NAME "cosmo-vita.vpk" CACHE STRING "Output Vita package filename")
+        set(COSMO_VITA_VPK "${CMAKE_CURRENT_BINARY_DIR}/${COSMO_VITA_PACKAGE_NAME}")
         set(COSMO_VITA_VPK_RESOURCES
-            "${CMAKE_CURRENT_SOURCE_DIR}/vita/sce_sys/icon0.png=sce_sys/icon0.png")
+            "${COSMO_VITA_ICON}=sce_sys/icon0.png")
         set(COSMO_VITA_VPK_DEPENDS
-            "${CMAKE_CURRENT_SOURCE_DIR}/vita/sce_sys/icon0.png")
+            "${COSMO_VITA_ICON}")
         if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/gamedata/COSMO1.STN" AND
            EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/gamedata/COSMO1.VOL")
             list(APPEND COSMO_VITA_VPK_RESOURCES
