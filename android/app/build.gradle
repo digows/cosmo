@@ -14,8 +14,8 @@ android {
         applicationId = 'com.digows.cosmoenhanced'
         minSdk = 21
         targetSdk = 35
-        versionCode = 424
-        versionName = '0.5.0'
+        versionCode = 425
+        versionName = '0.5.1'
         manifestPlaceholders = [cosmoScreenOrientation: 'sensorLandscape']
 
         externalNativeBuild {
