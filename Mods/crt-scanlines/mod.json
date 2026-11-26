@@ -1,0 +1,9 @@
+{
+  "id": "crt-scanlines",
+  "name": "CRT Scanlines",
+  "version": "1.0.0",
+  "author": "Cosmo mod example",
+  "description": "Adds subtle alternating scanlines.",
+  "enabled": false,
+  "crtScanlines": true
+}

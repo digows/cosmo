@@ -82,7 +82,8 @@ endforeach()
 # Anything the transformations above cannot express lives in patches/. Applying
 # them here, rather than committing modified copies of the sources, keeps the
 # delta from 1992 visible in review.
-file(GLOB _cosmore_patches "${CMAKE_CURRENT_SOURCE_DIR}/patches/*.patch")
+file(GLOB _cosmore_patches CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/patches/*.patch")
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${_cosmore_patches})
 list(SORT _cosmore_patches)
 
 # Fingerprint every generated source, so a patch that quietly changes nothing

@@ -1,0 +1,68 @@
+diff --git a/glue.h b/glue.h
+--- a/glue.h
++++ b/glue.h
+@@ -217,6 +217,9 @@
+ void PlatformHapticMenuInput(byte scancode);
+ void PlatformSetAudioVolumes(int sound_percent, int music_percent);
+ void PlatformSetMusicPaused(int paused);
++int PlatformLowGravity(void);
++int PlatformShieldMode(void);
++int PlatformTurboMode(void);
+ void DrawScancodeCharacter(word x, word y, byte scancode);
+ void WrapBackdropVertical(byte *src, byte *dest, byte *scratch);
+ void WrapBackdropHorizontal(byte *src, byte *dest);
+diff --git a/game1.c b/game1.c
+--- a/game1.c
++++ b/game1.c
+@@ -291,6 +291,11 @@
+ void InitializeLevel(word);
+ void InitializeEpisode(void);
+ 
++static bbool PlayerFallsTwoTiles(void)
++{
++    return playerFallTime > 3 && (demoState != DEMO_STATE_NONE || !PlatformLowGravity());
++}
++
+ /*
+ Get the file size of the named group entry, in bytes.
+ */
+@@ -6904,7 +6909,8 @@
+ {
+     if (
+         playerDeadTime != 0 || isGodMode || blockActionCmds || activeTransporter != 0 ||
+-        isPlayerInvincible || isPlayerInPipe || playerHurtCooldown != 0
++        isPlayerInvincible || isPlayerInPipe || playerHurtCooldown != 0 ||
++        (demoState == DEMO_STATE_NONE && PlatformShieldMode())
+     ) return;
+ 
+     playerClingDir = DIR4_NONE;
+@@ -7087,7 +7093,7 @@
+             isPounceReady = true;
+         }
+     } else if (
+-        (playerFallTime > 3 ? 1 : 0) + (y - height) + 1 >= playerY && y - height <= playerY &&
++        (PlayerFallsTwoTiles() ? 1 : 0) + (y - height) + 1 >= playerY && y - height <= playerY &&
+         playerX + 2 >= x && x + width - 1 >= playerX &&
+         scooterMounted == 0
+     ) {
+@@ -8809,7 +8815,7 @@
+                     }
+                     playerFallTime = 0;
+                 }
+-                if (playerFallTime > 3) {
++                if (PlayerFallsTwoTiles()) {
+                     playerY++;
+                     scrollY++;
+                     if (TestPlayerMove(DIR4_SOUTH, playerX, playerY) != MOVE_FREE) {
+@@ -10171,8 +10177,10 @@
+ */
+ static void GameLoop(byte demo_state)
+ {
++    const word frame_ticks = demo_state == DEMO_STATE_NONE && PlatformTurboMode() ? 10 : 13;
++
+     for (;;) {
+-        while (gameTickCount < 13)
++        while (gameTickCount < frame_ticks)
+             ;  /* VOID */
+ 
+         gameTickCount = 0;

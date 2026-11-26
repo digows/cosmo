@@ -1,0 +1,125 @@
+diff --git a/game1.c b/game1.c
+--- a/game1.c
++++ b/game1.c
+@@ -987,78 +987,65 @@
+ always reflect the location the sprite wants to move into, and *not* the
+ location where it currently is.
+ */
++/* A sprite can straddle the top of the map or fall below its final row.
++ * Those cells are air, with no tile data to read. */
++static word SpriteMoveTile(int x, int y)
++{
++    if (x < 0 || x >= mapWidth || y < 0 || y >= maxScrollY + SCROLLH + 1)
++        return TILE_EMPTY;
++    unsigned index = (unsigned)y * mapWidth + (unsigned)x;
++    if (index >= WORD_MAX / sizeof(word)) return TILE_EMPTY;
++    word tile = mapData.w[index];
++    return tile / 8 < 7000 ? tile : TILE_EMPTY;
++}
++
+ static word TestSpriteMove(
+     word dir, word sprite_type, word frame, word x_origin, word y_origin
+ ) {
+-    word *mapcell;
+-    register word i;
+-    register word height;
+-    word width;
+     word offset = *(actorInfoData + sprite_type) + (frame * 4);
+-
+-    height = *(actorInfoData + offset);
+-    width = *(actorInfoData + offset + 1);
++    word height = *(actorInfoData + offset);
++    word width = *(actorInfoData + offset + 1);
++    word tile;
+ 
+     switch (dir) {
+     case DIR4_NORTH:
+-        mapcell = MAP_CELL_ADDR(x_origin, (y_origin - height) + 1);
+-
+-        for (i = 0; i < width; i++) {
+-            if (TILE_BLOCK_NORTH(*(mapcell + i))) return MOVE_BLOCKED;
+-        }
+-
++        for (word i = 0; i < width; ++i) {
++            tile = SpriteMoveTile(x_origin + i, (int)y_origin - height + 1);
++            if (TILE_BLOCK_NORTH(tile)) return MOVE_BLOCKED;
++        }
+         break;
+ 
+     case DIR4_SOUTH:
+-        mapcell = MAP_CELL_ADDR(x_origin, y_origin);
+-
+-        for (i = 0; i < width; i++) {
+-            if (TILE_SLOPED(*(mapcell + i))) return MOVE_SLOPED;
+-
+-            if (TILE_BLOCK_SOUTH(*(mapcell + i))) return MOVE_BLOCKED;
+-        }
+-
++        for (word i = 0; i < width; ++i) {
++            tile = SpriteMoveTile(x_origin + i, y_origin);
++            if (TILE_SLOPED(tile)) return MOVE_SLOPED;
++            if (TILE_BLOCK_SOUTH(tile)) return MOVE_BLOCKED;
++        }
+         break;
+ 
+     case DIR4_WEST:
+-        if (x_origin == 0) return MOVE_BLOCKED;
+-
+-        mapcell = MAP_CELL_ADDR(x_origin, y_origin);
+-
+-        for (i = 0; i < height; i++) {
+-            if (
+-                i == 0 &&
+-                TILE_SLOPED(*mapcell) &&
+-                !TILE_BLOCK_WEST(*(mapcell - mapWidth))
+-            ) return MOVE_SLOPED;
+-
+-            if (TILE_BLOCK_WEST(*mapcell)) return MOVE_BLOCKED;
+-
+-            mapcell -= mapWidth;
+-        }
+-
++        if (x_origin == 0 || x_origin >= mapWidth) return MOVE_BLOCKED;
++        for (word i = 0; i < height; ++i) {
++            tile = SpriteMoveTile(x_origin, (int)y_origin - i);
++            if (!i && TILE_SLOPED(tile) &&
++                !TILE_BLOCK_WEST(SpriteMoveTile(x_origin, (int)y_origin - 1)))
++                return MOVE_SLOPED;
++            if (TILE_BLOCK_WEST(tile)) return MOVE_BLOCKED;
++        }
+         break;
+ 
+     case DIR4_EAST:
+-        if (x_origin + width == mapWidth) return MOVE_BLOCKED;
+-
+-        mapcell = MAP_CELL_ADDR(x_origin + width - 1, y_origin);
+-
+-        for (i = 0; i < height; i++) {
+-            if (
+-                i == 0 &&
+-                TILE_SLOPED(*mapcell) &&
+-                !TILE_BLOCK_EAST(*(mapcell - mapWidth))
+-            ) return MOVE_SLOPED;
+-
+-            if (TILE_BLOCK_EAST(*mapcell)) return MOVE_BLOCKED;
+-
+-            mapcell -= mapWidth;
+-        }
+-
+-        break;
+-    }
+-
++        if (x_origin + width >= mapWidth) return MOVE_BLOCKED;
++        for (word i = 0; i < height; ++i) {
++            int x = x_origin + width - 1;
++            tile = SpriteMoveTile(x, (int)y_origin - i);
++            if (!i && TILE_SLOPED(tile) &&
++                !TILE_BLOCK_EAST(SpriteMoveTile(x, (int)y_origin - 1)))
++                return MOVE_SLOPED;
++            if (TILE_BLOCK_EAST(tile)) return MOVE_BLOCKED;
++        }
++        break;
++    }
+     return MOVE_FREE;
+ }
+ 

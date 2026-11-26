@@ -27,20 +27,6 @@
       }
     },
     {
-      "name": "macos-universal",
-      "inherits": "base",
-      "displayName": "macOS universal binary (arm64 + x86_64)",
-      "condition": {
-        "type": "equals",
-        "lhs": "${hostSystemName}",
-        "rhs": "Darwin"
-      },
-      "cacheVariables": {
-        "CMAKE_OSX_ARCHITECTURES": "arm64;x86_64",
-        "CMAKE_OSX_DEPLOYMENT_TARGET": "11.0"
-      }
-    },
-    {
       "name": "ci",
       "inherits": "base",
       "displayName": "CI (warnings are errors)",
@@ -50,7 +36,6 @@
   "buildPresets": [
     { "name": "default", "configurePreset": "default" },
     { "name": "debug", "configurePreset": "debug" },
-    { "name": "macos-universal", "configurePreset": "macos-universal" },
     { "name": "ci", "configurePreset": "ci" }
   ],
   "testPresets": [

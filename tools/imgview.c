@@ -163,7 +163,7 @@ int main(int argc, char *argv[])
 
     ega_init();
 
-    if (!video_init("Cosmo", 3)) return 1;
+    if (!video_init("Cosmo", 3, false)) return 1;
 
     printf("Browsing %d fullscreen images from %s/\n", IMAGE_COUNT, datadir);
     printf("Arrows or space to change image, S to save a screenshot, Q to quit.\n");

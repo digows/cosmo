@@ -1,0 +1,244 @@
+diff --git a/game1.c b/game1.c
+--- a/game1.c
++++ b/game1.c
+@@ -847,6 +847,23 @@
+ do this once before the loop that draws all map/backdrop tiles. Within the
+ loop, we only need to do table lookups and additions.
+ */
++#ifdef COSMO_WIDESCREEN
++static bool WideWorldEnabled(void)
++{
++    return demoState == DEMO_STATE_NONE && WideTerrainColumns() && mapWidth >= SCROLLW + WideTerrainColumns();
++}
++#endif
++
++static int CameraRightLimit(void)
++{
++    int limit = mapWidth - SCROLLW;
++#ifdef COSMO_WIDESCREEN
++    if (WideWorldEnabled()) limit -= WideTerrainColumns();
++    if (WideTerrainColumns() && demoState == DEMO_STATE_NONE && limit < 0) limit = 0;
++#endif
++    return limit;
++}
++
+ static void DrawMapRegion(void)
+ {
+     register word ymap;
+@@ -857,7 +874,7 @@
+     word bdoff;
+     word bdsrc = EGA_OFFSET_BDROP_EVEN - EGA_OFFSET_SOLID_TILES;
+ #ifdef COSMO_WIDESCREEN
+-    const word wide_columns = demoState == DEMO_STATE_NONE ? WideTerrainColumns() : 0;
++    const word wide_columns = WideWorldEnabled() ? WideTerrainColumns() : 0;
+     if (wide_columns) BeginWideTerrain();
+ #endif
+ 
+@@ -945,9 +962,18 @@
+     height = *(actorInfoData + offset);
+     width = *(actorInfoData + offset + 1);
+ 
++    word actor_left = scrollX;
++#ifdef COSMO_WIDESCREEN
++    /* Keep the original activation width, following Cosmo into the right edge. */
++    if (WideWorldEnabled() && playerX > scrollX + SCROLLW - 4) {
++        word shift = playerX - (scrollX + SCROLLW - 4);
++        if (shift > WideTerrainColumns()) shift = WideTerrainColumns();
++        actor_left += shift;
++    }
++#endif
+     return (
+-        (scrollX <= x_origin && scrollX + SCROLLW > x_origin) ||
+-        (scrollX >= x_origin && x_origin + width > scrollX)
++        (actor_left <= x_origin && actor_left + SCROLLW > x_origin) ||
++        (actor_left >= x_origin && x_origin + width > actor_left)
+     ) && (
+         (scrollY + SCROLLH > (y_origin - height) + 1 && scrollY + SCROLLH <= y_origin) ||
+         (y_origin >= scrollY && scrollY + SCROLLH > y_origin)
+@@ -1233,7 +1259,7 @@
+ {
+     word right = scrollX + SCROLLW;
+ #ifdef COSMO_WIDESCREEN
+-    if (demoState == DEMO_STATE_NONE) {
++    if (WideWorldEnabled()) {
+         right += WideTerrainColumns();
+         if (right > mapWidth) right = mapWidth;
+     }
+@@ -1242,12 +1268,14 @@
+ }
+ 
+ #ifdef COSMO_WIDESCREEN
+-static bool SpriteInWideStrip(word sprite, word frame, word x, word y)
+-{
+-    if (x < scrollX + SCROLLW || x >= WorldDrawRight()) return false;
++static bool SpriteInWideView(word sprite, word frame, word x, word y)
++{
++    if (!WideWorldEnabled() || x >= WorldDrawRight()) return false;
+     word offset = actorInfoData[sprite] + frame * 4;
+     word height = actorInfoData[offset];
+-    return y >= scrollY && (int)y - height + 1 < scrollY + SCROLLH;
++    word width = actorInfoData[offset + 1];
++    return x + width > scrollX && y >= scrollY &&
++           (int)y - height + 1 < scrollY + SCROLLH;
+ }
+ #endif
+ 
+@@ -1589,7 +1617,7 @@
+         scrollY--;
+     }
+ 
+-    if (playerX - scrollX > SCROLLW - 15 && mapWidth - SCROLLW > scrollX) {
++    if (playerX - scrollX > SCROLLW - 15 && CameraRightLimit() > scrollX) {
+         scrollX++;
+     } else if (playerX - scrollX < 12 && scrollX > 0) {
+         scrollX--;
+@@ -4151,8 +4179,8 @@
+ 
+         if ((int) (playerX - 14) < 0) {
+             scrollX = 0;
+-        } else if (playerX - 14 > mapWidth - SCROLLW) {
+-            scrollX = mapWidth - SCROLLW;
++        } else if (playerX - 14 > CameraRightLimit()) {
++            scrollX = CameraRightLimit();
+         } else {
+             scrollX = playerX - 14;
+         }
+@@ -6577,7 +6605,7 @@
+         if (sh->age >= 9) {
+             if (sh->age > 16 && !IsSpriteVisible(sh->sprite, sh->frame, sh->x, sh->y)
+ #ifdef COSMO_WIDESCREEN
+-                && !SpriteInWideStrip(sh->sprite, sh->frame, sh->x, sh->y)
++                && !SpriteInWideView(sh->sprite, sh->frame, sh->x, sh->y)
+ #endif
+             ) {
+                 sh->age = 0;
+@@ -6852,7 +6880,7 @@
+         /* Possible BUG: dec->numframes should be decorationFrame[i] instead. */
+         if (IsSpriteVisible(dec->sprite, dec->numframes, dec->x, dec->y)
+ #ifdef COSMO_WIDESCREEN
+-            || SpriteInWideStrip(dec->sprite, decorationFrame[i], dec->x, dec->y)
++            || SpriteInWideView(dec->sprite, decorationFrame[i], dec->x, dec->y)
+ #endif
+         ) {
+             if (dec->sprite != SPR_SPARKLE_SLIPPERY) {
+@@ -7858,3 +7886,7 @@
+-    if (IsSpriteVisible(act->sprite, act->frame, act->x, act->y)) {
++    if (IsSpriteVisible(act->sprite, act->frame, act->x, act->y)
++#ifdef COSMO_WIDESCREEN
++        || SpriteInWideView(act->sprite, act->frame, act->x, act->y)
++#endif
++    ) {
+         if (act->stayactive) {
+             act->forceactive = true;
+@@ -7917,7 +7946,7 @@
+         }
+     } else if (!act->forceactive) {
+ #ifdef COSMO_WIDESCREEN
+-        if (SpriteInWideStrip(act->sprite, act->frame, act->x, act->y))
++        if (SpriteInWideView(act->sprite, act->frame, act->x, act->y))
+             DrawSprite(act->sprite, act->frame, act->x, act->y, DRAW_MODE_NORMAL);
+ #endif
+         return;
+@@ -7958,7 +7986,7 @@
+ 
+     if (IsSpriteVisible(act->sprite, act->frame, act->x, act->y)
+ #ifdef COSMO_WIDESCREEN
+-        || SpriteInWideStrip(act->sprite, act->frame, act->x, act->y)
++        || SpriteInWideView(act->sprite, act->frame, act->x, act->y)
+ #endif
+     ) {
+         nextDrawMode = DRAW_MODE_NORMAL;
+@@ -7975,7 +8003,8 @@
+     }
+ 
+ #ifdef COSMO_WIDESCREEN
+-    if (!SpriteInWideStrip(act->sprite, act->frame, act->x, act->y))
++    if (IsSpriteVisible(act->sprite, act->frame, act->x, act->y) ||
++        !SpriteInWideView(act->sprite, act->frame, act->x, act->y))
+ #endif
+         if (InteractPlayer(index, act->sprite, act->frame, act->x, act->y)) return;
+ 
+@@ -8457,6 +8486,9 @@
+ {
+     word i;
+     bool blocked = false;
++#ifdef COSMO_WIDESCREEN
++    word previous_scroll_x = scrollX;
++#endif
+ 
+     if (!isPlayerPushed) return;
+ 
+@@ -8466,6 +8498,9 @@
+     }
+ 
+     for (i = 0; i < playerPushSpeed; i++) {
++#ifdef COSMO_WIDESCREEN
++        previous_scroll_x = scrollX;
++#endif
+         if (
+             playerX + dir8X[playerPushDir] > 0 &&
+             playerX + dir8X[playerPushDir] + 2 < mapWidth
+@@ -8477,7 +8512,7 @@
+ 
+         if (
+             scrollX + dir8X[playerPushDir] > 0 &&
+-            scrollX + dir8X[playerPushDir] < mapWidth - (SCROLLW - 1)
++            scrollX + dir8X[playerPushDir] <= CameraRightLimit()
+         ) {
+             scrollX += dir8X[playerPushDir];
+         }
+@@ -8501,7 +8536,11 @@
+         /* Rather than precompute, move into the wall then back up one step. */
+         playerX -= dir8X[playerPushDir];
+         playerY -= dir8Y[playerPushDir];
+-        scrollX -= dir8X[playerPushDir];
++#ifdef COSMO_WIDESCREEN
++        if (WideWorldEnabled()) scrollX = previous_scroll_x;
++        else
++#endif
++            scrollX -= dir8X[playerPushDir];
+         scrollY -= dir8Y[playerPushDir];
+ 
+         ClearPlayerPush();
+@@ -8678,7 +8717,7 @@
+                 if (playerY - scrollY > SCROLLH - 4) {
+                     scrollY++;
+                 }
+-                if (playerX - scrollX > SCROLLW - 15 && mapWidth - SCROLLW > scrollX) {
++                if (playerX - scrollX > SCROLLW - 15 && CameraRightLimit() > scrollX) {
+                     scrollX++;
+                 }
+                 playerClingDir = DIR4_NONE;
+@@ -9024,7 +9063,7 @@
+             scrollY--;
+         }
+     }
+-    if (playerX - scrollX > SCROLLW - 15 && mapWidth - SCROLLW > scrollX && mapYPower > 5) {
++    if (playerX - scrollX > SCROLLW - 15 && CameraRightLimit() > scrollX && mapYPower > 5) {
+         scrollX++;
+     } else if (playerX - scrollX < 12 && scrollX > 0) {
+         scrollX--;
+@@ -9190,7 +9229,7 @@
+         }
+     }
+ 
+-    if (playerX - scrollX > SCROLLW - 15 && mapWidth - SCROLLW > scrollX) {
++    if (playerX - scrollX > SCROLLW - 15 && CameraRightLimit() > scrollX) {
+         scrollX++;
+     } else if (playerX - scrollX < 12 && scrollX > 0) {
+         scrollX--;
+@@ -10383,9 +10422,13 @@
+         switch (map_actor_type) {
+         case SPA_PLAYER_START:
+             if (x_origin > mapWidth - 15) {
+-                scrollX = mapWidth - SCROLLW;
++                scrollX = CameraRightLimit();
+             } else if ((int)x_origin - 15 >= 0 && mapYPower > 5) {
+                 scrollX = x_origin - 15;
++#ifdef COSMO_WIDESCREEN
++                if (WideWorldEnabled() && scrollX > CameraRightLimit())
++                    scrollX = CameraRightLimit();
++#endif
+             } else {
+                 scrollX = 0;
+             }

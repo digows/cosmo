@@ -12,6 +12,7 @@
 #define COSMO_AUDIO_H
 
 #include <stdbool.h>
+#include <stddef.h>
 #include <stdint.h>
 
 /*
@@ -27,5 +28,32 @@ void audio_shutdown(void);
  * listening to it. Call before audio_init(). Driven by COSMO_AUDIO_WAV.
  */
 void audio_record_to(const char *path);
+
+/* Play a decoded MP3 as the active music track. False means no decoder or
+ * the file could not be decoded; callers should use original IMF playback. */
+bool audio_music_play_mp3(const char *path);
+/* Play and loop an original Cosmo IMF music sequence from raw MNI bytes. */
+bool audio_music_play_imf(const void *data, size_t size);
+/* Stop whichever music format is currently active. */
+void audio_music_stop_mp3(void);
+/* Fade music to silence while the game is paused. */
+void audio_set_music_paused(bool paused);
+
+/* Play a one-shot WAV or MP3 effect. False means use the original effect. */
+bool audio_sound_play_asset(const char *path);
+bool audio_sound_preload_asset(const char *path);
+void audio_sound_stop_mp3(void);
+void audio_set_volumes(int sound_percent, int music_percent);
+
+#ifdef COSMO_VITA_APP
+void audio_vita_shutdown_keep_effects(void);
+int audio_vita_preload_wav(const char *path);
+bool audio_vita_play_wav(int handle, unsigned priority, bool critical);
+void audio_vita_stop_wavs(void);
+#endif
+
+#ifdef COSMO_VITA_AUDIO_DEBUG
+void audio_vita_debug_text(char lines[5][96], unsigned rendered_frames);
+#endif
 
 #endif /* COSMO_AUDIO_H */

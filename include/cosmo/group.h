@@ -25,6 +25,10 @@
 size_t group_read(const char *datadir, int episode, const char *entry_name,
                   void *dest, size_t max);
 
+/* Length of an original STN/VOL entry, or zero when the asset is absent. */
+size_t group_entry_size(const char *datadir, int episode,
+                        const char *entry_name);
+
 /* Whether both group files for an episode are present in `datadir`. */
 bool group_episode_present(const char *datadir, int episode);
 

@@ -1,0 +1,9 @@
+{
+  "id": "crt-shader",
+  "name": "CRT Shader",
+  "version": "1.0.0",
+  "author": "Cosmo mod example",
+  "description": "Adds soft phosphor blur and glow.",
+  "enabled": false,
+  "crtShader": true
+}

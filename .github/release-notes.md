@@ -1,50 +1,29 @@
-**Cosmo's Cosmic Adventure: Forbidden Planet** (Apogee, 1992), running
-natively. No DOSBox, no emulator.
+## What's new in 0.5.0
 
-Every download includes the shareware Episode 1 and plays as soon as it is
-unpacked. On macOS it is an application you double-click; on Windows and Linux,
-a folder with the game in it.
+- Android touch controls are now built into the gameplay HUD and episode launcher. They're enabled by default and can be toggled in the launcher settings.
+- Touch menus show Select and Back prompts, and you can enter high-score names with the device keyboard.
+- Experimental PlayStation Vita homebrew port, including MP3 music replacements and bundled mods.
 
-If you own Episodes 2 and 3, choose them in the launcher and it will ask you to
-find your copy.
+## Downloads
 
-| Download | For |
-|---|---|
-| `cosmo-*-macos.zip` | macOS 11 or newer, Apple Silicon and Intel |
-| `cosmo-*-windows.zip` | Windows, 64-bit |
-| `cosmo-*-linux.tar.gz` | Linux, x86-64 |
+- **Windows x64** · Unpack the ZIP and launch `cosmo.exe`.
+- **Android ARM64 and x86-64** · Install `cosmo-v0.5.0-android.apk`.
+- **PlayStation Vita / Vita3K** · Install `cosmo-v0.5.0-vita.vpk`.
 
-macOS refuses to open this the first time, because it is not signed by a paid
-Apple developer account. To allow it, open **System Settings → Privacy &
-Security**, scroll to Security, and click **Open Anyway** next to the message
-about Cosmo. On macOS 15 and later that panel is the only route — right-clicking
-and choosing Open no longer works. From a terminal,
-`xattr -dr com.apple.quarantine /path/to/Cosmo.app` does the same in one step.
-
-Arrow keys move, **space** jumps, **alt** bombs, **F1** helps, **Q** then **Y**
-quits and saves. All of it is rebindable from the game's own menu. `PLAYING.txt`
-in the archive has the rest.
-
-## What this is
-
-Built from the game's own code rather than a reimplementation, by way of
-[Cosmore](https://github.com/smitelli/cosmore) — Scott Smitelli's
-reconstruction of the 1992 source — with only the layer that talked to PC
-hardware replaced. The physics, the actors, the collision handling and the bugs
-are Todd Replogle's. What is new underneath is an emulated EGA adapter, the
-programmable interval timer, the keyboard controller, the PC speaker and an
-AdLib.
-
-`SHA256SUMS.txt` covers every archive.
+The Windows, Android, and Vita downloads bundle shareware Episode 1. The Windows launcher can also play Episodes 2 and 3 using your own game files. Vita support is experimental; see the [Vita guide](https://github.com/GITitdoneboi/enhanced-cosmo/blob/main/vita/README.md) for build and compatibility details.
 
 ## Credits
 
-*Cosmo's Cosmic Adventure*, its artwork and its music are © 1992 Apogee
-Software, Ltd. Episode 1 is included as the freely distributable shareware
-release. Episodes 2 and 3 are not included and are still sold.
+*Cosmo's Cosmic Adventure* was released by Apogee Software, Ltd. in 1992.
+Todd J. Replogle programmed the game and designed its levels; Stephen A.
+Hornback created the graphics; Scott Miller produced the game; Allen H. Blum
+III created the level editor; Bobby Prince composed the AdLib music, and
+id Software provided the music routines.
 
-This port's code is MIT. Cosmore is MIT, © Scott Smitelli and contributors;
-ymfm is BSD 3-Clause, © Aaron Giles. Full credits are in
-[ATTRIBUTION.md](https://github.com/digows/cosmo/blob/main/ATTRIBUTION.md), and
-the story of what it took is in
-[docs/porting-notes.md](https://github.com/digows/cosmo/blob/main/docs/porting-notes.md).
+Cosmo Enhanced builds on the SDL port maintained by digows and
+[Cosmore](https://github.com/smitelli/cosmore), Scott Smitelli's reconstruction
+of the original source code. The audio emulation uses
+[ymfm](https://github.com/aaronsgiles/ymfm) by Aaron Giles, and platform
+support uses [SDL](https://github.com/libsdl-org/SDL). See
+[ATTRIBUTION.md](https://github.com/GITitdoneboi/enhanced-cosmo/blob/main/ATTRIBUTION.md)
+for full credits and licenses.

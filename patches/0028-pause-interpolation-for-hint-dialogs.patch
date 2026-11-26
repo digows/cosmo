@@ -1,0 +1,30 @@
+diff --git a/glue.h b/glue.h
+--- a/glue.h
++++ b/glue.h
+@@ -216,5 +216,6 @@ void PlatformHapticMenuInput(byte scancode);
+ void PlatformSetAudioVolumes(int sound_percent, int music_percent);
+ void PlatformSetCameraPosition(word scroll_x, word scroll_y, int backdrop_x, int backdrop_y, word frame_ticks);
++void PlatformSetMotionInterpolationPaused(int paused);
+ const char *PlatformDisplayFilterName(void);
+ int PlatformStepDisplayFilter(int direction);
+ void PlatformSetMusicPaused(int paused);
+diff --git a/game2.c b/game2.c
+--- a/game2.c
++++ b/game2.c
+@@ -3265,7 +3265,8 @@ void ShowHintGlobeMessage(word hint_num)
+ {
+     word x;
+ 
++    PlatformSetMotionInterpolationPaused(1);
+     SelectDrawPage(activePage);
+     WaitHard(30);
+ 
+ #if EPISODE == 1
+@@ -3459,6 +3460,7 @@ void ShowHintGlobeMessage(word hint_num)
+ #endif  /* EPISODE == ... */
+ 
+     SelectDrawPage(!activePage);
++    PlatformSetMotionInterpolationPaused(0);
+ }
+ 
+ /*

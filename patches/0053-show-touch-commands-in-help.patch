@@ -1,0 +1,24 @@
+diff --git a/game2.c b/game2.c
+--- a/game2.c
++++ b/game2.c
+@@ -2268,6 +2268,20 @@ void ShowHintsAndKeys(word top)
+     DrawTextLine(x, y + 16, "   yourself into the wall again.");
+     WaitSpinner(x + 35, y + 17);
+ 
++#ifdef COSMO_TOUCH_PREVIEW
++    if (PlatformTouchControlsEnabled()) {
++        x = UnfoldTextFrame(4, 12, 36, "Touch Controls", "Tap Select or Back.");
++        DrawTextLine(x + 1, 7, "Left and Right move Cosmo.");
++        DrawTextLine(x + 1, 8, "Up and Down look or climb.");
++        DrawTextLine(x + 1, 9, "The large up arrow jumps.");
++        DrawTextLine(x + 1, 10, "The green bomb drops a bomb.");
++        DrawTextLine(x + 1, 11, "Pause opens the game menu.");
++        DrawTextLine(x + 1, 12, "Use Select and Back in menus.");
++        WaitSpinner(x + 32, 14);
++        return;
++    }
++#endif
++
+     x = UnfoldTextFrame(top, 18, 38, "Key Definition Screen", "");
+     DrawTextLine(x,      y + 4,  "                     Look");
+     DrawTextLine(x,      y + 5,  "                      UP");

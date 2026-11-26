@@ -1,0 +1,29 @@
+diff --git a/game1.c b/game1.c
+index 08e7585..b8bd5c5 100644
+--- a/game1.c
++++ b/game1.c
+@@ -275,7 +275,8 @@ external linkage even though nothing depends on that.
+ void DrawSprite(word, word, word, word, word);
+ void DrawPlayer(byte, word, word, word);
+ void BeginPreviewPlayerFrame(void);
+-int BeginPreviewPlayer(int x, int y);
++int BeginPreviewPlayer(int x, int y);
++void TrackPreviewPlayer(int x, int y);
+ void DrawPreviewPlayerTile(const byte *pixels, word x, word y, int white);
+ void OccludePreviewPlayerTile(word x, word y);
+ int BeginPreviewStar(dword identity, int x, int y, int spin);
+@@ -1439,6 +1440,14 @@ void DrawPlayer(byte frame, word x_origin, word y_origin, word mode)
+         break;
+     }
+ 
++    /* Keep the position sample during the invisible half of the damage flash. */
++    if ((mode == DRAW_MODE_NORMAL || mode == DRAW_MODE_WHITE) &&
++        playerHurtCooldown % 2 != 0 &&
++        playerPushForceFrame != PLAYER_HIDDEN && activeTransporter == 0 &&
++        !blockActionCmds) {
++        TrackPreviewPlayer((int)x_origin - scrollX, (int)y_origin - scrollY);
++    }
++
+     if (mode != DRAW_MODE_ABSOLUTE && (
+         playerPushForceFrame == PLAYER_HIDDEN ||
+         activeTransporter != 0 ||

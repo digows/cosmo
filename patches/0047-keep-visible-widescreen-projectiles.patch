@@ -1,0 +1,16 @@
+diff --git a/game1.c b/game1.c
+--- a/game1.c
++++ b/game1.c
+@@ -3033,7 +3033,11 @@ static void ActProjectile(word index)
+ {
+     Actor *act = actors + index;
+ 
+-    if (!IsSpriteVisible(SPR_PROJECTILE, 0, act->x, act->y)) {
++    if (!IsSpriteVisible(SPR_PROJECTILE, 0, act->x, act->y)
++#ifdef COSMO_WIDESCREEN
++        && !SpriteInWideView(SPR_PROJECTILE, 0, act->x, act->y)
++#endif
++    ) {
+         act->dead = true;
+         return;
+     }

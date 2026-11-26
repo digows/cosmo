@@ -1,0 +1,43 @@
+diff --git a/glue.h b/glue.h
+--- a/glue.h
++++ b/glue.h
+@@ -220,6 +220,7 @@
+ int PlatformLowGravity(void);
+ int PlatformShieldMode(void);
+ int PlatformTurboMode(void);
++void PlatformRecolorPlayer(byte *tiles, unsigned size);
+ void DrawScancodeCharacter(word x, word y, byte scancode);
+ void WrapBackdropVertical(byte *src, byte *dest, byte *scratch);
+ void WrapBackdropHorizontal(byte *src, byte *dest);
+diff --git a/game1.c b/game1.c
+--- a/game1.c
++++ b/game1.c
+@@ -8228,6 +8228,8 @@
+ */
+ static void Startup(void)
+ {
++    word player_tile_bytes;
++
+     /*
+     Mode Dh is EGA/VGA 40x25 characters with an 8x8 pixel box.
+     320x200 graphics resolution, 16 color, 8 pages, 0xA000 screen segment
+@@ -8274,7 +8276,8 @@
+     LoadSoundData("SOUNDS2.MNI", soundData2, 23);
+     LoadSoundData("SOUNDS3.MNI", soundData3, 46);
+ 
+-    playerTileData = malloc((word)GroupEntryLength("PLAYERS.MNI"));
++    player_tile_bytes = (word)GroupEntryLength("PLAYERS.MNI");
++    playerTileData = malloc(player_tile_bytes);
+ 
+     mapData.b = malloc(WORD_MAX);
+ 
+@@ -8297,7 +8300,8 @@
+ 
+     LoadActorTileData("ACTORS.MNI");
+ 
+-    LoadGroupEntryData("PLAYERS.MNI", playerTileData, (word)GroupEntryLength("PLAYERS.MNI"));
++    LoadGroupEntryData("PLAYERS.MNI", playerTileData, player_tile_bytes);
++    PlatformRecolorPlayer(playerTileData, player_tile_bytes);
+ 
+     actorInfoData = malloc((word)GroupEntryLength("ACTRINFO.MNI"));
+     LoadInfoData("ACTRINFO.MNI", actorInfoData, (word)GroupEntryLength("ACTRINFO.MNI"));

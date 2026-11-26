@@ -1,0 +1,74 @@
+diff --git a/game1.c b/game1.c
+index f20d133..a6c2bc0 100644
+--- a/game1.c
++++ b/game1.c
+@@ -5146,33 +5146,46 @@ static void ActEpisode1End(word index)
+ /*
+ Handle one frame of score effect movement.
+ */
+-int BeginPreviewEffect(dword identity, int x, int y, word mode, int expand);
++int BeginPreviewEffect(dword identity, int x, int y, word mode, int expand, int edge_padding);
+ void DrawPreviewEffectTile(const byte *pixels, word x, word y, word mode);
+ 
+-static void DrawSmoothEffect(dword identity, word sprite, word frame,
+-                             word x, word y, word mode)
++static bool CaptureSmoothEffect(dword identity, word sprite, word frame,
++                                word x, word y, word mode)
+ {
++    bool edge_padding = sprite == SPR_POUNCE_DEBRIS;
++    int screen_x = edge_padding ? (int16_t)(x - scrollX) : (int)x - scrollX;
++    int screen_y = edge_padding ? (int16_t)(y - scrollY) : (int)y - scrollY;
+     if (demoState != DEMO_STATE_NONE ||
+-        !BeginPreviewEffect(identity, (int)x - scrollX, (int)y - scrollY, mode, sprite == SPR_EXPLOSION)) {
+-        DrawSprite(sprite, frame, x, y, mode);
+-        return;
++        !BeginPreviewEffect(identity, screen_x, screen_y, mode, sprite == SPR_EXPLOSION, edge_padding)) {
++        return false;
+     }
+ 
+     word offset = actorInfoData[sprite] + frame * 4;
+     word height = actorInfoData[offset];
+     word width = actorInfoData[offset + 1];
+     const byte *src = actorTileData[actorInfoData[offset + 3]] + actorInfoData[offset + 2];
++    int first_tile = edge_padding ? 0 : 1;
++    int last_x = WorldDrawRight() - scrollX + edge_padding;
++    int last_y = SCROLLH + edge_padding;
+     for (word row = 0; row < height; ++row) {
+         int sy = mode == DRAW_MODE_FLIPPED
+-            ? (int)y - row - scrollY + 1
+-            : (int)y - height + row - scrollY + 2;
++            ? screen_y - row + 1
++            : screen_y - height + row + 2;
+         for (word col = 0; col < width; ++col) {
+-            int sx = (int)x + col - scrollX + 1;
+-            if (sx > 0 && sx <= WorldDrawRight() - scrollX && sy > 0 && sy <= SCROLLH)
++            int sx = screen_x + col + 1;
++            if (sx >= first_tile && sx <= last_x && sy >= first_tile && sy <= last_y)
+                 DrawPreviewEffectTile(src, sx, sy, mode);
+             src += 40;
+         }
+     }
++    return true;
++}
++
++static void DrawSmoothEffect(dword identity, word sprite, word frame,
++                             word x, word y, word mode)
++{
++    if (!CaptureSmoothEffect(identity, sprite, frame, x, y, mode))
++        DrawSprite(sprite, frame, x, y, mode);
+ }
+ 
+ static void ActScoreEffect(word index)
+@@ -7001,6 +7014,12 @@ static void MoveAndDrawDecorations(void)
+                 }
+             }
+         } else {
++            /* Capture the first offscreen pose so the last visible pixels can slide out. */
++            if (dec->sprite == SPR_POUNCE_DEBRIS) {
++                CaptureSmoothEffect((previewDecorationIdentity[i] << 16) | (0x1000u | i),
++                                    dec->sprite, decorationFrame[i], dec->x, dec->y,
++                                    DRAW_MODE_NORMAL);
++            }
+             dec->alive = false;
+         }
+     }

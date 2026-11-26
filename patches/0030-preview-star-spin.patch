@@ -1,0 +1,63 @@
+diff --git a/game1.c b/game1.c
+index 182636c..049da0b 100644
+--- a/game1.c
++++ b/game1.c
+@@ -167,7 +167,8 @@ static byte soundPriority[80 + 1];
+ static Platform platforms[MAX_PLATFORMS];
+ static Fountain fountains[MAX_FOUNTAINS];
+ static Light lights[MAX_LIGHTS];
+-static Actor actors[MAX_ACTORS];
++static Actor actors[MAX_ACTORS];
++static dword previewStarIdentity[MAX_ACTORS];
+ static Shard shards[MAX_SHARDS];
+ static Explosion explosions[MAX_EXPLOSIONS];
+ static Spawner spawners[MAX_SPAWNERS];
+@@ -274,7 +275,9 @@ void DrawPlayer(byte, word, word, word);
+ void BeginPreviewPlayerFrame(void);
+ int BeginPreviewPlayer(int x, int y);
+ void DrawPreviewPlayerTile(const byte *pixels, word x, word y, int white);
+-void OccludePreviewPlayerTile(word x, word y);
++void OccludePreviewPlayerTile(word x, word y);
++int BeginPreviewStar(dword identity, int x, int y, int spin);
++void DrawPreviewStarTile(const byte *pixels, word x, word y);
+ void DrawCartoon(byte, word, word);
+ word GetMapTile(word, word);
+ void SetMapTile(word, word, word);
+@@ -1854,7 +1857,8 @@ static void ConstructActor(
+         numBarrels++;
+     }
+ 
+-    act = actors + nextActorIndex;
++    act = actors + nextActorIndex;
++    ++previewStarIdentity[nextActorIndex];
+ 
+     act->sprite = sprite_type;
+     act->frame = 0;
+@@ -8022,6 +8026,27 @@ static void ProcessActor(word index)
+         if (InteractPlayer(index, act->sprite, act->frame, act->x, act->y)) return;
+ 
+     if (nextDrawMode != DRAW_MODE_HIDDEN) {
++        if (nextDrawMode == DRAW_MODE_NORMAL &&
++            demoState == DEMO_STATE_NONE &&
++            act->sprite != SPR_RED_CHOMPER &&
++            act->sprite != SPR_HAMBURGER &&
++            BeginPreviewStar((previewStarIdentity[index] << 16) | index,
++                             (int)act->x - scrollX, (int)act->y - scrollY, act->sprite == SPR_STAR)) {
++            word offset = actorInfoData[act->sprite] + act->frame * 4;
++            word height = actorInfoData[offset];
++            word width = actorInfoData[offset + 1];
++            const byte *src = actorTileData[actorInfoData[offset + 3]] + actorInfoData[offset + 2];
++            for (word row = 0; row < height; ++row) {
++                int sy = (int)act->y - height + row - scrollY + 2;
++                for (word col = 0; col < width; ++col) {
++                    int sx = (int)act->x + col - scrollX + 1;
++                    if (sx > 0 && sx <= WorldDrawRight() - scrollX && sy > 0 && sy <= SCROLLH)
++                        DrawPreviewStarTile(src, sx, sy);
++                    src += 40;
++                }
++            }
++            return;
++        }
+         DrawSprite(act->sprite, act->frame, act->x, act->y, nextDrawMode);
+     }
+ }

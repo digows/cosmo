@@ -6,6 +6,7 @@
 #include <string.h>
 
 #include "cosmo/group.h"
+#include "cosmo/mods.h"
 
 #define GROUP_NAME_COMPARE 11
 
@@ -41,10 +42,25 @@ static long find_entry(const char *path, const char *entry_name,
     return -1;
 }
 
+size_t group_entry_size(const char *datadir, int episode,
+                        const char *entry_name)
+{
+    static const char *const extensions[] = {"STN", "VOL"};
+    for (size_t g = 0; g < sizeof extensions / sizeof extensions[0]; ++g) {
+        char path[1024];
+        uint32_t length = 0;
+        snprintf(path,sizeof path,"%s/COSMO%d.%s",datadir,episode,extensions[g]);
+        if (find_entry(path,entry_name,&length) >= 0) return (size_t)length;
+    }
+    return 0;
+}
+
 size_t group_read(const char *datadir, int episode, const char *entry_name,
                   void *dest, size_t max)
 {
     static const char *const extensions[] = {"STN", "VOL"};
+    size_t override_size = mods_read_override(datadir, episode, entry_name, dest, max);
+    if (override_size) return override_size;
 
     for (size_t g = 0; g < sizeof extensions / sizeof extensions[0]; g++) {
         char path[1024];

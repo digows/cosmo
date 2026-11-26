@@ -1,0 +1,68 @@
+diff --git a/game2.c b/game2.c
+index 1622531..7152ba3 100644
+--- a/game2.c
++++ b/game2.c
+@@ -2893,9 +2893,18 @@ void ShowMemoryUsage(void)
+     WaitSpinner(x + 27, 8);
+ }
+ 
++#ifdef COSMO_TOUCH_PREVIEW
++int PlatformTouchControlsEnabled(void);
++int PlatformToggleTouchControls(void);
++#endif
++
+ enum game_setting {
+     SETTING_KEYBOARD, SETTING_GAMEPAD, SETTING_MUSIC,
+-    SETTING_SOUND, SETTING_FILTER, SETTING_COUNT
++    SETTING_SOUND, SETTING_FILTER,
++#ifdef COSMO_TOUCH_PREVIEW
++    SETTING_TOUCH,
++#endif
++    SETTING_COUNT
+ };
+ 
+ static void ShowGamepadControls(void)
+@@ -2913,13 +2922,17 @@ static void ShowGamepadControls(void)
+ 
+ static void DrawGameSettings(word x, byte selection, bbool save_failed)
+ {
+-    static const byte rows[SETTING_COUNT] = {7, 8, 10, 11, 12};
++    static const byte rows[SETTING_COUNT] = {7, 8, 10, 11, 12,
++#ifdef COSMO_TOUCH_PREVIEW
++        13,
++#endif
++    };
+     char value[20];
+ 
+     char *help = selection <= SETTING_GAMEPAD ? "Enter or A opens, Esc or B back"
+                                                      : "Left and Right   Esc or B back";
+     DrawTextFrame(SETTINGS_LEFT, SETTINGS_TOP, SETTINGS_HEIGHT, SETTINGS_WIDTH,
+-                  "Game Settings", save_failed ? "Could not save filter" : help, true);
++                  "Game Settings", save_failed ? "Could not save setting" : help, true);
+     DrawTextLine(x + 2, rows[SETTING_KEYBOARD], "Keyboard Mapping");
+     DrawTextLine(x + 2, rows[SETTING_GAMEPAD], "Gamepad Controls");
+     DrawTextLine(x + 2, rows[SETTING_MUSIC], "Music Volume");
+@@ -2932,6 +2945,11 @@ static void DrawGameSettings(word x, byte selection, bbool save_failed)
+     DrawTextLine(x + 25, rows[SETTING_SOUND], value);
+     snprintf(value, sizeof value, "< %s >", PlatformDisplayFilterName());
+     DrawTextLine(x + 33 - strlen(value), rows[SETTING_FILTER], value);
++#ifdef COSMO_TOUCH_PREVIEW
++    DrawTextLine(x + 2, rows[SETTING_TOUCH], "Touch Controls");
++    DrawTextLine(x + 25, rows[SETTING_TOUCH],
++                 PlatformTouchControlsEnabled() ? "< On  >" : "< Off >");
++#endif
+     DrawTextLine(x, rows[selection], ">");
+ }
+ 
+@@ -2974,6 +2992,11 @@ void ShowGameRedefineMenu(void)
+         }
+ 
+         save_failed = false;
++#ifdef COSMO_TOUCH_PREVIEW
++        if (step && selection == SETTING_TOUCH) {
++            save_failed = !PlatformToggleTouchControls();
++        }
++#endif
+         if (step && selection == SETTING_FILTER) {
+             save_failed = !PlatformStepDisplayFilter(step);
+         } else if (step && (selection == SETTING_MUSIC || selection == SETTING_SOUND)) {

@@ -1,0 +1,17 @@
+diff --git a/game1.c b/game1.c
+--- a/game1.c
++++ b/game1.c
+@@ -643,6 +643,13 @@ static bool suppressCurrentSound;
+ void StartSound(word sound_num)
+ {
++#ifdef COSMO_VITA_APP
++    extern int PlatformTryVitaWav(unsigned sound_number, unsigned priority);
++    if (isSoundEnabled && PlatformTryVitaWav(sound_num, soundPriority[sound_num])) {
++        PlatformHapticSound(sound_num);
++        return;
++    }
++#endif
+     if (soundPriority[sound_num] < activeSoundPriority) return;
+ 
+     activeSoundPriority = soundPriority[sound_num];
+     isNewSound = true;

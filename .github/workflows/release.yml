@@ -8,10 +8,15 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Tag to build (dry run; no release is published)'
+        description: 'Version for the release archives, for example v0.4.0'
         required: false
+      publish:
+        description: 'Publish a GitHub release for this commit'
+        type: boolean
+        default: false
 
 env:
+  RELEASE_VERSION: ${{ inputs.tag || github.ref_name }}
   CMAKE_FLAGS: >-
     -DCOSMO_WERROR=ON -DCOSMO_FETCH_SDL=ON -DCOSMO_BUNDLE=ON
     -DCMAKE_BUILD_TYPE=Release
@@ -24,87 +29,6 @@ env:
   VOL_SHA256: f578a1b72423e83b363c5c019faac5b96124f39bc4a2ec4ee09cabc29f3a63fd
 
 jobs:
-  macos:
-    name: macOS (universal)
-    runs-on: macos-latest
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          submodules: recursive
-
-      - name: Fetch the shareware episode
-        run: bash .github/scripts/fetch-shareware.sh gamedata
-
-      - name: Build
-        run: |
-          cmake -S . -B build $CMAKE_FLAGS \
-            -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64" \
-            -DCMAKE_OSX_DEPLOYMENT_TARGET=11.0
-          cmake --build build -j3
-
-      - name: Check both architectures are present
-        run: |
-          for binary in build/Cosmo.app/Contents/MacOS/*; do
-            lipo -info "$binary"
-            lipo -info "$binary" | grep -q 'arm64' || exit 1
-            lipo -info "$binary" | grep -q 'x86_64' || exit 1
-          done
-
-      - name: Package
-        run: bash .github/scripts/package.sh macos build "${{ github.ref_name }}"
-
-      # Unpack what is about to be published and make sure the game actually
-      # starts from it. A menu that draws is not the same as an episode that
-      # runs, which v0.2.0 proved the hard way.
-      - name: Start the packaged game
-        run: bash .github/scripts/smoke-test.sh macos dist/*
-
-      - uses: actions/upload-artifact@v7
-        with:
-          name: package-macos
-          path: dist/*
-
-  linux:
-    name: Linux
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          submodules: recursive
-
-      - name: Install dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            libasound2-dev libpulse-dev \
-            libx11-dev libxext-dev libxrandr-dev libxcursor-dev libxfixes-dev \
-            libxi-dev libxss-dev libxtst-dev libxkbcommon-dev \
-            libwayland-dev wayland-protocols libdecor-0-dev \
-            libdrm-dev libgbm-dev libgl1-mesa-dev libegl1-mesa-dev \
-            libdbus-1-dev libudev-dev libibus-1.0-dev
-
-      - name: Fetch the shareware episode
-        run: bash .github/scripts/fetch-shareware.sh gamedata
-
-      - name: Build
-        run: |
-          cmake -S . -B build $CMAKE_FLAGS
-          cmake --build build -j3
-
-      - name: Package
-        run: bash .github/scripts/package.sh linux build "${{ github.ref_name }}"
-
-      # Unpack what is about to be published and make sure the game actually
-      # starts from it. A menu that draws is not the same as an episode that
-      # runs, which v0.2.0 proved the hard way.
-      - name: Start the packaged game
-        run: bash .github/scripts/smoke-test.sh linux dist/*
-
-      - uses: actions/upload-artifact@v7
-        with:
-          name: package-linux
-          path: dist/*
-
   windows:
     name: Windows
     runs-on: windows-latest
@@ -118,13 +42,21 @@ jobs:
 
       - uses: msys2/setup-msys2@v2
         with:
-          msystem: MINGW64
+          msystem: UCRT64
           update: true
           install: >-
             git unzip zip
-            mingw-w64-x86_64-gcc
-            mingw-w64-x86_64-cmake
-            mingw-w64-x86_64-ninja
+            mingw-w64-ucrt-x86_64-gcc
+            mingw-w64-ucrt-x86_64-cmake
+            mingw-w64-ucrt-x86_64-ninja
+
+      - name: Validate release version
+        if: github.event_name == 'workflow_dispatch' && inputs.publish
+        run: |
+          if [[ ! "$RELEASE_VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo 'Enter a version such as v0.4.0 when publishing.'
+            exit 1
+          fi
 
       - name: Fetch the shareware episode
         run: bash .github/scripts/fetch-shareware.sh gamedata
@@ -152,7 +84,7 @@ jobs:
           exit $failed
 
       - name: Package
-        run: bash .github/scripts/package.sh windows build "${{ github.ref_name }}"
+        run: bash .github/scripts/package.sh windows build "$RELEASE_VERSION"
 
       - name: Start the packaged game
         run: bash .github/scripts/smoke-test.sh windows dist/*
@@ -162,10 +94,47 @@ jobs:
           name: package-windows
           path: dist/*
 
+  macos:
+    name: macOS
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: recursive
+
+      - name: Validate release version
+        if: github.event_name == 'workflow_dispatch' && inputs.publish
+        run: |
+          if [[ ! "$RELEASE_VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo 'Enter a version such as v0.4.0 when publishing.'
+            exit 1
+          fi
+
+      - name: Fetch the shareware episode
+        run: bash .github/scripts/fetch-shareware.sh gamedata
+
+      - name: Build
+        run: |
+          cmake -S . -B build $CMAKE_FLAGS \
+            -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64" \
+            -DCMAKE_OSX_DEPLOYMENT_TARGET=11.0
+          cmake --build build -j4
+
+      - name: Package
+        run: bash .github/scripts/package.sh macos build "$RELEASE_VERSION"
+
+      - name: Start the packaged game
+        run: bash .github/scripts/smoke-test.sh macos dist/*
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: package-macos
+          path: dist/*
+
   publish:
     name: Publish
-    needs: [macos, linux, windows]
-    if: startsWith(github.ref, 'refs/tags/')
+    needs: [windows, macos]
+    if: startsWith(github.ref, 'refs/tags/') || (github.event_name == 'workflow_dispatch' && inputs.publish)
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -188,7 +157,14 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release create "${{ github.ref_name }}" \
-            --title "${{ github.ref_name }}" \
+          publish_options=()
+          if [[ "$RELEASE_VERSION" == v0.5.0 ]]; then
+            # Keep the release in draft until the locally signed Android APK is attached.
+            publish_options+=(--draft)
+          fi
+          gh release create "$RELEASE_VERSION" \
+            --target "$GITHUB_SHA" \
+            --title "$RELEASE_VERSION" \
             --notes-file .github/release-notes.md \
+            "${publish_options[@]}" \
             dist/*

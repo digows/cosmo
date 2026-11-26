@@ -1,0 +1,19 @@
+Read extracted graphic overrides before STN/VOL assets
+
+Keep the original reader as the fallback. The platform layer returns a
+FILE-compatible stream and its byte length for an enabled replacement.
+
+diff --git a/game2.c b/game2.c
+index 0000000..0000000 100644
+--- a/game2.c
++++ b/game2.c
+@@ -1483,6 +1483,9 @@ FILE *GroupEntryFp(char *entry_name)
+     }
+     name[19] = '\0';
+     strupr(name);
++
++    fp = platform_open_mod_asset(EPISODE, name, &lastGroupEntryLength);
++    if (fp) return fp;
+ 
+     /*
+     Attempt to read from the STN file

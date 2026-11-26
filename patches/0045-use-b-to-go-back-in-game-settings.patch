@@ -1,0 +1,78 @@
+diff --git a/game2.c b/game2.c
+index b9bbe36..1622531 100644
+--- a/game2.c
++++ b/game2.c
+@@ -1943,7 +1943,7 @@ static void ShowKeyboardConfiguration(void)
+     };
+     byte selection = 0;
+     word x = DrawTextFrame(SETTINGS_LEFT, SETTINGS_TOP, SETTINGS_HEIGHT, SETTINGS_WIDTH,
+-                           "Keyboard Mapping", "Esc or LB to go back", true);
++                           "Keyboard Mapping", "Esc or B to go back", true);
+ 
+     for (;;) {
+         byte scancode;
+@@ -1978,7 +1978,7 @@ static void ShowKeyboardConfiguration(void)
+             continue;
+         }
+         DrawTextFrame(SETTINGS_LEFT, SETTINGS_TOP, SETTINGS_HEIGHT, SETTINGS_WIDTH,
+-                      "Keyboard Mapping", "Esc or LB to go back", true);
++                      "Keyboard Mapping", "Esc or B to go back", true);
+     }
+ }
+ 
+@@ -2901,13 +2901,13 @@ enum game_setting {
+ static void ShowGamepadControls(void)
+ {
+     word x = DrawTextFrame(SETTINGS_LEFT, SETTINGS_TOP, SETTINGS_HEIGHT, SETTINGS_WIDTH,
+-                           "Gamepad Controls", "Esc or LB to go back", true);
++                           "Gamepad Controls", "Esc or B to go back", true);
+ 
+     DrawTextLine(x + 1, 7,  "D-pad, Left stick  Move");
+     DrawTextLine(x + 1, 8,  "A                  Jump or select");
+     DrawTextLine(x + 1, 9,  "B                  Drop bomb");
+     DrawTextLine(x + 1, 10, "Start              Pause menu");
+-    DrawTextLine(x + 1, 11, "LB                 Back");
++    DrawTextLine(x + 1, 11, "B in settings      Back");
+     while (WaitSpinner(x + 30, 14) != SCANCODE_ESC) {}
+ }
+ 
+@@ -2916,8 +2916,8 @@ static void DrawGameSettings(word x, byte selection, bbool save_failed)
+     static const byte rows[SETTING_COUNT] = {7, 8, 10, 11, 12};
+     char value[20];
+ 
+-    char *help = selection <= SETTING_GAMEPAD ? "Enter or A opens, Esc or LB back"
+-                                                     : "Left and Right   Esc or LB back";
++    char *help = selection <= SETTING_GAMEPAD ? "Enter or A opens, Esc or B back"
++                                                     : "Left and Right   Esc or B back";
+     DrawTextFrame(SETTINGS_LEFT, SETTINGS_TOP, SETTINGS_HEIGHT, SETTINGS_WIDTH,
+                   "Game Settings", save_failed ? "Could not save filter" : help, true);
+     DrawTextLine(x + 2, rows[SETTING_KEYBOARD], "Keyboard Mapping");
+@@ -2935,8 +2935,11 @@ static void DrawGameSettings(word x, byte selection, bbool save_failed)
+     DrawTextLine(x, rows[selection], ">");
+ }
+ 
++void PlatformSetGameSettingsOpen(int open);
++
+ void ShowGameRedefineMenu(void)
+ {
++    PlatformSetGameSettingsOpen(true);
+     word x = UnfoldTextFrame(SETTINGS_TOP, SETTINGS_HEIGHT, SETTINGS_WIDTH,
+                              "Game Settings", "");
+     byte selection = SETTING_KEYBOARD;
+@@ -2948,7 +2951,7 @@ void ShowGameRedefineMenu(void)
+         bbool confirm = scancode == SCANCODE_ENTER || scancode == SCANCODE_SPACE;
+         int step = 0;
+ 
+-        if (scancode == SCANCODE_ESC) return;
++        if (scancode == SCANCODE_ESC) break;
+ 
+         if (confirm) {
+             if (selection <= SETTING_GAMEPAD) {
+@@ -2983,6 +2986,7 @@ void ShowGameRedefineMenu(void)
+         }
+         DrawGameSettings(x, selection, save_failed);
+     }
++    PlatformSetGameSettingsOpen(false);
+ }
+ 
+ /*

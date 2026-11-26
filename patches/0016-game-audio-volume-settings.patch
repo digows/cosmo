@@ -1,0 +1,50 @@
+diff --git a/glue.h b/glue.h
+--- a/glue.h
++++ b/glue.h
+@@ -218,2 +218,3 @@
+ void PlatformHapticMenuInput(byte scancode);
++void PlatformSetAudioVolumes(int sound_percent, int music_percent);
+ void DrawScancodeCharacter(word x, word y, byte scancode);
+diff --git a/game2.c b/game2.c
+--- a/game2.c
++++ b/game2.c
+@@ -1569,5 +1569,7 @@ static Music *LoadMusicData(word music_num, Music *dest)
+ }
+ 
+ static word activeMusicNumber;
++static byte soundVolume = 100;
++static byte musicVolume = 100;
+ 
+ #if EPISODE == 1
+@@ -2772,6 +2774,9 @@ void ToggleSound(void)
+ {
+     word x;
+ 
+-    isSoundEnabled = !isSoundEnabled;
++    soundVolume = soundVolume == 0 ? 25 : soundVolume + 25;
++    if (soundVolume > 100) soundVolume = 0;
++    isSoundEnabled = soundVolume != 0;
++    PlatformSetAudioVolumes(soundVolume, musicVolume);
+ 
+     if (isSoundEnabled) {
+@@ -2792,6 +2797,9 @@ void ToggleMusic(void)
+ {
+     word x;
+ 
+-    isMusicEnabled = !isMusicEnabled;
++    musicVolume = musicVolume == 0 ? 25 : musicVolume + 25;
++    if (musicVolume > 100) musicVolume = 0;
++    isMusicEnabled = musicVolume != 0;
++    PlatformSetAudioVolumes(soundVolume, musicVolume);
+ 
+     if (isMusicEnabled) {
+@@ -2942,7 +2950,7 @@ void ShowGameRedefineMenu(void)
+ 
+     DrawTextLine(x, 7,  " K)eyboard redefine");
+     DrawTextLine(x, 8,  " J)oystick redefine");
+-    DrawTextLine(x, 9,  " S)ound toggle");
++    DrawTextLine(x, 9,  " S)ound volume");
+     DrawTextLine(x, 10, " T)est sound");
+-    DrawTextLine(x, 11, " M)usic toggle");
++    DrawTextLine(x, 11, " M)usic volume");
+     DrawTextLine(x, menu_rows[selection], ">");

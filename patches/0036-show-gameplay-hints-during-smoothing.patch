@@ -1,0 +1,56 @@
+diff --git a/game2.c b/game2.c
+index 21fffcd..83aacae 100644
+--- a/game2.c
++++ b/game2.c
+@@ -3739,6 +3739,7 @@ void ShowBombHint(void)
+ 
+     if (demoState != DEMO_STATE_NONE) return;
+ 
++    PlatformSetMotionInterpolationPaused(1);
+     EGA_MODE_LATCHED_WRITE();
+     SelectDrawPage(activePage);
+     StartSound(SND_HINT_DIALOG_ALERT);
+@@ -3749,7 +3750,8 @@ void ShowBombHint(void)
+     WaitHard(60);
+     WaitSpinner(x + 25, 4);
+ 
+-    SelectDrawPage(!activePage);
++    SelectDrawPage(!activePage);
++    PlatformSetMotionInterpolationPaused(0);
+ }
+ 
+ /*
+@@ -3761,6 +3763,7 @@ void ShowPounceHint(void)
+ 
+     if (demoState != DEMO_STATE_NONE) return;
+ 
++    PlatformSetMotionInterpolationPaused(1);
+     EGA_MODE_LATCHED_WRITE();
+     SelectDrawPage(activePage);
+     StartSound(SND_HINT_DIALOG_ALERT);
+@@ -3776,7 +3779,8 @@ void ShowPounceHint(void)
+     WaitHard(60);
+     WaitSpinner(x + 17, 13);
+ 
+-    SelectDrawPage(!activePage);
++    SelectDrawPage(!activePage);
++    PlatformSetMotionInterpolationPaused(0);
+ }
+ 
+ /*
+@@ -3811,6 +3815,7 @@ void ShowHealthHint(void)
+ 
+     if (demoState != DEMO_STATE_NONE) return;
+ 
++    PlatformSetMotionInterpolationPaused(1);
+     EGA_MODE_LATCHED_WRITE();
+     SelectDrawPage(activePage);
+     StartSound(SND_HINT_DIALOG_ALERT);
+@@ -3822,5 +3827,6 @@ void ShowHealthHint(void)
+     WaitHard(60);
+     WaitSpinner(x + 8, 5);
+ 
+-    SelectDrawPage(!activePage);
++    SelectDrawPage(!activePage);
++    PlatformSetMotionInterpolationPaused(0);
+ }

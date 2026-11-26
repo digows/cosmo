@@ -25,6 +25,16 @@
 #define EGA_SCREEN_W      320
 #define EGA_SCREEN_H      200
 
+#define EGA_WIDE_FIRST_COLUMN (EGA_SCREEN_W / 8 - 1)
+#define EGA_WIDE_COLS     14
+#define EGA_WIDE_ROWS     18
+#define EGA_WIDE_BYTES    (EGA_WIDE_COLS * EGA_WIDE_ROWS * 8)
+typedef struct {
+    uint8_t planes[EGA_PLANES][EGA_WIDE_BYTES];
+    uint8_t visible;
+} ega_wide_terrain;
+extern ega_wide_terrain ega_wide_pages[2];
+
 /* Ports */
 #define EGA_PORT_SEQ_INDEX  0x03C4
 #define EGA_PORT_SEQ_DATA   0x03C5

@@ -1,0 +1,82 @@
+diff --git a/game1.c b/game1.c
+index 33a5084..bc14351 100644
+--- a/game1.c
++++ b/game1.c
+@@ -169,7 +169,8 @@ static Fountain fountains[MAX_FOUNTAINS];
+ static Light lights[MAX_LIGHTS];
+ static Actor actors[MAX_ACTORS];
+ static dword previewStarIdentity[MAX_ACTORS];
+-static Shard shards[MAX_SHARDS];
++static Shard shards[MAX_SHARDS];
++static dword previewShardIdentity[MAX_SHARDS];
+ static Explosion explosions[MAX_EXPLOSIONS];
+ static Spawner spawners[MAX_SPAWNERS];
+ static Decoration decorations[MAX_DECORATIONS];
+@@ -5119,6 +5120,35 @@ static void ActEpisode1End(word index)
+ /*
+ Handle one frame of score effect movement.
+ */
++int BeginPreviewEffect(dword identity, int x, int y, word mode, int expand);
++void DrawPreviewEffectTile(const byte *pixels, word x, word y, word mode);
++
++static void DrawSmoothEffect(dword identity, word sprite, word frame,
++                             word x, word y, word mode)
++{
++    if (demoState != DEMO_STATE_NONE ||
++        !BeginPreviewEffect(identity, (int)x - scrollX, (int)y - scrollY, mode, sprite == SPR_EXPLOSION)) {
++        DrawSprite(sprite, frame, x, y, mode);
++        return;
++    }
++
++    word offset = actorInfoData[sprite] + frame * 4;
++    word height = actorInfoData[offset];
++    word width = actorInfoData[offset + 1];
++    const byte *src = actorTileData[actorInfoData[offset + 3]] + actorInfoData[offset + 2];
++    for (word row = 0; row < height; ++row) {
++        int sy = mode == DRAW_MODE_FLIPPED
++            ? (int)y - row - scrollY + 1
++            : (int)y - height + row - scrollY + 2;
++        for (word col = 0; col < width; ++col) {
++            int sx = (int)x + col - scrollX + 1;
++            if (sx > 0 && sx <= WorldDrawRight() - scrollX && sy > 0 && sy <= SCROLLH)
++                DrawPreviewEffectTile(src, sx, sy, mode);
++            src += 40;
++        }
++    }
++}
++
+ static void ActScoreEffect(word index)
+ {
+     Actor *act = actors + index;
+@@ -5146,7 +5176,8 @@ static void ActScoreEffect(word index)
+         nextDrawMode = DRAW_MODE_HIDDEN;
+     }
+ 
+-    DrawSprite(act->sprite, act->frame, act->x, act->y, DRAW_MODE_IN_FRONT);
++    DrawSmoothEffect((previewStarIdentity[index] << 16) | index,
++                     act->sprite, act->frame, act->x, act->y, DRAW_MODE_IN_FRONT);
+ }
+ 
+ /*
+@@ -6556,6 +6587,7 @@ void NewShard(word sprite_type, word frame, word x_origin, word y_origin)
+ 
+         if (sh->age != 0) continue;
+ 
++        ++previewShardIdentity[i];
+         sh->sprite = sprite_type;
+         sh->x = x_origin;
+         sh->y = y_origin;
+@@ -6651,9 +6683,11 @@ restart:
+         }
+ 
+         if (sh->age == 1) {
+-            DrawSprite(sh->sprite, sh->frame, sh->x, sh->y, DRAW_MODE_WHITE);
++            DrawSmoothEffect((previewShardIdentity[i] << 16) | (0x8000u | i),
++                             sh->sprite, sh->frame, sh->x, sh->y, DRAW_MODE_WHITE);
+         } else {
+-            DrawSprite(sh->sprite, sh->frame, sh->x, sh->y, DRAW_MODE_FLIPPED);
++            DrawSmoothEffect((previewShardIdentity[i] << 16) | (0x8000u | i),
++                             sh->sprite, sh->frame, sh->x, sh->y, DRAW_MODE_FLIPPED);
+         }
+ 
+         sh->age++;

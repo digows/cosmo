@@ -1,0 +1,37 @@
+diff --git a/game1.c b/game1.c
+index da04911..e87b227 100644
+--- a/game1.c
++++ b/game1.c
+@@ -5148,6 +5148,7 @@ Handle one frame of score effect movement.
+ */
+ int BeginPreviewEffect(dword identity, int x, int y, word mode, int expand, int edge_padding);
+ void DrawPreviewEffectTile(const byte *pixels, word x, word y, word mode);
++void MarkPreviewEffectSlowRise(void);
+ 
+ static bool CaptureSmoothEffect(dword identity, word sprite, word frame,
+                                 word x, word y, word mode)
+@@ -8104,6 +8105,7 @@ static void ProcessActor(word index)
+         nextDrawMode = DRAW_MODE_NORMAL;
+     }
+ 
++    word y_before_tick = act->y;
+     act->tickfunc(index);
+ 
+     if (
+@@ -8126,8 +8128,14 @@ static void ProcessActor(word index)
+             return;
+         }
+         if (act->sprite == SPR_STONE_HEAD_CRUSHER || act->sprite == SPR_SPEAR) {
+-            DrawSmoothEffect((previewStarIdentity[index] << 16) | index,
+-                             act->sprite, act->frame, act->x, act->y, nextDrawMode);
++            if (CaptureSmoothEffect((previewStarIdentity[index] << 16) | index,
++                                    act->sprite, act->frame, act->x, act->y, nextDrawMode)) {
++                if (act->sprite == SPR_STONE_HEAD_CRUSHER && act->frame == 0 &&
++                    act->y < y_before_tick)
++                    MarkPreviewEffectSlowRise();
++            } else {
++                DrawSprite(act->sprite, act->frame, act->x, act->y, nextDrawMode);
++            }
+             return;
+         }
+         if (nextDrawMode == DRAW_MODE_NORMAL &&

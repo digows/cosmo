@@ -1,0 +1,46 @@
+diff --git a/glue.h b/glue.h
+--- a/glue.h
++++ b/glue.h
+@@ -218,3 +218,4 @@
+ void PlatformHapticMenuInput(byte scancode);
+ void PlatformSetAudioVolumes(int sound_percent, int music_percent);
++void PlatformSetMusicPaused(int paused);
+ void DrawScancodeCharacter(word x, word y, byte scancode);
+diff --git a/game1.c b/game1.c
+--- a/game1.c
++++ b/game1.c
+@@ -9933,11 +9933,14 @@
+         } else if (isKeyDown[SCANCODE_F1]) {
++            PlatformSetMusicPaused(true);
+             byte result = ShowHelpMenu();
+-            if (result == HELP_MENU_RESTART) {
+-                return GAME_INPUT_RESTART;
+-            } else if (result == HELP_MENU_QUIT) {
+-                if (PromptQuitConfirm()) return GAME_INPUT_QUIT;
+-            }
++            if (result == HELP_MENU_QUIT && !PromptQuitConfirm())
++                result = HELP_MENU_CONTINUE;
++            PlatformSetMusicPaused(false);
++            if (result == HELP_MENU_RESTART) return GAME_INPUT_RESTART;
++            if (result == HELP_MENU_QUIT) return GAME_INPUT_QUIT;
+         } else if (isKeyDown[SCANCODE_P]) {
++            PlatformSetMusicPaused(true);
+             StartSound(SND_PAUSE_GAME);
+             ShowPauseMessage();
++            PlatformSetMusicPaused(false);
+         }
+diff --git a/game2.c b/game2.c
+--- a/game2.c
++++ b/game2.c
+@@ -2879,11 +2879,5 @@
+ void ShowPauseMessage(void)
+ {
+     word x = UnfoldTextFrame(2, 4, 18, "Game Paused.", "Press ANY key.");
+-    StopAdLibPlayback();
+     WaitSpinner(x + 15, 4);
+-
+-    if (isMusicEnabled) {
+-        SwitchMusic(activeMusic);
+-        StartAdLibPlayback();  /* already happened in SwitchMusic() */
+-    }
+ }

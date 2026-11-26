@@ -1,0 +1,47 @@
+diff --git a/game1.c b/game1.c
+--- a/game1.c
++++ b/game1.c
+@@ -5981,7 +5981,7 @@
+         ConstructActor(SPR_GRAPES, x, y + 2, F, F, F, F, ActFootSwitch, 0, 0, 0, 0, 0);
+         break;
+     case ACT_PARACHUTE_BALL:
+-        ConstructActor(SPR_PARACHUTE_BALL, x, y, F, T, T, T, ActParachuteBall, 0, 20, 0, 0, 2);
++        ConstructActor(SPR_PARACHUTE_BALL, x, y, F, T, T, T, ActParachuteBall, 0, 20, 0, 0, 3);
+         break;
+     case ACT_SPIKES_E:
+         ConstructActor(SPR_SPIKES_E, x, y, F, F, F, F, ActFootSwitch, 0, 0, 0, 0, 0);
+@@ -7356,10 +7356,8 @@
+             StartSound(SND_PLAYER_POUNCE);
+             act->data3 = 0;
+             act->hurtcooldown = 3;
+-            act->data5--;
+-            if (act->data1 != 0 || act->falltime != 0) {
+-                act->data5 = 0;
+-            }
++            /* A pounce costs one hit, including while falling or fleeing. */
++            if (act->data5 > 0) act->data5--;
+             if (act->data5 == 0) {
+                 NewPounceDecoration(act->x, act->y);
+                 act->dead = true;
+@@ -8082,6 +8080,13 @@
+             DrawSprite(act->sprite, act->frame, act->x, act->y, DRAW_MODE_IN_FRONT);
+             return;
+         }
++        if (act->sprite == SPR_PARACHUTE_BALL) {
++            /* The canopy is captured separately by ActParachuteBall; track
++             * the body across both the airborne and grounded frames. */
++            DrawSmoothEffect((previewStarIdentity[index] << 16) | index,
++                             act->sprite, act->frame, act->x, act->y, nextDrawMode);
++            return;
++        }
+         if (act->sprite == SPR_STONE_HEAD_CRUSHER || act->sprite == SPR_SPEAR) {
+             if (CaptureSmoothEffect((previewStarIdentity[index] << 16) | index,
+                                     act->sprite, act->frame, act->x, act->y, nextDrawMode)) {
+@@ -8096,7 +8101,6 @@
+         if (nextDrawMode == DRAW_MODE_NORMAL &&
+             demoState == DEMO_STATE_NONE &&
+             act->sprite != SPR_RED_CHOMPER &&
+-            !(act->sprite == SPR_PARACHUTE_BALL && act->falltime >= 2) &&
+             BeginPreviewStar((previewStarIdentity[index] << 16) | index,
+                              (int)act->x - scrollX, (int)act->y - scrollY, act->sprite == SPR_STAR)) {
+             word offset = actorInfoData[act->sprite] + act->frame * 4;

@@ -1,5 +1,8 @@
 build/
 compile_commands.json
+/android/.gradle/
+/android/local.properties
+/android/app/.cxx/
 
 # Game data is Apogee Software's property. Never commit it.
 gamedata/*
@@ -9,9 +12,12 @@ gamedata/*
 # Stray captures from running the game are noise; images that are part of the
 # documentation are not.
 *.png
+!android/touch-preview/launcher-touch-panel.png
 !docs/*.png
 !assets/*.png
 !docs/screenshots/*.png
+!android/app/src/main/res/**/*.png
+!vita/sce_sys/icon0.png
 .DS_Store
 .cache/
 

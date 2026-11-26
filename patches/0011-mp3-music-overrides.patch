@@ -1,0 +1,130 @@
+diff --git a/glue.h b/glue.h
+--- a/glue.h
++++ b/glue.h
+@@ -212,4 +212,10 @@
+ void StartGameMusic(word music_num);
+ void StartMenuMusic(word music_num);
+ void StopMusic(void);
++int PlatformPlayMP3Music(char *asset_name);
++void PlatformStopMP3Music(void);
++int PlatformPlayMP3Sound(unsigned sound_number);
++void PlatformStopMP3Sound(void);
++void PlatformHapticSound(unsigned sound_number);
++void PlatformHapticMenuInput(byte scancode);
+ void DrawScancodeCharacter(word x, word y, byte scancode);
+diff --git a/game1.c b/game1.c
+--- a/game1.c
++++ b/game1.c
+@@ -626,9 +626,12 @@
++static bool suppressCurrentSound;
+ void StartSound(word sound_num)
+ {
+     if (soundPriority[sound_num] < activeSoundPriority) return;
+ 
+     activeSoundPriority = soundPriority[sound_num];
+     isNewSound = true;
+     activeSoundIndex = sound_num - 1;
++    suppressCurrentSound = isSoundEnabled && PlatformPlayMP3Sound(sound_num);
++    if (!isSoundEnabled) PlatformStopMP3Sound();
+     enableSpeaker = false;
+ }
+@@ -8056,6 +8058,7 @@
+     if (*(soundDataPtr[activeSoundIndex] + soundCursor) == END_SOUND) {
+         enableSpeaker = false;
+         activeSoundPriority = 0;
++        suppressCurrentSound = false;
+ 
+         outportb(0x0061, inportb(0x0061) & ~0x02);
+     }
+@@ -8063,7 +8067,8 @@
+     if (enableSpeaker) {
+         word sample = *(soundDataPtr[activeSoundIndex] + soundCursor);
+ 
+-        if (sample == 0 && isSoundEnabled) {
++        if (suppressCurrentSound) outportb(0x0061, inportb(0x0061) & ~0x02);
++        else if (sample == 0 && isSoundEnabled) {
+             outportb(0x0061, inportb(0x0061) & ~0x03);
+         } else if (isSoundEnabled) {
+             outportb(0x0043, 0xb6);
+diff --git a/game2.c b/game2.c
+--- a/game2.c
++++ b/game2.c
+@@ -1580,1 +1580,3 @@
++static word activeMusicNumber;
++
+ #if EPISODE == 1
+@@ -1848,9 +1850,14 @@
+ {
+-    if (IsAdLibAbsent()) return;
++    activeMusicNumber = music_num;
++    PlatformStopMP3Music();
++    if (IsAdLibAbsent()) {
++        if (isMusicEnabled) (void)PlatformPlayMP3Music(musicNames[music_num]);
++        return;
++    }
+ 
+     activeMusic = LoadMusicData(music_num, (Music *) (miscData + 5000));
+ 
+     if (isMusicEnabled) {
+-        SwitchMusic(activeMusic);
++        if (!PlatformPlayMP3Music(musicNames[music_num])) SwitchMusic(activeMusic);
+     }
+ }
+@@ -1864,9 +1871,14 @@
+ {
+-    if (IsAdLibAbsent()) return;
++    activeMusicNumber = music_num;
++    PlatformStopMP3Music();
++    if (IsAdLibAbsent()) {
++        if (isMusicEnabled) (void)PlatformPlayMP3Music(musicNames[music_num]);
++        return;
++    }
+ 
+     activeMusic = LoadMusicData(music_num, (Music *) maskedTileData);
+ 
+     if (isMusicEnabled) {
+-        SwitchMusic(activeMusic);
++        if (!PlatformPlayMP3Music(musicNames[music_num])) SwitchMusic(activeMusic);
+     }
+ }
+@@ -1878,4 +1890,5 @@
+ {
++    PlatformStopMP3Music();
+     if (IsAdLibAbsent()) return;
+ 
+     StopAdLibPlayback();
+@@ -2762,5 +2774,6 @@
+     if (isSoundEnabled) {
+         x = UnfoldTextFrame(2, 4, 24, "Sound Toggle", "The sound is now ON!");
+     } else {
++        PlatformStopMP3Sound();
+         /* Minor BUG: last char gets cut off by the wait spinner */
+         x = UnfoldTextFrame(2, 4, 24, "Sound Toggle", "The sound is now OFF!");
+@@ -2785,13 +2798,16 @@
+ {
+     word x;
+ 
+-    if (IsAdLibAbsent()) return;
+-
+     isMusicEnabled = !isMusicEnabled;
+ 
+     if (isMusicEnabled) {
+         x = UnfoldTextFrame(2, 4, 24, "Music Toggle", "The music is now ON!");
+ 
+-        SwitchMusic(activeMusic);
+-        StartAdLibPlayback();  /* already happened in SwitchMusic() */
++        if (!PlatformPlayMP3Music(musicNames[activeMusicNumber]) &&
++            !IsAdLibAbsent()) {
++            activeMusic = LoadMusicData(activeMusicNumber,
++                                        (Music *) (miscData + 5000));
++            SwitchMusic(activeMusic);
++            StartAdLibPlayback();  /* already happened in SwitchMusic() */
++        }
+     } else {
+@@ -2799,5 +2814,6 @@
+         /* Minor BUG: last char gets cut off by the wait spinner */
+         x = UnfoldTextFrame(2, 4, 24, "Music Toggle", "The music is now OFF!");
+ 
++        PlatformStopMP3Music();
+         StopAdLibPlayback();
+     }
