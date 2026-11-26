@@ -496,6 +496,12 @@ if(COSMO_BUILD_GAME)
             "${COSMO_VITA_ICON}=sce_sys/icon0.png")
         set(COSMO_VITA_VPK_DEPENDS
             "${COSMO_VITA_ICON}")
+        foreach(COSMO_VITA_ART IN ITEMS pic0.png livearea/contents/bg0.png
+                livearea/contents/startup.png livearea/contents/template.xml)
+            set(COSMO_VITA_ART_SOURCE "${CMAKE_CURRENT_SOURCE_DIR}/vita/sce_sys/${COSMO_VITA_ART}")
+            list(APPEND COSMO_VITA_VPK_RESOURCES "${COSMO_VITA_ART_SOURCE}=sce_sys/${COSMO_VITA_ART}")
+            list(APPEND COSMO_VITA_VPK_DEPENDS "${COSMO_VITA_ART_SOURCE}")
+        endforeach()
         if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/gamedata/COSMO1.STN" AND
            EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/gamedata/COSMO1.VOL")
             list(APPEND COSMO_VITA_VPK_RESOURCES
